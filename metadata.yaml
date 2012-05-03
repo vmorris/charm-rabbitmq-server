@@ -1,4 +1,3 @@
-ensemble: formula
 name: rabbitmq-server
 summary:  "An AMQP server written in Erlang"
 description: |
