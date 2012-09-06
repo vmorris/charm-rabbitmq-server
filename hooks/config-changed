@@ -7,7 +7,10 @@ ssl_enabled=`config-get ssl_enabled`
 
 cd /etc/rabbitmq
 
-exec 3> rabbitmq.config.new
+new_config=`mktemp /etc/rabbitmq/.rabbitmq.config.XXXXXX`
+chgrp rabbitmq "$new_config"
+chmod g+r "$new_config"
+exec 3> "$new_config"
 
 cat >&3 <<EOF
 [
@@ -51,6 +54,6 @@ if [ -f rabbitmq.config ]; then
 	mv rabbitmq.config{,.bak}
 fi
 
-mv rabbitmq.config{.new,}
+mv "$new_config" rabbitmq.config
 
 /etc/init.d/rabbitmq-server restart
