@@ -37,11 +37,6 @@ function install_hook() {
   DEBIAN_FRONTEND=noninteractive apt-get -qqy \
     install --no-install-recommends rabbitmq-server
   rc=$?
-
-  # give ubuntu user passwd-less sudo for log access 
-  echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/ubuntu-qa
-  chmod 0440 /etc/sudoers.d/ubuntu-qa
-
   service rabbitmq-server stop
 }
 
