@@ -5,7 +5,7 @@ options:
     description: enable SSL
   ssl_port:
     type: int
-    default: 5673
+    default: 5671
     description: SSL port
   ssl_key:
     type: string
