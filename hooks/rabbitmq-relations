@@ -38,6 +38,7 @@ function install_hook() {
     install --no-install-recommends rabbitmq-server
   rc=$?
   service rabbitmq-server stop
+  open-port 5672/tcp
 }
 
 function amqp_changed() {
