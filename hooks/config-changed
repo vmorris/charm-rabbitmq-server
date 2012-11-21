@@ -3,6 +3,16 @@ set -eu
 
 juju-log "rabbitmq-server: Firing config hook"
 
+export HOME=/root		# (HOME is not set on first run)
+RABBIT_PLUGINS=/usr/lib/rabbitmq/lib/rabbitmq_server-*/sbin/rabbitmq-plugins
+if [ "`config-get management_plugin`" == "True" ]; then
+	$RABBIT_PLUGINS enable rabbitmq_management
+	open-port 55672/tcp
+else
+	$RABBIT_PLUGINS disable rabbitmq_management
+	close-port 55672/tcp
+fi
+
 ssl_enabled=`config-get ssl_enabled`
 
 cd /etc/rabbitmq

@@ -3,6 +3,10 @@ options:
     type: boolean
     default: False
     description: enable SSL
+  management_plugin:
+    type: boolean
+    default: False
+    description: enable the management plugin
   ssl_port:
     type: int
     default: 5671
