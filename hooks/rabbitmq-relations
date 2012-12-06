@@ -47,62 +47,65 @@ function amqp_changed() {
   # In reponse, we generate a password for new users,
   # grant the user access on the default vhost "/",
   # and tell it where to reach us.
-  RABBIT_USER=`relation-get username`
-  VHOST=`relation-get vhost`
-  if [[ -z $RABBIT_USER ]] || [[ -z $VHOST ]] ; then
-    juju-log "rabbitmq-server: RABBIT_USER||VHOST not yet received from peer."
+  local rabbit_user=`relation-get username`
+  local vhost=`relation-get vhost`
+  if [[ -z "$rabbit_user" ]] || [[ -z "$vhost" ]] ; then
+    juju-log "rabbitmq-server: rabbit_user||vhost not yet received from peer."
     exit 0
   fi
-  PASSWD_FILE="/var/lib/juju/$RABBIT_USER.passwd"
-  if [[ -e $PASSWD_FILE ]] ; then
-    PASSWORD=$(cat $PASSWD_FILE)
+  local passwd_file="/var/lib/juju/$rabbit_user.passwd"
+  local password=""
+  if [[ -e $passwd_file ]] ; then
+    password=$(cat $passwd_file)
   else
-    PASSWORD=$(pwgen 10 1)
-    echo $PASSWORD >$PASSWD_FILE
-    chmod 0400 $PASSWD_FILE
+    password=$(pwgen 10 1)
+    echo $password >$passwd_file
+    chmod 0400 $passwd_file
   fi
-  if ! vhost_exists ; then
-    juju-log "rabbitmq-server: Creating vhost $VHOST"
-    create_vhost
+  if ! vhost_exists "$vhost" ; then
+    juju-log "rabbitmq-server: Creating vhost $vhost"
+    create_vhost "$vhost"
   fi
-  if ! user_exists $RABBIT_USER ; then
-    juju-log "rabbitmq-server: Creating user $RABBIT_USER"
-    user_create $RABBIT_USER admin || exit 1
+  if ! user_exists "$rabbit_user" ; then
+    juju-log "rabbitmq-server: Creating user $rabbit_user"
+    user_create $rabbit_user admin || exit 1
   else
-    juju-log "rabbitmq-server: user $RABBIT_USER already exists."
+    juju-log "rabbitmq-server: user $rabbit_user already exists."
   fi
   local remote_host="$(relation-get private-address)"
-  juju-log "rabbitmq-server: Returning credentials for $RABBIT_USER@$remote_host"
-  relation-set password=$PASSWORD
+  juju-log "rabbitmq-server: Returning credentials for $rabbit_user@$remote_host"
+  relation-set password="$password"
 }
 
 function cluster_joined {
-  REMOTE_UNIT_ID=$(echo $JUJU_REMOTE_UNIT | cut -d/ -f2)
-  LOCAL_UNIT_ID=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
-  [[ $LOCAL_UNIT_ID -gt $REMOTE_UNIT_ID ]] && echo "Relation greater" && exit 0
+  local remote_unit_id=$(echo $JUJU_REMOTE_UNIT | cut -d/ -f2)
+  local local_unit_id=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
+  [[ $local_unit_id -gt $remote_unit_id ]] && echo "Relation greater" && exit 0
   if [[ ! -e $ERLANG_COOKIE ]] ; then
     juju-log "rabbitmq-server: ERROR Could not find cookie at $ERLANG_COOKIE"
     exit 1
   fi
-  relation-set cookie=$(cat $ERLANG_COOKIE) host=$(unit-get private-address)
+  relation-set cookie=$(cat $ERLANG_COOKIE)
 }
 
 function cluster_changed {
-  REMOTE_UNIT_ID=$(echo $JUJU_REMOTE_UNIT | cut -d/ -f2)
-  LOCAL_UNIT_ID=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
-  [[ $LOCAL_UNIT_ID -lt $REMOTE_UNIT_ID ]] && echo "Relation lesser" && exit 0
+  local remote_unit_id=$(echo $JUJU_REMOTE_UNIT | cut -d/ -f2)
+  local local_unit_id=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
 
-  REMOTE_HOST=$(relation-get private-address)
-  COOKIE_VALUE=$(relation-get cookie)
-  [[ -z $REMOTE_HOST ]] || [[ -z $COOKIE_VALUE ]] && \
-    juju-log "rabbimtq-server: REMOTE_HOST||COOKIE_VALUE not yet set." \
+  [[ $local_unit_id -lt $remote_unit_id ]] && echo "Relation lesser" && exit 0
+
+  local remote_host=$(relation-get private-address)
+  local cookie_value=$(relation-get cookie)
+
+  [[ -z "$remote_host" ]] || [[ -z "$cookie_value" ]] && \
+    juju-log "rabbimtq-server: remote_host||cookie_value not yet set." \
     exit 0
 
   service rabbitmq-server stop
-  echo -n $COOKIE_VALUE > $ERLANG_COOKIE
+  echo -n "$cookie_value" > $ERLANG_COOKIE
   service rabbitmq-server start
   rabbitmqctl reset
-  rabbitmqctl cluster rabbit@$(unit-get private-address) rabbit@$REMOTE_HOST
+  rabbitmqctl cluster rabbit@$(unit-get private-address) rabbit@$remote_host
   rabbitmqctl start_app
 }
 
