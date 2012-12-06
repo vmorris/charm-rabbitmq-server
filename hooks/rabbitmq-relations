@@ -71,8 +71,8 @@ function amqp_changed() {
   else
     juju-log "rabbitmq-server: user $RABBIT_USER already exists."
   fi
-  juju-log "rabbitmq-server: Returning credentials for $RABBIT_USER@$HOSTNAME"
-  relation-set hostname=`unit-get private-address`
+  local remote_host="$(relation-get private-address)"
+  juju-log "rabbitmq-server: Returning credentials for $RABBIT_USER@$remote_host"
   relation-set password=$PASSWORD
 }
 
@@ -84,7 +84,7 @@ function cluster_joined {
     juju-log "rabbitmq-server: ERROR Could not find cookie at $ERLANG_COOKIE"
     exit 1
   fi
-  relation-set cookie=$(cat $ERLANG_COOKIE) host=$HOSTNAME
+  relation-set cookie=$(cat $ERLANG_COOKIE) host=$(unit-get private-address)
 }
 
 function cluster_changed {
@@ -92,7 +92,7 @@ function cluster_changed {
   LOCAL_UNIT_ID=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
   [[ $LOCAL_UNIT_ID -lt $REMOTE_UNIT_ID ]] && echo "Relation lesser" && exit 0
 
-  REMOTE_HOST=$(relation-get host)
+  REMOTE_HOST=$(relation-get private-address)
   COOKIE_VALUE=$(relation-get cookie)
   [[ -z $REMOTE_HOST ]] || [[ -z $COOKIE_VALUE ]] && \
     juju-log "rabbimtq-server: REMOTE_HOST||COOKIE_VALUE not yet set." \
@@ -102,7 +102,7 @@ function cluster_changed {
   echo -n $COOKIE_VALUE > $ERLANG_COOKIE
   service rabbitmq-server start
   rabbitmqctl reset
-  rabbitmqctl cluster rabbit@$HOSTNAME rabbit@$REMOTE_HOST
+  rabbitmqctl cluster rabbit@$(unit-get private-address) rabbit@$REMOTE_HOST
   rabbitmqctl start_app
 }
 
