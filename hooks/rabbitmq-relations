@@ -101,11 +101,16 @@ function cluster_changed {
     juju-log "rabbimtq-server: remote_host||cookie_value not yet set." \
     exit 0
 
+  # Sync the erlang cookie to that of remote host.
   service rabbitmq-server stop
   echo -n "$cookie_value" > $ERLANG_COOKIE
   service rabbitmq-server start
-  rabbitmqctl reset
-  rabbitmqctl cluster rabbit@$(unit-get private-address) rabbit@$remote_host
+
+  # Configure clustering.
+  # rabbitmq apparently does not like FQDNs.
+  local short_host=$(echo $remote_host | sed -e 's/\./ /g' | awk '{ print $1 }')
+  rabbitmqctl stop_app
+  rabbitmqctl cluster rabbit@$short_host
   rabbitmqctl start_app
 }
 
