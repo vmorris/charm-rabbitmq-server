@@ -20,13 +20,13 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 set -u
-FORMULA_DIR=$(dirname $0)
+CHARM_DIR=$(dirname $0)
 ARG0=${0##*/}
 
-if [[ -e $FORMULA_DIR/rabbitmq-common ]] ; then
-  . $FORMULA_DIR/rabbitmq-common
+if [[ -e $CHARM_DIR/rabbitmq-common ]] ; then
+  . $CHARM_DIR/rabbitmq-common
 else
-  juju-log "rabbitmq-server: ERROR Could not load $FORMULA_DIR/rabbitmq-common"
+  juju-log "rabbitmq-server: ERROR Could not load $CHARM_DIR/rabbitmq-common"
   exit 1
 fi
 
