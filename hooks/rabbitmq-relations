@@ -85,7 +85,7 @@ function cluster_joined {
     juju-log "rabbitmq-server: ERROR Could not find cookie at $ERLANG_COOKIE"
     exit 1
   fi
-  relation-set cookie=$(cat $ERLANG_COOKIE)
+  relation-set cookie="$(cat $ERLANG_COOKIE)" host="$(hostname)"
 }
 
 function cluster_changed {
@@ -94,11 +94,11 @@ function cluster_changed {
 
   [[ $local_unit_id -lt $remote_unit_id ]] && echo "Relation lesser" && exit 0
 
-  local remote_host=$(relation-get private-address)
+  local remote_host=$(relation-get host)
   local cookie_value=$(relation-get cookie)
 
   [[ -z "$remote_host" ]] || [[ -z "$cookie_value" ]] && \
-    juju-log "rabbimtq-server: remote_host||cookie_value not yet set." \
+    juju-log "rabbimtq-server: remote_host||cookie_value not yet set." &&
     exit 0
 
   # Sync the erlang cookie to that of remote host.
