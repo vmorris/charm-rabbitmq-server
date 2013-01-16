@@ -8,6 +8,10 @@ description: |
 provides:
   amqp:
     interface: rabbitmq
+requires:
+  ha:
+    interface: hacluster
+    scope: container
 peers:
   cluster:
     interface: rabbitmq

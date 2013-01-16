@@ -64,3 +64,19 @@ function user_create {
 function rabbit_version {
   echo "$(dpkg -l | grep rabbitmq-server | awk '{ print $3 }')"
 }
+
+##########################################################################
+# Description: Query HA interface to determine is cluster is configured
+# Returns: 0 if configured, 1 if not configured
+##########################################################################
+is_clustered() {
+  for r_id in `relation-ids ha`; do
+    for unit in `relation-list -r $r_id`; do
+       clustered=`relation-get -r $r_id clustered $unit`
+       if [ -n "$clustered" ]; then
+         return 0
+       fi
+    done
+  done
+  return 1
+}

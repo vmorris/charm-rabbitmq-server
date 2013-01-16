@@ -90,6 +90,10 @@ function amqp_changed() {
   local remote_host="$(relation-get private-address)"
   juju-log "rabbitmq-server: Returning credentials for $rabbit_user@$remote_host"
   relation-set password="$password"
+
+  if is_clustered ; then
+    relation-set clustered="true" vip="$(config-get vip)"
+  fi
 }
 
 function cluster_joined {
@@ -139,6 +143,32 @@ function cluster_changed {
   fi
 }
 
+function ha_joined() {
+  local corosync_bindiface=`config-get ha-bindiface`
+  local corosync_mcastport=`config-get ha-mcastport`
+  local vip=`config-get vip`
+  local vip_iface=`config-get vip_iface`
+  local vip_cidr=`config-get vip_cidr`
+  if [ -n "$vip" ] && [ -n "$vip_iface" ] && \
+     [ -n "$vip_cidr" ] && [ -n "$corosync_bindiface" ] && \
+     [ -n "$corosync_mcastport" ]; then
+    # TODO: This feels horrible but the data required by the hacluster
+    # charm is quite complex and is python ast parsed.
+    resources="{
+'res_rabbitmq_vip':'ocf:heartbeat:IPaddr2'
+}"
+    resource_params="{
+'res_rabbitmq_vip': 'params ip=\"$vip\" cidr_netmask=\"$vip_cidr\" nic=\"$vip_iface\"'
+}"
+    relation-set corosync_bindiface=$corosync_bindiface \
+      corosync_mcastport=$corosync_mcastport \
+      resources="$resources" resource_params="$resource_params"
+  else
+    juju-log "Insufficient configuration data to configure hacluster"
+    exit 1
+  fi
+}
+
 case $ARG0 in
   "install") install_hook ;;
   "start") service rabbitmq-server status || service rabbitmq-server start ;;
@@ -147,6 +177,8 @@ case $ARG0 in
   "amqp-relation-changed") amqp_changed ;;
   "cluster-relation-joined") cluster_joined ;;
   "cluster-relation-changed") cluster_changed ;;
+  "ha-relation-joined") ha_joined ;;
+  "ha-relation-changed") exit 0 ;;
 esac
 
 rc=$?
