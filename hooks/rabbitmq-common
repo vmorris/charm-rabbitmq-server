@@ -18,7 +18,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-set -ue
+set -e
 
 RABBIT_CTL='rabbitmqctl'
 
@@ -42,17 +42,25 @@ function create_vhost {
 }
 
 function user_create {
-  juju-log "rabbitmq: Creating user $1."
-  $RABBIT_CTL add_user "$1" "$3" || return 1
+  local user="$1"
+  local passwd="$2"
+  local vhost="$3"
+  local admin="$4"
+  juju-log "rabbitmq: Creating user $1 (vhost: $3"
+  $RABBIT_CTL add_user "$user" "$passwd" || return 1
 
   # grant the user all permissions on the default vhost /
   # TODO: investigate sane permissions
   juju-log "rabbitmq: Granting permission to $1 on vhost /"
-  $RABBIT_CTL set_permissions -p $VHOST $1 ".*" ".*" ".*"
+  $RABBIT_CTL set_permissions -p "$vhost" "$user" ".*" ".*" ".*"
 
-  if [[ "$2" == 'admin' ]]  ; then
-    user_is_admin "$1" && return 0
-    juju-log "rabbitmq: Granting user $1 admin access"
-    $RABBIT_CTL set_user_tags "$1" administrator || return 1
+  if [[ "$admin" == "admin" ]]  ; then
+    user_is_admin "$user" && return 0
+    juju-log "rabbitmq: Granting user $user admin access"
+    $RABBIT_CTL set_user_tags "$user" administrator || return 1
   fi
+}
+
+function rabbit_version {
+  echo "$(dpkg -l | grep rabbitmq-server | awk '{ print $3 }')"
 }

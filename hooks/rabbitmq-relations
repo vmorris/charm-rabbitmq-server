@@ -19,7 +19,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-set -ue
+set -e
 
 CHARM_DIR=$(dirname $0)
 ARG0=${0##*/}
@@ -47,6 +47,21 @@ function amqp_changed() {
   # In reponse, we generate a password for new users,
   # grant the user access on the default vhost "/",
   # and tell it where to reach us.
+
+  # Skip managing rabbit queue config unless we are the
+  # highest numbered unit in the service cluster.
+  local local_unit_id=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
+  local remote_unit_id=""
+  for relid in $(relation-ids cluster) ; do
+    for unit in $(relation-list -r "$relid") ; do
+      remote_unit_id="$(echo $unit | cut -d/ -f2)"
+      if [[ "$remote_unit_id" -gt "$local_unit_id" ]]; then
+        juju-log "amqp_changed(): Deferring amqp_changed to leader."
+        exit 0
+      fi
+    done
+  done
+
   local rabbit_user=`relation-get username`
   local vhost=`relation-get vhost`
   if [[ -z "$rabbit_user" ]] || [[ -z "$vhost" ]] ; then
@@ -68,7 +83,7 @@ function amqp_changed() {
   fi
   if ! user_exists "$rabbit_user" ; then
     juju-log "rabbitmq-server: Creating user $rabbit_user"
-    user_create $rabbit_user admin || exit 1
+    user_create "$rabbit_user" "$password" "$vhost" admin || exit 1
   else
     juju-log "rabbitmq-server: user $rabbit_user already exists."
   fi
@@ -109,9 +124,19 @@ function cluster_changed {
   # Configure clustering.
   # rabbitmq apparently does not like FQDNs.
   local short_host=$(echo $remote_host | sed -e 's/\./ /g' | awk '{ print $1 }')
-  rabbitmqctl stop_app
-  rabbitmqctl cluster rabbit@$short_host
-  rabbitmqctl start_app
+  local cur_vers=$(rabbit_version)
+  local cluster_cmd="cluster"
+  if dpkg --compare-versions "$cur_vers" ge "3.0.1-1" ; then
+    cluster_cmd="join_cluster"
+  fi
+  if ! rabbitmqctl cluster_status | grep -q "rabbit@$short_host" ; then
+    juju-log "Clustering with new rabbitmq peer @ $short_host."
+    rabbitmqctl stop_app
+    rabbitmqctl $cluster_cmd rabbit@$short_host
+    rabbitmqctl start_app
+  else
+    juju-log "Already clustered with rabbitmq peer @ $short_host."
+  fi
 }
 
 case $ARG0 in
