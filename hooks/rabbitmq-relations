@@ -174,10 +174,9 @@ function ha_changed() {
   if is_clustered ; then
     local vip="$(config-get vip)"
     juju-log "$CHARM - ha_changed(): We are now HA clustered. "\
-             "Advertising our VIP (vip) to all AMQP clients."
+             "Advertising our VIP ($vip) to all AMQP clients."
     for rid in $(relation-ids amqp) ; do
-        relation-set -r $rid relation-set clustered="true" \
-                             vip="$(config-get vip)"
+        relation-set -r $rid clustered="true" vip="$vip"
     done
   fi
 }
