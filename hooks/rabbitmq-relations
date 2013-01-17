@@ -19,14 +19,15 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-set -u
-FORMULA_DIR=$(dirname $0)
+set -e
+
+CHARM_DIR=$(dirname $0)
 ARG0=${0##*/}
 
-if [[ -e $FORMULA_DIR/rabbitmq-common ]] ; then
-  . $FORMULA_DIR/rabbitmq-common
+if [[ -e $CHARM_DIR/rabbitmq-common ]] ; then
+  . $CHARM_DIR/rabbitmq-common
 else
-  juju-log "rabbitmq-server: ERROR Could not load $FORMULA_DIR/rabbitmq-common"
+  juju-log "rabbitmq-server: ERROR Could not load $CHARM_DIR/rabbitmq-common"
   exit 1
 fi
 
@@ -46,63 +47,138 @@ function amqp_changed() {
   # In reponse, we generate a password for new users,
   # grant the user access on the default vhost "/",
   # and tell it where to reach us.
-  RABBIT_USER=`relation-get username`
-  VHOST=`relation-get vhost`
-  if [[ -z $RABBIT_USER ]] || [[ -z $VHOST ]] ; then
-    juju-log "rabbitmq-server: RABBIT_USER||VHOST not yet received from peer."
+
+  # Skip managing rabbit queue config unless we are the
+  # lowest numbered unit in the service cluster.
+  local local_unit_id=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
+  local remote_unit_id=""
+  for relid in $(relation-ids cluster) ; do
+    for unit in $(relation-list -r "$relid") ; do
+      remote_unit_id="$(echo $unit | cut -d/ -f2)"
+      if [[ "$local_unit_id" -gt "$remote_unit_id" ]]; then
+        juju-log "amqp_changed(): Deferring amqp_changed to leader."
+        exit 0
+      fi
+    done
+  done
+
+  local rabbit_user=`relation-get username`
+  local vhost=`relation-get vhost`
+  if [[ -z "$rabbit_user" ]] || [[ -z "$vhost" ]] ; then
+    juju-log "rabbitmq-server: rabbit_user||vhost not yet received from peer."
     exit 0
   fi
-  PASSWD_FILE="/var/lib/juju/$RABBIT_USER.passwd"
-  if [[ -e $PASSWD_FILE ]] ; then
-    PASSWORD=$(cat $PASSWD_FILE)
+  local passwd_file="/var/lib/juju/$rabbit_user.passwd"
+  local password=""
+  if [[ -e $passwd_file ]] ; then
+    password=$(cat $passwd_file)
   else
-    PASSWORD=$(pwgen 10 1)
-    echo $PASSWORD >$PASSWD_FILE
-    chmod 0400 $PASSWD_FILE
+    password=$(pwgen 10 1)
+    echo $password >$passwd_file
+    chmod 0400 $passwd_file
   fi
-  if ! vhost_exists ; then
-    juju-log "rabbitmq-server: Creating vhost $VHOST"
-    create_vhost
+  if ! vhost_exists "$vhost" ; then
+    juju-log "rabbitmq-server: Creating vhost $vhost"
+    create_vhost "$vhost"
   fi
-  if ! user_exists $RABBIT_USER ; then
-    juju-log "rabbitmq-server: Creating user $RABBIT_USER"
-    user_create $RABBIT_USER admin || exit 1
+  if ! user_exists "$rabbit_user" ; then
+    juju-log "rabbitmq-server: Creating user $rabbit_user"
+    user_create "$rabbit_user" "$password" "$vhost" admin || exit 1
   else
-    juju-log "rabbitmq-server: user $RABBIT_USER already exists."
+    juju-log "rabbitmq-server: user $rabbit_user already exists."
   fi
-  juju-log "rabbitmq-server: Returning credentials for $RABBIT_USER@$HOSTNAME"
-  relation-set hostname=`unit-get private-address`
-  relation-set password=$PASSWORD
+  local remote_host="$(relation-get private-address)"
+  juju-log "rabbitmq-server: Returning credentials for $rabbit_user@$remote_host"
+  relation-set password="$password"
+
+  if is_clustered ; then
+    relation-set clustered="true" vip="$(config-get vip)"
+  fi
 }
 
 function cluster_joined {
-  REMOTE_UNIT_ID=$(echo $JUJU_REMOTE_UNIT | cut -d/ -f2)
-  LOCAL_UNIT_ID=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
-  [[ $LOCAL_UNIT_ID -gt $REMOTE_UNIT_ID ]] && echo "Relation greater" && exit 0
+  local remote_unit_id=$(echo $JUJU_REMOTE_UNIT | cut -d/ -f2)
+  local local_unit_id=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
+  [[ $local_unit_id -gt $remote_unit_id ]] && echo "Relation greater" && exit 0
   if [[ ! -e $ERLANG_COOKIE ]] ; then
     juju-log "rabbitmq-server: ERROR Could not find cookie at $ERLANG_COOKIE"
     exit 1
   fi
-  relation-set cookie=$(cat $ERLANG_COOKIE) host=$HOSTNAME
+  relation-set cookie="$(cat $ERLANG_COOKIE)" host="$(hostname)"
 }
 
 function cluster_changed {
-  REMOTE_UNIT_ID=$(echo $JUJU_REMOTE_UNIT | cut -d/ -f2)
-  LOCAL_UNIT_ID=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
-  [[ $LOCAL_UNIT_ID -lt $REMOTE_UNIT_ID ]] && echo "Relation lesser" && exit 0
+  local remote_unit_id=$(echo $JUJU_REMOTE_UNIT | cut -d/ -f2)
+  local local_unit_id=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
 
-  REMOTE_HOST=$(relation-get host)
-  COOKIE_VALUE=$(relation-get cookie)
-  [[ -z $REMOTE_HOST ]] || [[ -z $COOKIE_VALUE ]] && \
-    juju-log "rabbimtq-server: REMOTE_HOST||COOKIE_VALUE not yet set." \
+  [[ $local_unit_id -lt $remote_unit_id ]] && echo "Relation lesser" && exit 0
+
+  local remote_host=$(relation-get host)
+  local cookie_value=$(relation-get cookie)
+
+  [[ -z "$remote_host" ]] || [[ -z "$cookie_value" ]] && \
+    juju-log "rabbimtq-server: remote_host||cookie_value not yet set." &&
     exit 0
 
+  # Sync the erlang cookie to that of remote host.
   service rabbitmq-server stop
-  echo -n $COOKIE_VALUE > $ERLANG_COOKIE
+  echo -n "$cookie_value" > $ERLANG_COOKIE
   service rabbitmq-server start
-  rabbitmqctl reset
-  rabbitmqctl cluster rabbit@$HOSTNAME rabbit@$REMOTE_HOST
-  rabbitmqctl start_app
+
+  # Configure clustering.
+  # rabbitmq apparently does not like FQDNs.
+  local short_host=$(echo $remote_host | sed -e 's/\./ /g' | awk '{ print $1 }')
+  local cur_vers=$(rabbit_version)
+  local cluster_cmd="cluster"
+  if dpkg --compare-versions "$cur_vers" ge "3.0.1-1" ; then
+    cluster_cmd="join_cluster"
+  fi
+  if ! rabbitmqctl cluster_status | grep -q "rabbit@$short_host" ; then
+    juju-log "Clustering with new rabbitmq peer @ $short_host."
+    rabbitmqctl stop_app
+    rabbitmqctl $cluster_cmd rabbit@$short_host
+    rabbitmqctl start_app
+  else
+    juju-log "Already clustered with rabbitmq peer @ $short_host."
+  fi
+}
+
+function ha_joined() {
+  local corosync_bindiface=`config-get ha-bindiface`
+  local corosync_mcastport=`config-get ha-mcastport`
+  local vip=`config-get vip`
+  local vip_iface=`config-get vip_iface`
+  local vip_cidr=`config-get vip_cidr`
+  if [ -n "$vip" ] && [ -n "$vip_iface" ] && \
+     [ -n "$vip_cidr" ] && [ -n "$corosync_bindiface" ] && \
+     [ -n "$corosync_mcastport" ]; then
+    # TODO: This feels horrible but the data required by the hacluster
+    # charm is quite complex and is python ast parsed.
+    resources="{
+'res_rabbitmq_vip':'ocf:heartbeat:IPaddr2'
+}"
+    resource_params="{
+'res_rabbitmq_vip': 'params ip=\"$vip\" cidr_netmask=\"$vip_cidr\" nic=\"$vip_iface\"'
+}"
+    relation-set corosync_bindiface=$corosync_bindiface \
+      corosync_mcastport=$corosync_mcastport \
+      resources="$resources" resource_params="$resource_params"
+  else
+    juju-log "Insufficient configuration data to configure hacluster"
+    exit 1
+  fi
+}
+
+function ha_changed() {
+  # we may now be clustered, advertise our vip to clients if so.
+  if is_clustered ; then
+    local vip="$(config-get vip)"
+    juju-log "$CHARM - ha_changed(): We are now HA clustered. "\
+             "Advertising our VIP ($vip) to all AMQP clients."
+    for rid in $(relation-ids amqp) ; do
+        relation-set -r $rid clustered="true" vip="$vip"
+    done
+  fi
 }
 
 case $ARG0 in
@@ -113,6 +189,8 @@ case $ARG0 in
   "amqp-relation-changed") amqp_changed ;;
   "cluster-relation-joined") cluster_joined ;;
   "cluster-relation-changed") cluster_changed ;;
+  "ha-relation-joined") ha_joined ;;
+  "ha-relation-changed") ha_changed ;;
 esac
 
 rc=$?
