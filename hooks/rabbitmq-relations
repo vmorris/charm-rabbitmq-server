@@ -49,13 +49,13 @@ function amqp_changed() {
   # and tell it where to reach us.
 
   # Skip managing rabbit queue config unless we are the
-  # highest numbered unit in the service cluster.
+  # lowest numbered unit in the service cluster.
   local local_unit_id=$(echo $JUJU_UNIT_NAME | cut -d/ -f2)
   local remote_unit_id=""
   for relid in $(relation-ids cluster) ; do
     for unit in $(relation-list -r "$relid") ; do
       remote_unit_id="$(echo $unit | cut -d/ -f2)"
-      if [[ "$remote_unit_id" -gt "$local_unit_id" ]]; then
+      if [[ "$local_unit_id" -gt "$remote_unit_id" ]]; then
         juju-log "amqp_changed(): Deferring amqp_changed to leader."
         exit 0
       fi
