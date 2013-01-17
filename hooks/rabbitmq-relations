@@ -191,7 +191,7 @@ case $ARG0 in
   "cluster-relation-joined") cluster_joined ;;
   "cluster-relation-changed") cluster_changed ;;
   "ha-relation-joined") ha_joined ;;
-  "ha-relation-changed") exit 0 ;;
+  "ha-relation-changed") ha_changed ;;
 esac
 
 rc=$?
