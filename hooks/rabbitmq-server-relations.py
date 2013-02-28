@@ -187,7 +187,6 @@ def ceph_changed():
     else:
         utils.juju_log('INFO',
                        'This is not the peer leader. Not configuring RBD.')
-        # Stopping MySQL
         if utils.running('rabbitmq-server'):
             utils.juju_log('INFO','Stopping rabbitmq-server.')
             utils.stop('rabbitmq-server')
@@ -209,6 +208,8 @@ hooks = {
     'cluster-relation-changed': cluster_changed,
     'ha-relation-joined': ha_joined,
     'ha-relation-changed': ha_changed,
+    'ceph-relation-joined': ceph_joined,
+    'ceph-relation-changed': ceph_changed,
 }
 
 utils.do_hooks(hooks)
