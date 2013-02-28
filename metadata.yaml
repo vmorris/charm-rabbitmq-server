@@ -12,6 +12,8 @@ requires:
   ha:
     interface: hacluster
     scope: container
+  ceph:
+    interface: ceph-client
 peers:
   cluster:
-    interface: rabbitmq
+    interface: rabbitmq-ha

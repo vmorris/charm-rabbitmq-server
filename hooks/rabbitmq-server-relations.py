@@ -1,11 +1,16 @@
 #!/usr/bin/python
 
+import ceph
 import rabbit_utils as rabbit
 import utils
 
 import os
 import sys
 import subprocess
+
+SERVICE_NAME = utils.get_unit_name().replace('-','/').split('/')[0]
+POOL_NAME = SERVICE_NAME
+RABBIT_DIR='/var/lib/rabbitmq'
 
 def install():
     utils.install(*rabbit.PACKAGES)
@@ -104,17 +109,41 @@ def ha_joined():
                        'configure hacluster.')
         sys.exit(1)
 
+
+    if not utils.is_relation_made('ceph'):
+        utils.juju_log('INFO',
+                       'ha_joined: No ceph relation yet, deferring.')
+        return
+
     relation_settings = {}
     relation_settings['corosync_bindiface'] = corosync_bindiface
     relation_settings['corosync_mcastport'] = corosync_mcastport
+
     relation_settings['resources'] = {
-        'res_rabbitmq_vip': 'ocf:heartbeat:IPaddr2'
+        'res_rabbitmq_rbd':'ocf:ceph:rbd',
+        'res_rabbitmq_fs':'ocf:heartbeat:Filesystem',
+        'res_rabbitmq_vip':'ocf:heartbeat:IPaddr2',
+        'res_rabbitmq-server':'lsb:rabbitmq-server',
     }
+
     relation_settings['resource_params'] = {
-        'res_rabbitmq_vip': ('params ip="%s" cider_netmask="%s" nic="%s"' %\
-                             (vip, vip_cidr, vip_iface))
+        'res_rabbitmq_rbd': 'params name="%s" pool="%s" user="%s" secret="%s"' %\
+            (config['rbd-name'], POOL_NAME, SERVICE_NAME, ceph.keyfile_path(SERVICE_NAME)),
+        'res_rabbitmq_fs': 'params device="/dev/rbd/%s/%s" directory="%s" '\
+                        'fstype="ext4" op start start-delay="10s"' %\
+            (POOL_NAME, config['rbd-name'], RABBIT_DIR),
+        'res_rabbitmq_vip':'params ip="%s" cidr_netmask="%s" nic="%s"' %\
+            (config['vip'], config['vip_cidr'], config['vip_iface']),
+        'res_rabbitmqd':'op start start-delay="5s" op monitor interval="5s"',
     }
-    utils.relation_set(**relation_settings)
+
+    relation_settings['groups'] = {
+        'grp_rabbitmq':'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '\
+                       'res_rabbitmq-server',
+    }
+
+    for rel_id in utils.relation_ids('ha'):
+        utils.relation_set(rid=rel_id, **relation_settings)
 
 
 def ha_changed():
@@ -129,6 +158,49 @@ def ha_changed():
         relation_settings['rid'] = rid
         utils.relation_set(**relation_settings)
 
+
+def ceph_joined():
+    utils.juju_log('INFO', 'Start Ceph Relation Joined')
+    ceph.install()
+    utils.juju_log('INFO', 'Finish Ceph Relation Joined')
+
+
+def ceph_changed():
+    utils.juju_log('INFO', 'Start Ceph Relation Changed')
+    auth = utils.relation_get('auth')
+    key = utils.relation_get('key')
+    if None in [auth, key]:
+        utils.juju_log('INFO', 'Missing key or auth in relation')
+        sys.exit(0)
+
+    ceph.configure(service=SERVICE_NAME, key=key, auth=auth)
+
+    if utils.eligible_leader():
+        sizemb = int(config['rbd-size'].split('G')[0]) * 1024
+        rbd_img = config['rbd-name']
+        blk_device = '/dev/rbd/%s/%s' % (POOL_NAME, rbd_img)
+        ceph.ensure_ceph_storage(service=SERVICE_NAME, pool=POOL_NAME,
+                                 rbd_img=rbd_img, sizemb=sizemb,
+                                 fstype='ext4', mount_point=RABBIT_DIR,
+                                 blk_device=blk_device,
+                                 system_services=['rabbitmq-server'])
+    else:
+        utils.juju_log('INFO',
+                       'This is not the peer leader. Not configuring RBD.')
+        # Stopping MySQL
+        if utils.running('rabbitmq-server'):
+            utils.juju_log('INFO','Stopping rabbitmq-server.')
+            utils.stop('rabbitmq-server')
+
+    # If 'ha' relation has been made before the 'ceph' relation
+    # it is important to make sure the ha-relation data is being
+    # sent.
+    if utils.is_relation_made('ha'):
+        utils.juju_log('INFO', '*ha* relation exists. Triggering ha_joined()')
+        ha_joined()
+    else:
+        utils.juju_log('INFO', '*ha* relation does not exist.')
+    utils.juju_log('INFO', 'Finish Ceph Relation Changed')
 
 hooks = {
     'install': install,
