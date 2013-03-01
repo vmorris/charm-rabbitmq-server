@@ -263,7 +263,11 @@ def unit_get(attribute):
         'unit-get',
         attribute
         ]
-    return subprocess.check_output(cmd).strip()  # IGNORE:E1103
+    value = subprocess.check_output(cmd).strip()  # IGNORE:E1103
+    if value == "":
+        return None
+    else:
+        return value
 
 
 def config_get(attribute):
@@ -271,7 +275,11 @@ def config_get(attribute):
         'config-get',
         attribute
         ]
-    return subprocess.check_output(cmd).strip()  # IGNORE:E1103
+    value = subprocess.check_output(cmd).strip()  # IGNORE:E1103
+    if value == "":
+        return None
+    else:
+        return value
 
 
 def get_unit_hostname():
