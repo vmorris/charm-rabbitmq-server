@@ -49,7 +49,7 @@ options:
         This value should be specified in GB (e.g. 100G).
   rbd-name:
       type: string
-      default: mysql1
+      default: rabbitmq1
       description: |
         The name that will be used to create the Ceph's RBD image with. If the
         image name exists in Ceph, it will be re-used and the data will be

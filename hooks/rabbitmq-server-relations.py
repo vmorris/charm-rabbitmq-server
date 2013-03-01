@@ -103,8 +103,10 @@ def ha_joined():
     vip = utils.config_get('vip')
     vip_iface = utils.config_get('vip_iface')
     vip_cidr = utils.config_get('vip_cidr')
+    rbd_name = utils.config_get('rbd-name')
+
     if None in [corosync_bindiface, corosync_mcastport, vip, vip_iface,
-                vip_cidr]:
+                vip_cidr, rbd_name]:
         utils.juju_log('ERROR', 'Insufficient configuration data to '\
                        'configure hacluster.')
         sys.exit(1)
@@ -128,12 +130,12 @@ def ha_joined():
 
     relation_settings['resource_params'] = {
         'res_rabbitmq_rbd': 'params name="%s" pool="%s" user="%s" secret="%s"' %\
-            (config['rbd-name'], POOL_NAME, SERVICE_NAME, ceph.keyfile_path(SERVICE_NAME)),
+            (rbd_name, POOL_NAME, SERVICE_NAME, ceph.keyfile_path(SERVICE_NAME)),
         'res_rabbitmq_fs': 'params device="/dev/rbd/%s/%s" directory="%s" '\
                         'fstype="ext4" op start start-delay="10s"' %\
-            (POOL_NAME, config['rbd-name'], RABBIT_DIR),
+            (POOL_NAME, rbd_name, RABBIT_DIR),
         'res_rabbitmq_vip':'params ip="%s" cidr_netmask="%s" nic="%s"' %\
-            (config['vip'], config['vip_cidr'], config['vip_iface']),
+            (vip, vip_cidr, vip_iface),
         'res_rabbitmqd':'op start start-delay="5s" op monitor interval="5s"',
     }
 
@@ -176,8 +178,9 @@ def ceph_changed():
     ceph.configure(service=SERVICE_NAME, key=key, auth=auth)
 
     if utils.eligible_leader():
-        sizemb = int(config['rbd-size'].split('G')[0]) * 1024
-        rbd_img = config['rbd-name']
+        rbd_img = utils.config_get('rbd-name')
+        rbd_size = utils.config_get('rbd-size')
+        sizemb = int(rbd_size.split('G')[0]) * 1024
         blk_device = '/dev/rbd/%s/%s' % (POOL_NAME, rbd_img)
         ceph.ensure_ceph_storage(service=SERVICE_NAME, pool=POOL_NAME,
                                  rbd_img=rbd_img, sizemb=sizemb,
