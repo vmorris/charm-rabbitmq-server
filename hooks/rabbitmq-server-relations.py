@@ -220,7 +220,7 @@ def upgrade_charm():
             d = os.path.join('/var/lib/rabbitmq', f)
             m = 'upgrade_charm: Migrating stored passwd from %s to %s.' % (s, d)
             utils.juju_log('INFO', m)
-            shutil.mv(s, d)
+            shutil.move(s, d)
 
 hooks = {
     'install': install,
