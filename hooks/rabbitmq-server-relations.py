@@ -8,7 +8,7 @@ import os
 import sys
 import subprocess
 
-SERVICE_NAME = utils.get_unit_name().split('/')[0]
+SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
 POOL_NAME = SERVICE_NAME
 RABBIT_DIR='/var/lib/rabbitmq'
 
