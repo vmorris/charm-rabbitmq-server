@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os
+import shutil
 import sys
 import subprocess
 
@@ -30,7 +31,7 @@ def amqp_changed():
         utils.juju_log('INFO', 'amqp_changed(): Relation not ready.')
         return
 
-    password_file = '/var/lib/juju/%s.passwd' % rabbit_user
+    password_file = os.path.join(RABBIT_DIR, '%s.passwd' % rabbit_user)
     if os.path.exists(password_file):
         password = open(password_file).read().strip()
     else:
@@ -208,6 +209,19 @@ def ceph_changed():
         utils.juju_log('INFO', '*ha* relation does not exist.')
     utils.juju_log('INFO', 'Finish Ceph Relation Changed')
 
+
+def upgrade_charm():
+    # Ensure older passwd files in /var/lib/juju are moved to
+    # /var/lib/rabbitmq which will end up replicated if clustered.
+    for f in [f for f in os.listdir('/var/lib/juju')
+              if os.path.isfile(os.path.join('/var/lib/juju', f))]:
+        if f.endswith('.passwd'):
+            s = os.path.join('/var/lib/juju', f)
+            d = os.path.join('/var/lib/rabbitmq', f)
+            m = 'upgrade_charm: Migrating stored passwd from %s to %s.' % (s, d)
+            utils.juju_log('INFO', m)
+            shutil.mv(s, d)
+
 hooks = {
     'install': install,
     'amqp-relation-changed': amqp_changed,
@@ -217,6 +231,7 @@ hooks = {
     'ha-relation-changed': ha_changed,
     'ceph-relation-joined': ceph_joined,
     'ceph-relation-changed': ceph_changed,
+    'upgrade-charm': upgrade_charm
 }
 
 utils.do_hooks(hooks)
