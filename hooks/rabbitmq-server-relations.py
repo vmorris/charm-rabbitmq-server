@@ -9,7 +9,6 @@ import subprocess
 import rabbit_utils as rabbit
 import utils
 import lib.ceph as ceph
-import lib.unison as unison
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
 POOL_NAME = SERVICE_NAME
@@ -54,13 +53,6 @@ def amqp_changed():
 
 
 def cluster_joined():
-    # Ensure permissions for unison file sync.
-    cmd = ['chmod', '-R', 'g+wrx', '/var/lib/rabbitmq']
-    subprocess.check_call(cmd)
-    unison.ssh_authorized_peers(user=SSH_USER,
-                                group='rabbitmq',
-                                peer_interface='cluster',
-                                ensure_user=True)
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
     if l_unit_no > r_unit_no:
