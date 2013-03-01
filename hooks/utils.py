@@ -396,8 +396,8 @@ def is_clustered():
     return False
 
 
-def is_leader():
-    status = execute('crm resource show res_rabbitmq_vip', echo=True)[0].strip()
+def is_leader(res):
+    status = execute('crm resource show %s' % res, echo=True)[0].strip()
     hostname = execute('hostname', echo=True)[0].strip()
     if hostname in status:
         return True
@@ -422,9 +422,9 @@ def oldest_peer(peers):
     return True
 
 
-def eligible_leader():
+def eligible_leader(res):
     if is_clustered():
-        if not is_leader():
+        if not is_leader(res):
             juju_log('INFO', 'Deferring action to CRM leader.')
             return False
     else:

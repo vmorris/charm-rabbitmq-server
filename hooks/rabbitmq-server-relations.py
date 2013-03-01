@@ -1,12 +1,14 @@
 #!/usr/bin/python
 
-import ceph
-import rabbit_utils as rabbit
-import utils
-
 import os
 import sys
 import subprocess
+
+
+import rabbit_utils as rabbit
+import utils
+import lib.ceph as ceph
+import lib.unison as unison
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
 POOL_NAME = SERVICE_NAME
@@ -17,15 +19,10 @@ def install():
     utils.expose(5672)
 
 def amqp_changed():
-    l_unit_no=os.getenv('JUJU_UNIT_NAME').split('/')[1]
-    r_unit_no=None
-    for rid in utils.relation_ids('cluster'):
-        for unit in utils.relation_list(rid):
-            r_unit_no = unit.split('/')[1]
-            if l_unit_no > r_unit_no:
-                msg = 'amqp_changed(): Deferring amqp_changed to leader.'
-                utils.juju_log('INFO', msg)
-                return
+    if not utils.eligible_leader('res_rabbitmq_vip'):
+        msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
+        utils.juju_log('INFO', msg)
+        return
 
     rabbit_user=utils.relation_get('username')
     vhost=utils.relation_get('vhost')
@@ -56,6 +53,13 @@ def amqp_changed():
 
 
 def cluster_joined():
+    # Ensure permissions for unison file sync.
+    cmd = ['chmod', '-R', 'g+wrx', '/var/lib/rabbitmq']
+    subprocess.check_call(cmd)
+    unison.ssh_authorized_peers(user=SSH_USER,
+                                group='rabbitmq',
+                                peer_interface='cluster',
+                                ensure_user=True)
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
     if l_unit_no > r_unit_no:
@@ -177,7 +181,7 @@ def ceph_changed():
 
     ceph.configure(service=SERVICE_NAME, key=key, auth=auth)
 
-    if utils.eligible_leader():
+    if utils.eligible_leader('res_rabbitmq_vip'):
         rbd_img = utils.config_get('rbd-name')
         rbd_size = utils.config_get('rbd-size')
         sizemb = int(rbd_size.split('G')[0]) * 1024
