@@ -118,7 +118,7 @@ def ha_joined():
         return
 
     # rabbit node-name need to match on all nodes.
-    with open('/etc/rabbitmq/rabbitmq.conf.d/node-name') as out:
+    with open('/etc/rabbitmq/rabbitmq.conf.d/node-name', 'wb') as out:
         out.write('RABBITMQ_NODENAME=%s@localhost' % SERVICE_NAME)
 
     relation_settings = {}
