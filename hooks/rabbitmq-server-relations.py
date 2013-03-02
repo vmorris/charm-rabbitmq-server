@@ -18,14 +18,15 @@ def install():
     utils.install(*rabbit.PACKAGES)
     utils.expose(5672)
 
-def amqp_changed():
+def amqp_changed(relation_id=None, remote_unit=None):
     if not utils.eligible_leader('res_rabbitmq_vip'):
         msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
         utils.juju_log('INFO', msg)
         return
 
-    rabbit_user=utils.relation_get('username')
-    vhost=utils.relation_get('vhost')
+    rabbit_user = utils.relation_get('username', rid=relation_id,
+                                     unit=remote_unit)
+    vhost = utils.relation_get('vhost', rid=relation_id, unit=remote_unit)
     if None in [rabbit_user, vhost]:
         utils.juju_log('INFO', 'amqp_changed(): Relation not ready.')
         return
@@ -49,6 +50,8 @@ def amqp_changed():
     if utils.is_clustered():
         relation_settings['clustered'] = 'true'
         relation_settings['vip'] = utils.config_get('vip')
+    if relation_id:
+        relation_settings['rid'] = relation_id
     utils.relation_set(**relation_settings)
 
 
@@ -114,6 +117,10 @@ def ha_joined():
                        'ha_joined: No ceph relation yet, deferring.')
         return
 
+    # rabbit node-name need to match on all nodes.
+    with open('/etc/rabbitmq/rabbitmq.conf.d/node-name') as out:
+        out.write('RABBITMQ_NODENAME=%s@localhost' % SERVICE_NAME)
+
     relation_settings = {}
     relation_settings['corosync_bindiface'] = corosync_bindiface
     relation_settings['corosync_mcastport'] = corosync_mcastport
@@ -146,16 +153,18 @@ def ha_joined():
 
 
 def ha_changed():
-    if not utils.is_clustered:
+    if not utils.is_clustered():
         return
     vip = utils.config_get('vip')
     utils.juju_log('INFO', 'ha_changed(): We are now HA clustered. '\
                    'Advertising our VIP (%s) to all AMQP clients.' %\
                    vip)
     relation_settings = {'vip': vip, 'clustered': 'true'}
+
+    # need to re-authenticate all clients since node-name changed.
     for rid in utils.relation_ids('amqp'):
-        relation_settings['rid'] = rid
-        utils.relation_set(**relation_settings)
+        for unit in utils.relation_list(rid):
+            amqp_changed(relation_id=rid, remote_unit=unit)
 
 
 def ceph_joined():
