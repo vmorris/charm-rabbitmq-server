@@ -118,9 +118,8 @@ def ha_joined():
         return
 
     # rabbit node-name need to match on all nodes.
-    if utils.running('rabbitmq-server'):
-        utils.juju_log('INFO','Stopping rabbitmq-server.')
-        utils.stop('rabbitmq-server')
+    utils.juju_log('INFO','Stopping rabbitmq-server.')
+    utils.stop('rabbitmq-server')
     with open('/etc/rabbitmq/rabbitmq.conf.d/node-name', 'wb') as out:
         out.write('RABBITMQ_NODENAME=%s@localhost' % SERVICE_NAME)
 
@@ -199,9 +198,8 @@ def ceph_changed():
     else:
         utils.juju_log('INFO',
                        'This is not the peer leader. Not configuring RBD.')
-        if utils.running('rabbitmq-server'):
-            utils.juju_log('INFO','Stopping rabbitmq-server.')
-            utils.stop('rabbitmq-server')
+        utils.juju_log('INFO','Stopping rabbitmq-server.')
+        utils.stop('rabbitmq-server')
 
     # If 'ha' relation has been made before the 'ceph' relation
     # it is important to make sure the ha-relation data is being

@@ -322,6 +322,7 @@ def start(*services):
 
 
 def running(service):
+    # TODO: ensure compat. /w sysv init scripts.
     try:
         output = subprocess.check_output(['service', service, 'status'])
     except subprocess.CalledProcessError:
