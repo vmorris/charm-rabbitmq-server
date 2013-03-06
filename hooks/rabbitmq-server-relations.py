@@ -56,6 +56,11 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
 
 def cluster_joined():
+    if utils.is_relation_made('ha'):
+        utils.juju_log('INFO',
+                       'hacluster relation is present, skipping native '\
+                       'rabbitmq cluster config.')
+        return
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
     if l_unit_no > r_unit_no:
@@ -71,6 +76,11 @@ def cluster_joined():
 
 
 def cluster_changed():
+    if utils.is_relation_made('ha'):
+        utils.juju_log('INFO',
+                       'hacluster relation is present, skipping native '\
+                       'rabbitmq cluster config.')
+        return
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
     if l_unit_no < r_unit_no:
