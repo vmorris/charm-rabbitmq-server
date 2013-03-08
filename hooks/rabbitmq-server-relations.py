@@ -130,6 +130,7 @@ def ha_joined():
     # rabbit node-name need to match on all nodes.
     utils.juju_log('INFO','Stopping rabbitmq-server.')
     utils.stop('rabbitmq-server')
+    rabbit.set_node_name(SERVICE_NAME)
     with open('/etc/rabbitmq/rabbitmq.conf.d/node-name', 'wb') as out:
         out.write('RABBITMQ_NODENAME=%s@localhost' % SERVICE_NAME)
 

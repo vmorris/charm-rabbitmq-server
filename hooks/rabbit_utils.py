@@ -95,3 +95,29 @@ def cluster_with(host):
     subprocess.check_call(cmd)
     cmd = [RABBITMQ_CTL, 'start_app']
     subprocess.check_call(cmd)
+
+
+def set_node_name(name):
+    # update or append RABBITMQ_NODENAME to environment config.
+    # rabbitmq.conf.d is not present on all releases, so use or create
+    # rabbitmq-env.conf instead.
+    conf = '/etc/rabbitmq/rabbitmq-env.conf'
+
+    if not os.path.isfile(conf):
+        utils.juju_log('INFO', '%s does not exist, creating.' % conf)
+        with open(conf, 'wb') as out:
+            out.write('RABBITMQ_NODENAME=%s\n' % name)
+        return
+
+    out = []
+    f = False
+    for line in open(conf).readlines():
+        if line.strip().startswith('RABBITMQ_NODENAME'):
+            f = True
+            line = 'RABBITMQ_NODENAME=%s\n' % name
+        out.append(line)
+    if not f:
+        out.append('RABBITMQ_NODENAME=%s\n' % name)
+    utils.juju_log('INFO', 'Updating %s, RABBITMQ_NODENAME=%s' % (conf, name))
+    with open(conf, 'wb') as conf:
+        conf.write(''.join(out))
