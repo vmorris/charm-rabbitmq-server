@@ -21,10 +21,12 @@ def do_hooks(hooks):
     hook = os.path.basename(sys.argv[0])
 
     try:
-        hooks[hook]()
+        hook_func = hooks[hook]
     except KeyError:
         juju_log('INFO',
                  "This charm doesn't know how to handle '{}'.".format(hook))
+    else:
+        hook_func()
 
 
 def can_install():
