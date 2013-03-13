@@ -8,6 +8,9 @@ description: |
 provides:
   amqp:
     interface: rabbitmq
+  nrpe-external-master:
+    interface: nrpe-external-master
+    scope: container
 peers:
   cluster:
     interface: rabbitmq
