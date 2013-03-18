@@ -1,13 +1,14 @@
 import os
 import re
 import subprocess
-import utils
+import lib.utils as utils
 import apt_pkg as apt
 
 PACKAGES = ['pwgen', 'rabbitmq-server']
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
+
 
 def vhost_exists(vhost):
     cmd = [RABBITMQ_CTL, 'list_vhosts']
