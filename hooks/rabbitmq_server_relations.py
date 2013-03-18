@@ -7,19 +7,22 @@ import subprocess
 
 
 import rabbit_utils as rabbit
-import utils
-import lib.ceph as ceph
+import lib.utils as utils
+import lib.cluster_utils as cluster
+import lib.ceph_utils as ceph
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
 POOL_NAME = SERVICE_NAME
-RABBIT_DIR='/var/lib/rabbitmq'
+RABBIT_DIR = '/var/lib/rabbitmq'
+
 
 def install():
     utils.install(*rabbit.PACKAGES)
     utils.expose(5672)
 
+
 def amqp_changed(relation_id=None, remote_unit=None):
-    if not utils.eligible_leader('res_rabbitmq_vip'):
+    if not cluster.eligible_leader('res_rabbitmq_vip'):
         msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
         utils.juju_log('INFO', msg)
         return
@@ -47,7 +50,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
     relation_settings = {
         'password': password
     }
-    if utils.is_clustered():
+    if cluster.is_clustered():
         relation_settings['clustered'] = 'true'
         relation_settings['vip'] = utils.config_get('vip')
     if relation_id:
@@ -107,7 +110,6 @@ def cluster_changed():
 
 
 def ha_joined():
-    config = {}
     corosync_bindiface = utils.config_get('ha-bindiface')
     corosync_mcastport = utils.config_get('ha-mcastport')
     vip = utils.config_get('vip')
@@ -121,14 +123,13 @@ def ha_joined():
                        'configure hacluster.')
         sys.exit(1)
 
-
-    if not utils.is_relation_made('ceph'):
+    if not utils.is_relation_made('ceph', 'auth'):
         utils.juju_log('INFO',
                        'ha_joined: No ceph relation yet, deferring.')
         return
 
     # rabbit node-name need to match on all nodes.
-    utils.juju_log('INFO','Stopping rabbitmq-server.')
+    utils.juju_log('INFO', 'Stopping rabbitmq-server.')
     utils.stop('rabbitmq-server')
 
     rabbit.set_node_name('%s@localhost' % SERVICE_NAME)
@@ -138,26 +139,28 @@ def ha_joined():
     relation_settings['corosync_mcastport'] = corosync_mcastport
 
     relation_settings['resources'] = {
-        'res_rabbitmq_rbd':'ocf:ceph:rbd',
-        'res_rabbitmq_fs':'ocf:heartbeat:Filesystem',
-        'res_rabbitmq_vip':'ocf:heartbeat:IPaddr2',
-        'res_rabbitmq-server':'lsb:rabbitmq-server',
+        'res_rabbitmq_rbd': 'ocf:ceph:rbd',
+        'res_rabbitmq_fs': 'ocf:heartbeat:Filesystem',
+        'res_rabbitmq_vip': 'ocf:heartbeat:IPaddr2',
+        'res_rabbitmq-server': 'lsb:rabbitmq-server',
     }
 
     relation_settings['resource_params'] = {
-        'res_rabbitmq_rbd': 'params name="%s" pool="%s" user="%s" secret="%s"' %\
-            (rbd_name, POOL_NAME, SERVICE_NAME, ceph.keyfile_path(SERVICE_NAME)),
+        'res_rabbitmq_rbd': 'params name="%s" pool="%s" user="%s" '
+                            'secret="%s"' % \
+                            (rbd_name, POOL_NAME,
+                             SERVICE_NAME, ceph.keyfile_path(SERVICE_NAME)),
         'res_rabbitmq_fs': 'params device="/dev/rbd/%s/%s" directory="%s" '\
-                        'fstype="ext4" op start start-delay="10s"' %\
-            (POOL_NAME, rbd_name, RABBIT_DIR),
-        'res_rabbitmq_vip':'params ip="%s" cidr_netmask="%s" nic="%s"' %\
-            (vip, vip_cidr, vip_iface),
-        'res_rabbitmqd':'op start start-delay="5s" op monitor interval="5s"',
+                           'fstype="ext4" op start start-delay="10s"' %\
+                           (POOL_NAME, rbd_name, RABBIT_DIR),
+        'res_rabbitmq_vip': 'params ip="%s" cidr_netmask="%s" nic="%s"' %\
+                            (vip, vip_cidr, vip_iface),
+        'res_rabbitmqd': 'op start start-delay="5s" op monitor interval="5s"',
     }
 
     relation_settings['groups'] = {
-        'grp_rabbitmq':'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '\
-                       'res_rabbitmq-server',
+        'grp_rabbitmq': 'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '\
+                        'res_rabbitmq-server',
     }
 
     for rel_id in utils.relation_ids('ha'):
@@ -165,14 +168,12 @@ def ha_joined():
 
 
 def ha_changed():
-    if not utils.is_clustered():
+    if not cluster.is_clustered():
         return
     vip = utils.config_get('vip')
-    utils.juju_log('INFO', 'ha_changed(): We are now HA clustered. '\
+    utils.juju_log('INFO', 'ha_changed(): We are now HA clustered. '
                    'Advertising our VIP (%s) to all AMQP clients.' %\
                    vip)
-    relation_settings = {'vip': vip, 'clustered': 'true'}
-
     # need to re-authenticate all clients since node-name changed.
     for rid in utils.relation_ids('amqp'):
         for unit in utils.relation_list(rid):
@@ -195,7 +196,7 @@ def ceph_changed():
 
     ceph.configure(service=SERVICE_NAME, key=key, auth=auth)
 
-    if utils.eligible_leader('res_rabbitmq_vip'):
+    if cluster.eligible_leader('res_rabbitmq_vip'):
         rbd_img = utils.config_get('rbd-name')
         rbd_size = utils.config_get('rbd-size')
         sizemb = int(rbd_size.split('G')[0]) * 1024
@@ -208,7 +209,7 @@ def ceph_changed():
     else:
         utils.juju_log('INFO',
                        'This is not the peer leader. Not configuring RBD.')
-        utils.juju_log('INFO','Stopping rabbitmq-server.')
+        utils.juju_log('INFO', 'Stopping rabbitmq-server.')
         utils.stop('rabbitmq-server')
 
     # If 'ha' relation has been made before the 'ceph' relation
@@ -230,8 +231,9 @@ def upgrade_charm():
         if f.endswith('.passwd'):
             s = os.path.join('/var/lib/juju', f)
             d = os.path.join('/var/lib/rabbitmq', f)
-            m = 'upgrade_charm: Migrating stored passwd from %s to %s.' % (s, d)
-            utils.juju_log('INFO', m)
+            utils.juju_log('INFO',
+                           'upgrade_charm: Migrating stored passwd'
+                           ' from %s to %s.' % (s, d))
             shutil.move(s, d)
 
 hooks = {
