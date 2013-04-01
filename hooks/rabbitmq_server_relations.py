@@ -10,6 +10,8 @@ import rabbit_utils as rabbit
 import lib.utils as utils
 import lib.cluster_utils as cluster
 import lib.ceph_utils as ceph
+import lib.openstack_common as openstack
+
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
 POOL_NAME = SERVICE_NAME
@@ -165,6 +167,14 @@ def ha_joined():
 
     for rel_id in utils.relation_ids('ha'):
         utils.relation_set(rid=rel_id, **relation_settings)
+
+    env_vars = {
+        'OPENSTACK_SERVICE_RABBIT': 'rabbitmq-server',
+        'OPENSTACK_PORT_EPMD': 4369,
+        'OPENSTACK_PORT_MCASTPORT': utils.config_get('ha-mcastport')
+        'OPENSTACK_PORT_SSL': utils.config_get('ssl_port'),
+    }
+    openstack.save_script_rc(**env_vars)
 
 
 def ha_changed():
