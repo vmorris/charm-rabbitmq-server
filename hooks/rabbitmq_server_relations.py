@@ -169,7 +169,6 @@ def ha_joined():
         utils.relation_set(rid=rel_id, **relation_settings)
 
     env_vars = {
-        'OPENSTACK_SERVICE_RABBIT': 'rabbitmq-server',
         'OPENSTACK_PORT_EPMD': 4369,
         'OPENSTACK_PORT_MCASTPORT': utils.config_get('ha-mcastport'),
     }
