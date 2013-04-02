@@ -9,5 +9,5 @@ set -e
 openstack_service_names=`env| awk -F '=' '(/OPENSTACK_SERVICE/){print $2}'`
 for service_name in $openstack_service_names
 do
-    service $service_name status
+    /etc/init.d/$service_name status > /dev/null
 done

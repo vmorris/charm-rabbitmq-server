@@ -172,7 +172,6 @@ def ha_joined():
         'OPENSTACK_SERVICE_RABBIT': 'rabbitmq-server',
         'OPENSTACK_PORT_EPMD': 4369,
         'OPENSTACK_PORT_MCASTPORT': utils.config_get('ha-mcastport'),
-        'OPENSTACK_PORT_SSL': utils.config_get('ssl_port'),
     }
     openstack.save_script_rc(**env_vars)
 
