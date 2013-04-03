@@ -130,11 +130,13 @@ def ha_joined():
                        'ha_joined: No ceph relation yet, deferring.')
         return
 
-    # rabbit node-name need to match on all nodes.
-    utils.juju_log('INFO', 'Stopping rabbitmq-server.')
-    utils.stop('rabbitmq-server')
-
-    rabbit.set_node_name('%s@localhost' % SERVICE_NAME)
+    name = '%s@localhost' % SERVICE_NAME
+    if rabbit.get_node_name() != name:
+        utils.juju_log('INFO', 'Stopping rabbitmq-server.')
+        utils.stop('rabbitmq-server')
+        rabbit.set_node_name('%s@localhost' % SERVICE_NAME)
+    else:
+        utils.juju_log('INFO', 'Node name already set to %s.' % name)
 
     relation_settings = {}
     relation_settings['corosync_bindiface'] = corosync_bindiface

@@ -8,7 +8,7 @@ PACKAGES = ['pwgen', 'rabbitmq-server']
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
-
+ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
 
 def vhost_exists(vhost):
     cmd = [RABBITMQ_CTL, 'list_vhosts']
@@ -103,23 +103,35 @@ def set_node_name(name):
     # update or append RABBITMQ_NODENAME to environment config.
     # rabbitmq.conf.d is not present on all releases, so use or create
     # rabbitmq-env.conf instead.
-    conf = '/etc/rabbitmq/rabbitmq-env.conf'
-
-    if not os.path.isfile(conf):
-        utils.juju_log('INFO', '%s does not exist, creating.' % conf)
-        with open(conf, 'wb') as out:
+    if not os.path.isfile(ENV_CONF):
+        utils.juju_log('INFO', '%s does not exist, creating.' % ENV_CONF)
+        with open(ENV_CONF, 'wb') as out:
             out.write('RABBITMQ_NODENAME=%s\n' % name)
         return
 
     out = []
     f = False
-    for line in open(conf).readlines():
+    for line in open(ENV_CONF).readlines():
         if line.strip().startswith('RABBITMQ_NODENAME'):
             f = True
             line = 'RABBITMQ_NODENAME=%s\n' % name
         out.append(line)
     if not f:
         out.append('RABBITMQ_NODENAME=%s\n' % name)
-    utils.juju_log('INFO', 'Updating %s, RABBITMQ_NODENAME=%s' % (conf, name))
-    with open(conf, 'wb') as conf:
+    utils.juju_log('INFO', 'Updating %s, RABBITMQ_NODENAME=%s' %\
+                   (ENV_CONF, name))
+    with open(ENV_CONF, 'wb') as conf:
         conf.write(''.join(out))
+
+
+def get_node_name():
+    ENV_CONF = '/tmp/rabbitmq-env.conf'
+    if not os.path.exists(ENV_CONF):
+        return None
+    node_name = None
+    env_conf = open(ENV_CONF, 'r').readlines()
+    node_name = None
+    for l in env_conf:
+        if l.startswith('RABBITMQ_NODENAME'):
+            node_name = l.split('=')[1].strip()
+    return node_name
