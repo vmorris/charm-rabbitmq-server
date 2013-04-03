@@ -125,7 +125,6 @@ def set_node_name(name):
 
 
 def get_node_name():
-    ENV_CONF = '/tmp/rabbitmq-env.conf'
     if not os.path.exists(ENV_CONF):
         return None
     node_name = None
