@@ -157,7 +157,7 @@ def ha_joined():
                            (POOL_NAME, rbd_name, RABBIT_DIR),
         'res_rabbitmq_vip': 'params ip="%s" cidr_netmask="%s" nic="%s"' %\
                             (vip, vip_cidr, vip_iface),
-        'res_rabbitmqd': 'op start start-delay="5s" op monitor interval="5s"',
+        'res_rabbitmq-server': 'op start start-delay="5s" op monitor interval="5s"',
     }
 
     relation_settings['groups'] = {
