@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import subprocess
+import glob
 
 
 import rabbit_utils as rabbit
@@ -19,6 +20,7 @@ RABBIT_DIR = '/var/lib/rabbitmq'
 
 
 def install():
+    pre_install_hooks()
     utils.install(*rabbit.PACKAGES)
     utils.expose(5672)
 
@@ -234,6 +236,7 @@ def ceph_changed():
 
 
 def upgrade_charm():
+    pre_install_hooks()
     # Ensure older passwd files in /var/lib/juju are moved to
     # /var/lib/rabbitmq which will end up replicated if clustered.
     for f in [f for f in os.listdir('/var/lib/juju')
@@ -245,6 +248,12 @@ def upgrade_charm():
                            'upgrade_charm: Migrating stored passwd'
                            ' from %s to %s.' % (s, d))
             shutil.move(s, d)
+
+
+def pre_install_hooks():
+    for f in glob.glob('exec.d/*/charm-pre-install'):
+        if os.path.isfile(f) and os.access(f, os.X_OK):
+            subprocess.check_call(['sh', '-c', f])
 
 hooks = {
     'install': install,
