@@ -249,6 +249,28 @@ def upgrade_charm():
                            ' from %s to %s.' % (s, d))
             shutil.move(s, d)
 
+MAN_PLUGIN = 'rabbitmq_management'
+
+def config_changed():
+    if utils.config_get('management_plugin') == True:
+        rabbit.enable_plugin(MAN_PLUGIN)
+        utils.open_port(55672)
+    else:
+        rabbit.disable_plugin(MAN_PLUGIN)
+        utils.close_port(55672)
+    
+    if utils.config_get('ssl_enabled') == True:
+        rabbit.enable_ssl(utils.config_get('ssl_key'),
+                          utils.config_get('ssl_cert'),
+                          utils.config_get('ssl_port'))
+        utils.open_port(utils.config_get('ssl_port'))
+    else:
+        if os.path.exists(rabbit.RABBITMQ_CONF):
+            os.remove(rabbit.RABBITMQ_CONF)
+        utils.close_port(utils.config_get('ssl_port'))
+    
+    utils.restart('rabbitmq-server')
+
 
 def pre_install_hooks():
     for f in glob.glob('exec.d/*/charm-pre-install'):
@@ -264,7 +286,8 @@ hooks = {
     'ha-relation-changed': ha_changed,
     'ceph-relation-joined': ceph_joined,
     'ceph-relation-changed': ceph_changed,
-    'upgrade-charm': upgrade_charm
+    'upgrade-charm': upgrade_charm,
+    'config-changed': config_changed
 }
 
 utils.do_hooks(hooks)
