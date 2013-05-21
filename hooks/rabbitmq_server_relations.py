@@ -266,7 +266,7 @@ def config_changed():
         if None in [ ssl_key, ssl_cert, ssl_port ]:
             utils.juju_log('ERROR',
                            'Please provide ssl_key, ssl_cert and ssl_port'
-                           ' config when enabled SSL support')
+                           ' config when enabling SSL support')
             sys.exit(1)
         else:
             rabbit.enable_ssl(ssl_key, ssl_cert, ssl_port)
