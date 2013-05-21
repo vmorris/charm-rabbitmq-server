@@ -124,6 +124,18 @@ def expose(port, protocol='TCP'):
     subprocess.check_call(cmd)
 
 
+def open_port(port, protocol='TCP'):
+    expose(port, protocol)
+
+
+def close_port(port, protocol='TCP'):
+    cmd = [
+        'close-port',
+        '{}/{}'.format(port, protocol)
+        ]
+    subprocess.check_call(cmd)
+
+
 def juju_log(severity, message):
     cmd = [
         'juju-log',

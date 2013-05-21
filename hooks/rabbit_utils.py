@@ -1,6 +1,9 @@
 import os
+import pwd
+import grp
 import re
 import subprocess
+import glob
 import lib.utils as utils
 import apt_pkg as apt
 
@@ -9,6 +12,7 @@ PACKAGES = ['pwgen', 'rabbitmq-server']
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
 ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
+RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
 
 def vhost_exists(vhost):
     cmd = [RABBITMQ_CTL, 'list_vhosts']
@@ -127,10 +131,46 @@ def set_node_name(name):
 def get_node_name():
     if not os.path.exists(ENV_CONF):
         return None
-    node_name = None
     env_conf = open(ENV_CONF, 'r').readlines()
     node_name = None
     for l in env_conf:
         if l.startswith('RABBITMQ_NODENAME'):
             node_name = l.split('=')[1].strip()
     return node_name
+
+
+def _manage_plugin(plugin, action):
+    os.environ['HOME'] = '/root'
+    _rabbitmq_plugins = \
+        glob.glob('/usr/lib/rabbitmq/lib/rabbitmq_server-*/sbin/rabbitmq-plugins')[0]
+    subprocess.check_call([ _rabbitmq_plugins, action, plugin])
+
+
+def enable_plugin(plugin):
+    _manage_plugin(plugin, 'enable')
+
+
+def disable_plugin(plugin):
+    _manage_plugin(plugin, 'disable')
+
+ssl_key_file = "/etc/rabbitmq/rabbit-server-privkey.pem"
+ssl_cert_file = "/etc/rabbitmq/rabbit-server-cert.pem"
+
+
+def enable_ssl(ssl_key, ssl_cert, ssl_port):
+    uid = pwd.getpwnam("root").pw_uid
+    gid = grp.getgrnam("rabbitmq").gr_gid
+    with open(ssl_key_file, 'w') as key_file:
+        key_file.write(ssl_key)
+    os.chmod(ssl_key_file, 0640)
+    os.chown(ssl_key_file, uid, gid)
+    with open(ssl_cert_file, 'w') as cert_file:
+        cert_file.write(ssl_cert)
+    os.chmod(ssl_cert_file, 0640)
+    os.chown(ssl_cert_file, uid, gid)
+    with open(RABBITMQ_CONF, 'w') as rmq_conf:
+        rmq_conf.write(utils.render_template(os.path.basename(RABBITMQ_CONF),
+                              { "ssl_port": ssl_port,
+                                "ssl_cert_file": ssl_cert_file,
+                                "ssl_key_file": ssl_key_file})
+                       )
