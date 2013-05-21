@@ -260,10 +260,17 @@ def config_changed():
         utils.close_port(55672)
     
     if utils.config_get('ssl_enabled') == True:
-        rabbit.enable_ssl(utils.config_get('ssl_key'),
-                          utils.config_get('ssl_cert'),
-                          utils.config_get('ssl_port'))
-        utils.open_port(utils.config_get('ssl_port'))
+        ssl_key = utils.config_get('ssl_key')
+        ssl_cert = utils.config_get('ssl_cert')
+        ssl_port = utils.config_get('ssl_port')
+        if None in [ ssl_key, ssl_cert, ssl_port ]:
+            utils.juju_log('ERROR',
+                           'Please provide ssl_key, ssl_cert and ssl_port'
+                           ' config when enabled SSL support')
+            sys.exit(1)
+        else:
+            rabbit.enable_ssl(ssl_key, ssl_cert, ssl_port)
+            utils.open_port(ssl_port)
     else:
         if os.path.exists(rabbit.RABBITMQ_CONF):
             os.remove(rabbit.RABBITMQ_CONF)
