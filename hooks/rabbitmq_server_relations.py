@@ -50,9 +50,11 @@ def amqp_changed(relation_id=None, remote_unit=None):
     rabbit.create_vhost(vhost)
     rabbit.create_user(rabbit_user, password)
     rabbit.grant_permissions(rabbit_user, vhost)
+    rabbit_hostname = utils.unit_get('private-address')
 
     relation_settings = {
-        'password': password
+        'password': password,
+        'hostname': rabbit_hostname
     }
     if cluster.is_clustered():
         relation_settings['clustered'] = 'true'
