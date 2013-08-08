@@ -157,13 +157,13 @@ def make_filesystem(blk_device, fstype='ext4'):
     count = 0
     e_noent = os.errno.ENOENT
     while not os.path.exists(blk_device):
-        utils.juju_log('INFO',
-            'ceph: waiting for block device %s to appear' % blk_device)
-        count += 1
         if count >= 10:
             utils.juju_log('ERROR',
                 'ceph: gave up waiting on block device %s' % blk_device)
             raise IOError(e_noent, os.strerror(e_noent), blk_device)
+        utils.juju_log('INFO',
+            'ceph: waiting for block device %s to appear' % blk_device)
+        count += 1
         time.sleep(1)
     else:
         utils.juju_log('INFO',
