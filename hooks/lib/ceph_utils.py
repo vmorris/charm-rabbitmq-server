@@ -158,21 +158,18 @@ def make_filesystem(blk_device, fstype='ext4'):
     e_noent = os.errno.ENOENT
     while not os.path.exists(blk_device):
         utils.juju_log('INFO',
-                       'ceph: waiting for block device %s to appear' %
-                       blk_device)
+            'ceph: waiting for block device %s to appear' % blk_device)
         count += 1
         if count >= 10:
             utils.juju_log('ERROR',
-                           'ceph: gave up waiting on block device %s to '
-                           'appear' % blk_device)
+                'ceph: gave up waiting on block device %s' % blk_device)
             raise IOError(e_noent, os.strerror(e_noent), blk_device)
         time.sleep(1)
     else:
         utils.juju_log('INFO',
-                       'ceph: Formatting block device %s as filesystem %s.' %
-                       (blk_device, fstype))
-        cmd = ['mkfs', '-t', fstype, blk_device]
-        execute(cmd)
+            'ceph: Formatting block device %s as filesystem %s.' %
+            (blk_device, fstype))
+        execute(['mkfs', '-t', fstype, blk_device])
 
 
 def place_data_on_ceph(service, blk_device, data_src_dst, fstype='ext4'):
