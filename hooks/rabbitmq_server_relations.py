@@ -278,7 +278,8 @@ def config_changed():
             os.remove(rabbit.RABBITMQ_CONF)
         utils.close_port(utils.config_get('ssl_port'))
     
-    utils.restart('rabbitmq-server')
+    if cluster.eligible_leader('res_rabbitmq_vip'):
+        utils.restart('rabbitmq-server')
 
 
 def pre_install_hooks():
