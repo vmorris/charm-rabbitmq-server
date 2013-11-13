@@ -118,7 +118,7 @@ def get_ceph_nodes():
             ceph_public_addr = utils.relation_get(
                 'ceph_public_addr', unit=unit, rid=r_id) or \
                 utils.relation_get('private-address', unit=unit, rid=r_id)
-                hosts.append(ceph_public_addr)
+            hosts.append(ceph_public_addr)
     return hosts
 
 
