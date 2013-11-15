@@ -13,10 +13,17 @@ import lib.cluster_utils as cluster
 import lib.ceph_utils as ceph
 import lib.openstack_common as openstack
 
+import _pythonpath
+_ = _pythonpath
+
+from charmhelpers.core.host import rsync
+from charmhelpers.contrib.charmsupport.nrpe import NRPE
+
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
 POOL_NAME = SERVICE_NAME
 RABBIT_DIR = '/var/lib/rabbitmq'
+NAGIOS_PLUGINS='/usr/lib/nagios/plugins'
 
 
 def install():
@@ -237,6 +244,35 @@ def ceph_changed():
     utils.juju_log('INFO', 'Finish Ceph Relation Changed')
 
 
+def update_nrpe_checks():
+    if os.path.isdir(NAGIOS_PLUGINS):
+        rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts', 'check_rabbitmq.py'),
+              os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
+    user = 'naigos'
+    vhost = 'nagios'
+    password_file = os.path.join(RABBIT_DIR, '%s.passwd' % user)
+    if os.path.exists(password_file):
+        password = open(password_file).read().strip()
+    else:
+        cmd = ['pwgen', '64', '1']
+        password = subprocess.check_output(cmd).strip()
+        with open(password_file, 'wb') as out:
+            out.write(password)
+
+    rabbit.create_vhost(vhost)
+    rabbit.create_user(user, password)
+    rabbit.grant_permissions(user, vhost)
+
+    nrpe_compat = NRPE()
+    nrpe_compat.add_check(
+        shortname='rabbitmq',
+        description='Check RabbitMQ',
+        check_cmd='{}/check_rabbitmq.py --user {} --password {} --vhost {}'
+                  ''.format(NAGIOS_PLUGINS, user, password, vhost)
+    )
+    nrpe_compat.write()
+
+
 def upgrade_charm():
     pre_install_hooks()
     # Ensure older passwd files in /var/lib/juju are moved to
@@ -281,6 +317,8 @@ def config_changed():
     if cluster.eligible_leader('res_rabbitmq_vip'):
         utils.restart('rabbitmq-server')
 
+    update_nrpe_checks()
+
 
 def pre_install_hooks():
     for f in glob.glob('exec.d/*/charm-pre-install'):
@@ -297,7 +335,8 @@ hooks = {
     'ceph-relation-joined': ceph_joined,
     'ceph-relation-changed': ceph_changed,
     'upgrade-charm': upgrade_charm,
-    'config-changed': config_changed
+    'config-changed': config_changed,
+    'nrpe-external-master-relation-changed': update_nrpe_checks
 }
 
 utils.do_hooks(hooks)
