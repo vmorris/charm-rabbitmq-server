@@ -23,7 +23,7 @@ from charmhelpers.contrib.charmsupport.nrpe import NRPE
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
 POOL_NAME = SERVICE_NAME
 RABBIT_DIR = '/var/lib/rabbitmq'
-NAGIOS_PLUGINS='/usr/lib/nagios/plugins'
+NAGIOS_PLUGINS='/usr/local/lib/nagios/plugins'
 
 
 def install():

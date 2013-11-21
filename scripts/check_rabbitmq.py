@@ -10,8 +10,6 @@
 
 # This file is managed by juju.  Do not make local changes.
 
-# Author: Cristian Gafton <cristian.gafton@canonical.com>
-#
 # Copyright (C) 2009, 2012 Canonical
 # All Rights Reserved
 #
