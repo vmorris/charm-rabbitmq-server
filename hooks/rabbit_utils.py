@@ -7,7 +7,7 @@ import glob
 import lib.utils as utils
 import apt_pkg as apt
 
-PACKAGES = ['pwgen', 'rabbitmq-server']
+PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib']
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'

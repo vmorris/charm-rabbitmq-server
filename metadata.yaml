@@ -9,10 +9,10 @@ categories: ["misc"]
 provides:
   amqp:
     interface: rabbitmq
-requires:
   nrpe-external-master:
     interface: nrpe-external-master
     scope: container
+requires:
   ha:
     interface: hacluster
     scope: container
