@@ -196,6 +196,7 @@ def ha_changed():
 
 def ceph_joined():
     utils.juju_log('INFO', 'Start Ceph Relation Joined')
+    utils.configure_source()
     ceph.install()
     utils.juju_log('INFO', 'Finish Ceph Relation Joined')
 
