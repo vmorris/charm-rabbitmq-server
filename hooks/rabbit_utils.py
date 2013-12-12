@@ -14,6 +14,7 @@ COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
 ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
 RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
 
+
 def vhost_exists(vhost):
     cmd = [RABBITMQ_CTL, 'list_vhosts']
     out = subprocess.check_output(cmd)
@@ -88,6 +89,9 @@ def cluster_with(host):
     vers = rabbit_version()
     if vers >= '3.0.1-1':
         cluster_cmd = 'join_cluster'
+        cmd = [RABBITMQ_CTL, 'set_policy HA \'^(?!amq\.).*\' '
+               '\'{"ha-mode": "all"}\'']
+        subprocess.check_call(cmd)
     else:
         cluster_cmd = 'cluster'
     out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
@@ -122,7 +126,7 @@ def set_node_name(name):
         out.append(line)
     if not f:
         out.append('RABBITMQ_NODENAME=%s\n' % name)
-    utils.juju_log('INFO', 'Updating %s, RABBITMQ_NODENAME=%s' %\
+    utils.juju_log('INFO', 'Updating %s, RABBITMQ_NODENAME=%s' %
                    (ENV_CONF, name))
     with open(ENV_CONF, 'wb') as conf:
         conf.write(''.join(out))
@@ -142,8 +146,9 @@ def get_node_name():
 def _manage_plugin(plugin, action):
     os.environ['HOME'] = '/root'
     _rabbitmq_plugins = \
-        glob.glob('/usr/lib/rabbitmq/lib/rabbitmq_server-*/sbin/rabbitmq-plugins')[0]
-    subprocess.check_call([ _rabbitmq_plugins, action, plugin])
+        glob.glob('/usr/lib/rabbitmq/lib/rabbitmq_server-*'
+                  '/sbin/rabbitmq-plugins')[0]
+    subprocess.check_call([_rabbitmq_plugins, action, plugin])
 
 
 def enable_plugin(plugin):
@@ -170,7 +175,6 @@ def enable_ssl(ssl_key, ssl_cert, ssl_port):
     os.chown(ssl_cert_file, uid, gid)
     with open(RABBITMQ_CONF, 'w') as rmq_conf:
         rmq_conf.write(utils.render_template(os.path.basename(RABBITMQ_CONF),
-                              { "ssl_port": ssl_port,
-                                "ssl_cert_file": ssl_cert_file,
-                                "ssl_key_file": ssl_key_file})
-                       )
+                                             {"ssl_port": ssl_port,
+                                              "ssl_cert_file": ssl_cert_file,
+                                              "ssl_key_file": ssl_key_file}))

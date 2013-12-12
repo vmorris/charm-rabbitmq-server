@@ -23,7 +23,7 @@ from charmhelpers.contrib.charmsupport.nrpe import NRPE
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
 POOL_NAME = SERVICE_NAME
 RABBIT_DIR = '/var/lib/rabbitmq'
-NAGIOS_PLUGINS='/usr/local/lib/nagios/plugins'
+NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 
 def install():
@@ -74,7 +74,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
 def cluster_joined():
     if utils.is_relation_made('ha'):
         utils.juju_log('INFO',
-                       'hacluster relation is present, skipping native '\
+                       'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
         return
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
@@ -84,7 +84,7 @@ def cluster_joined():
         return
     rabbit.COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
     if not os.path.isfile(rabbit.COOKIE_PATH):
-        utils.juju_log('ERROR', 'erlang cookie missing from %s' %\
+        utils.juju_log('ERROR', 'erlang cookie missing from %s' %
                        rabbit.COOKIE_PATH)
     cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
     local_hostname = subprocess.check_output(['hostname']).strip()
@@ -94,7 +94,7 @@ def cluster_joined():
 def cluster_changed():
     if utils.is_relation_made('ha'):
         utils.juju_log('INFO',
-                       'hacluster relation is present, skipping native '\
+                       'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
         return
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
@@ -132,7 +132,7 @@ def ha_joined():
 
     if None in [corosync_bindiface, corosync_mcastport, vip, vip_iface,
                 vip_cidr, rbd_name]:
-        utils.juju_log('ERROR', 'Insufficient configuration data to '\
+        utils.juju_log('ERROR', 'Insufficient configuration data to '
                        'configure hacluster.')
         sys.exit(1)
 
@@ -162,19 +162,20 @@ def ha_joined():
 
     relation_settings['resource_params'] = {
         'res_rabbitmq_rbd': 'params name="%s" pool="%s" user="%s" '
-                            'secret="%s"' % \
+                            'secret="%s"' %
                             (rbd_name, POOL_NAME,
                              SERVICE_NAME, ceph.keyfile_path(SERVICE_NAME)),
-        'res_rabbitmq_fs': 'params device="/dev/rbd/%s/%s" directory="%s" '\
-                           'fstype="ext4" op start start-delay="10s"' %\
+        'res_rabbitmq_fs': 'params device="/dev/rbd/%s/%s" directory="%s" '
+                           'fstype="ext4" op start start-delay="10s"' %
                            (POOL_NAME, rbd_name, RABBIT_DIR),
-        'res_rabbitmq_vip': 'params ip="%s" cidr_netmask="%s" nic="%s"' %\
+        'res_rabbitmq_vip': 'params ip="%s" cidr_netmask="%s" nic="%s"' %
                             (vip, vip_cidr, vip_iface),
-        'res_rabbitmq-server': 'op start start-delay="5s" op monitor interval="5s"',
+        'res_rabbitmq-server': 'op start start-delay="5s" '
+                               'op monitor interval="5s"',
     }
 
     relation_settings['groups'] = {
-        'grp_rabbitmq': 'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '\
+        'grp_rabbitmq': 'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '
                         'res_rabbitmq-server',
     }
 
@@ -193,7 +194,7 @@ def ha_changed():
         return
     vip = utils.config_get('vip')
     utils.juju_log('INFO', 'ha_changed(): We are now HA clustered. '
-                   'Advertising our VIP (%s) to all AMQP clients.' %\
+                   'Advertising our VIP (%s) to all AMQP clients.' %
                    vip)
     # need to re-authenticate all clients since node-name changed.
     for rid in utils.relation_ids('amqp'):
@@ -246,7 +247,8 @@ def ceph_changed():
 
 def update_nrpe_checks():
     if os.path.isdir(NAGIOS_PLUGINS):
-        rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts', 'check_rabbitmq.py'),
+        rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts',
+                           'check_rabbitmq.py'),
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
     user = 'naigos'
     vhost = 'nagios'
@@ -289,19 +291,20 @@ def upgrade_charm():
 
 MAN_PLUGIN = 'rabbitmq_management'
 
+
 def config_changed():
-    if utils.config_get('management_plugin') == True:
+    if utils.config_get('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
         utils.open_port(55672)
     else:
         rabbit.disable_plugin(MAN_PLUGIN)
         utils.close_port(55672)
-    
-    if utils.config_get('ssl_enabled') == True:
+
+    if utils.config_get('ssl_enabled') is True:
         ssl_key = utils.config_get('ssl_key')
         ssl_cert = utils.config_get('ssl_cert')
         ssl_port = utils.config_get('ssl_port')
-        if None in [ ssl_key, ssl_cert, ssl_port ]:
+        if None in [ssl_key, ssl_cert, ssl_port]:
             utils.juju_log('ERROR',
                            'Please provide ssl_key, ssl_cert and ssl_port'
                            ' config when enabling SSL support')
@@ -313,7 +316,7 @@ def config_changed():
         if os.path.exists(rabbit.RABBITMQ_CONF):
             os.remove(rabbit.RABBITMQ_CONF)
         utils.close_port(utils.config_get('ssl_port'))
-    
+
     if cluster.eligible_leader('res_rabbitmq_vip'):
         utils.restart('rabbitmq-server')
 
