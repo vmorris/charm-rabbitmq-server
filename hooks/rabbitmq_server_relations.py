@@ -32,8 +32,8 @@ def install():
     utils.expose(5672)
 
 
-def amqp_changed(relation_id=None, remote_unit=None):
-    if not cluster.eligible_leader('res_rabbitmq_vip'):
+def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
+    if needs_leader and not cluster.eligible_leader('res_rabbitmq_vip'):
         msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
         utils.juju_log('INFO', msg)
         return
@@ -140,7 +140,7 @@ def cluster_changed():
     # need to iterate over all the relationships and refresh hosts
     for rid in utils.relation_ids('amqp'):
         for unit in utils.relation_list(rid):
-            amqp_changed(relation_id=rid, remote_unit=unit)
+            amqp_changed(relation_id=rid, remote_unit=unit, needs_leader=False)
 
 def ha_joined():
     corosync_bindiface = utils.config_get('ha-bindiface')
