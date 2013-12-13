@@ -80,7 +80,7 @@ def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
             peer_hostname = utils.relation_get('private-address',
                                                rid=relation_id, unit=peer)
             hosts.append(peer_hostname)
-        relation_settings['hosts'] = hosts
+        relation_settings['hosts'] = ','.join(hosts)
 
     if relation_id:
         relation_settings['rid'] = relation_id
