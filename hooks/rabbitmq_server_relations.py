@@ -137,6 +137,10 @@ def cluster_changed():
     rabbit.service('start')
     rabbit.cluster_with(remote_host)
 
+    # need to iterate over all the relationships and refresh hosts
+    for rid in utils.relation_ids('amqp'):
+        for unit in utils.relation_list(rid):
+            amqp_changed(relation_id=rid, remote_unit=unit)
 
 def ha_joined():
     corosync_bindiface = utils.config_get('ha-bindiface')
