@@ -68,14 +68,19 @@ def amqp_changed(relation_id=None, remote_unit=None):
         if utils.is_relation_made('ha'):
             # active/passive settings
             relation_settings['vip'] = utils.config_get('vip')
-        else:
-            # send active/active settings
-            relation_settings['vip'] = None
-            peers = utils.peer_units()
-            hosts = []
-            for peer in peers:
-                hosts.append(peer.unit_get('private-address'))
-            relation_settings['hosts'] = hosts
+            relation_settings['hosts'] = None
+
+    # check for active/active
+    peers = cluster.peer_units()
+    if len(peers) > 0:
+        relation_settings['vip'] = None
+        hosts = []
+        hosts.append(utils.unit_get('private-address'))
+        for peer in peers:
+            peer_hostname = utils.relation_get('private-address',
+                                               rid=relation_id, unit=peer)
+            hosts.append(peer_hostname)
+        relation_settings['hosts'] = hosts
 
     if relation_id:
         relation_settings['rid'] = relation_id
