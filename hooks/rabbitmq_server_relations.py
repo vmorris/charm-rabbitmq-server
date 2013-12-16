@@ -56,6 +56,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
         utils.juju_log('INFO', msg)
         return
 
+    relation_settings = {}
     settings = hookenv.relation_get(rid=relation_id, unit=remote_unit)
 
     singleset = set([
@@ -69,7 +70,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
             return
 
         relation_settings['password'] = configure_amqp(username=settings['username'],
-                                                       password=settings['vhost'])
+                                                       vhost=settings['vhost'])
     else:
         queues = {}
         for k, v in settings.iteritems():
