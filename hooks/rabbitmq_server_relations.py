@@ -68,19 +68,6 @@ def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
         if utils.is_relation_made('ha'):
             # active/passive settings
             relation_settings['vip'] = utils.config_get('vip')
-            relation_settings['hosts'] = None
-
-    # check for active/active
-    peers = cluster.peer_units()
-    if len(peers) > 0:
-        relation_settings['vip'] = None
-        hosts = []
-        hosts.append(utils.unit_get('private-address'))
-        for peer in peers:
-            peer_hostname = utils.relation_get('private-address',
-                                               rid=relation_id, unit=peer)
-            hosts.append(peer_hostname+':5672')
-        relation_settings['hosts'] = ','.join(hosts)
 
     if relation_id:
         relation_settings['rid'] = relation_id
@@ -136,11 +123,6 @@ def cluster_changed():
         out.write(cookie)
     rabbit.service('start')
     rabbit.cluster_with(remote_host)
-
-    # need to iterate over all the relationships and refresh hosts
-    for rid in utils.relation_ids('amqp'):
-        for unit in utils.relation_list(rid):
-            amqp_changed(relation_id=rid, remote_unit=unit, needs_leader=False)
 
 def ha_joined():
     corosync_bindiface = utils.config_get('ha-bindiface')
