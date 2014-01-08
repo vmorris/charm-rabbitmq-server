@@ -32,7 +32,8 @@ def install(*pkgs):
     cmd = [
         'apt-get',
         '-y',
-        'install']
+        'install'
+          ]
     for pkg in pkgs:
         cmd.append(pkg)
     subprocess.check_call(cmd)
@@ -53,12 +54,14 @@ except ImportError:
 
 
 def render_template(template_name, context, template_dir=TEMPLATES_DIR):
-    templates = jinja2.Environment(loader=jinja2.FileSystemLoader(
-                                   template_dir))
+    templates = jinja2.Environment(
+                    loader=jinja2.FileSystemLoader(template_dir)
+                    )
     template = templates.get_template(template_name)
     return template.render(context)
 
-CLOUD_ARCHIVE = """ # Ubuntu Cloud Archive
+CLOUD_ARCHIVE = \
+""" # Ubuntu Cloud Archive
 deb http://ubuntu-cloud.archive.canonical.com/ubuntu {} main
 """
 
@@ -68,7 +71,11 @@ CLOUD_ARCHIVE_POCKETS = {
     'folsom/proposed': 'precise-proposed/folsom',
     'grizzly': 'precise-updates/grizzly',
     'grizzly/updates': 'precise-updates/grizzly',
-    'grizzly/proposed': 'precise-proposed/grizzly'}
+    'grizzly/proposed': 'precise-proposed/grizzly',
+    'havana': 'precise-updates/havana',
+    'havana/updates': 'precise-updates/havana',
+    'havana/proposed': 'precise-proposed/havana',
+    }
 
 
 def configure_source():
@@ -78,11 +85,15 @@ def configure_source():
     if source.startswith('ppa:'):
         cmd = [
             'add-apt-repository',
-            source]
+            source
+            ]
         subprocess.check_call(cmd)
     if source.startswith('cloud:'):
+        # CA values should be formatted as cloud:ubuntu-openstack/pocket, eg:
+        #   cloud:precise-folsom/updates or cloud:precise-folsom/proposed
         install('ubuntu-cloud-keyring')
         pocket = source.split(':')[1]
+        pocket = pocket.split('-')[1]
         with open('/etc/apt/sources.list.d/cloud-archive.list', 'w') as apt:
             apt.write(CLOUD_ARCHIVE.format(CLOUD_ARCHIVE_POCKETS[pocket]))
     if source.startswith('deb'):
@@ -92,7 +103,8 @@ def configure_source():
             cmd = [
                 'apt-key',
                 'adv', '--keyserver keyserver.ubuntu.com',
-                '--recv-keys', key]
+                '--recv-keys', key
+                ]
             subprocess.check_call(cmd)
         elif l == 1:
             apt_line = source
@@ -101,7 +113,8 @@ def configure_source():
             apt.write(apt_line + "\n")
     cmd = [
         'apt-get',
-        'update']
+        'update'
+        ]
     subprocess.check_call(cmd)
 
 # Protocols
@@ -112,18 +125,8 @@ UDP = 'UDP'
 def expose(port, protocol='TCP'):
     cmd = [
         'open-port',
-        '{}/{}'.format(port, protocol)]
-    subprocess.check_call(cmd)
-
-
-def open_port(port, protocol='TCP'):
-    expose(port, protocol)
-
-
-def close_port(port, protocol='TCP'):
-    cmd = [
-        'close-port',
-        '{}/{}'.format(port, protocol)]
+        '{}/{}'.format(port, protocol)
+        ]
     subprocess.check_call(cmd)
 
 
@@ -131,14 +134,33 @@ def juju_log(severity, message):
     cmd = [
         'juju-log',
         '--log-level', severity,
-        message]
+        message
+        ]
     subprocess.check_call(cmd)
 
 
+cache = {}
+
+
+def cached(func):
+    def wrapper(*args, **kwargs):
+        global cache
+        key = str((func, args, kwargs))
+        try:
+            return cache[key]
+        except KeyError:
+            res = func(*args, **kwargs)
+            cache[key] = res
+            return res
+    return wrapper
+
+
+@cached
 def relation_ids(relation):
     cmd = [
         'relation-ids',
-        relation]
+        relation
+        ]
     result = str(subprocess.check_output(cmd)).split()
     if result == "":
         return None
@@ -146,10 +168,12 @@ def relation_ids(relation):
         return result
 
 
+@cached
 def relation_list(rid):
     cmd = [
         'relation-list',
-        '-r', rid]
+        '-r', rid,
+        ]
     result = str(subprocess.check_output(cmd)).split()
     if result == "":
         return None
@@ -157,9 +181,11 @@ def relation_list(rid):
         return result
 
 
+@cached
 def relation_get(attribute, unit=None, rid=None):
     cmd = [
-        'relation-get']
+        'relation-get',
+        ]
     if rid:
         cmd.append('-r')
         cmd.append(rid)
@@ -173,9 +199,31 @@ def relation_get(attribute, unit=None, rid=None):
         return value
 
 
+@cached
+def relation_get_dict(relation_id=None, remote_unit=None):
+    """Obtain all relation data as dict by way of JSON"""
+    cmd = [
+        'relation-get', '--format=json'
+        ]
+    if relation_id:
+        cmd.append('-r')
+        cmd.append(relation_id)
+    if remote_unit:
+        cmd.append('-')
+        cmd.append(remote_unit)
+    j = subprocess.check_output(cmd)
+    d = json.loads(j)
+    settings = {}
+    # convert unicode to strings
+    for k, v in d.iteritems():
+        settings[str(k)] = str(v)
+    return settings
+
+
 def relation_set(**kwargs):
     cmd = [
-        'relation-set']
+        'relation-set'
+        ]
     args = []
     for k, v in kwargs.items():
         if k == 'rid':
@@ -188,10 +236,12 @@ def relation_set(**kwargs):
     subprocess.check_call(cmd)
 
 
+@cached
 def unit_get(attribute):
     cmd = [
         'unit-get',
-        attribute]
+        attribute
+        ]
     value = subprocess.check_output(cmd).strip()  # IGNORE:E1103
     if value == "":
         return None
@@ -199,11 +249,13 @@ def unit_get(attribute):
         return value
 
 
+@cached
 def config_get(attribute):
     cmd = [
         'config-get',
         '--format',
-        'json']
+        'json',
+        ]
     out = subprocess.check_output(cmd).strip()  # IGNORE:E1103
     cfg = json.loads(out)
 
@@ -213,10 +265,12 @@ def config_get(attribute):
         return None
 
 
+@cached
 def get_unit_hostname():
     return socket.gethostname()
 
 
+@cached
 def get_host_ip(hostname=unit_get('private-address')):
     try:
         # Test to see if already an IPv4 address
@@ -264,7 +318,8 @@ def running(service):
     except subprocess.CalledProcessError:
         return False
     else:
-        if ("start/running" in output or "is running" in output):
+        if ("start/running" in output or
+            "is running" in output):
             return True
         else:
             return False
