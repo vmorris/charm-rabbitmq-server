@@ -5,6 +5,7 @@ import re
 import subprocess
 import glob
 import lib.utils as utils
+import lib.unison as unison
 import apt_pkg as apt
 
 PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib', 'unison']

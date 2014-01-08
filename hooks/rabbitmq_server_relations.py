@@ -112,6 +112,8 @@ def cluster_changed():
                                 group='rabbit',
                                 peer_interface='cluster',
                                 ensure_local_user=True)
+    rabbit.synchronize_service_credentials()
+
 
     if utils.is_relation_made('ha'):
         utils.juju_log('INFO',
@@ -141,7 +143,6 @@ def cluster_changed():
         out.write(cookie)
     rabbit.service('start')
     rabbit.cluster_with(remote_host)
-    rabbit.synchronize_service_credentials()
 
 
 def ha_joined():
