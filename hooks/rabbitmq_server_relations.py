@@ -79,10 +79,11 @@ def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
         relation_settings['rid'] = relation_id
     utils.relation_set(**relation_settings)
 
-    unison.ssh_authorized_peers(user=rabbit.SSH_USER,
-                                group='rabbit',
-                                peer_interface='cluster',
-                                ensure_local_user=True)
+    # sync new creds to all peers
+    unison.sync_to_peers(peer_interface='cluster',
+                         paths=[rabbit.LIB_PATH],
+                         user=SSH_USER,
+                         verbose=True)
 
 
 def cluster_joined():
