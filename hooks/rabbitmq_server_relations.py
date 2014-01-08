@@ -80,10 +80,7 @@ def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
     utils.relation_set(**relation_settings)
 
     # sync new creds to all peers
-    unison.sync_to_peers(peer_interface='cluster',
-                         paths=[rabbit.LIB_PATH],
-                         user=rabbit.SSH_USER,
-                         verbose=True)
+    rabbit.synchronize_service_credentials()
 
 
 def cluster_joined():
@@ -115,6 +112,7 @@ def cluster_changed():
                                 group='rabbit',
                                 peer_interface='cluster',
                                 ensure_local_user=True)
+
     if utils.is_relation_made('ha'):
         utils.juju_log('INFO',
                        'hacluster relation is present, skipping native '
@@ -143,6 +141,7 @@ def cluster_changed():
         out.write(cookie)
     rabbit.service('start')
     rabbit.cluster_with(remote_host)
+    rabbit.synchronize_service_credentials()
 
 
 def ha_joined():

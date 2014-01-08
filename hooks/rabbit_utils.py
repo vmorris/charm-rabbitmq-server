@@ -215,3 +215,16 @@ def execute(cmd, die=False, echo=False):
     if die and rc != 0:
         error_out("ERROR: command %s return non-zero.\n" % cmd)
     return (stdout, stderr, rc)
+
+
+def synchronize_service_credentials():
+    '''
+    Broadcast service credentials to peers or consume those that have been
+    broadcasted by peer, depending on hook context.
+    '''
+    if not os.path.isdir(LIB_PATH):
+        return
+    utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
+    unison.sync_to_peers(peer_interface='cluster',
+                         paths=[LIB_PATH], user=SSH_USER,
+                         verbose=True)
