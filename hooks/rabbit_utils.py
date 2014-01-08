@@ -7,12 +7,14 @@ import glob
 import lib.utils as utils
 import apt_pkg as apt
 
-PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib']
+PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib', 'unison']
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
 ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
 RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
+SSH_USER = 'juju_rabbit'
+LIB_PATH = '/var/lib/rabbitmq/'
 
 
 def vhost_exists(vhost):

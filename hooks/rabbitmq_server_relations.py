@@ -12,6 +12,7 @@ import lib.utils as utils
 import lib.cluster_utils as cluster
 import lib.ceph_utils as ceph
 import lib.openstack_common as openstack
+import lib.unison as unison
 
 import _pythonpath
 _ = _pythonpath
@@ -30,6 +31,11 @@ def install():
     pre_install_hooks()
     utils.install(*rabbit.PACKAGES)
     utils.expose(5672)
+
+    # ensure user + permissions for peer relations that
+    # may be syncing data there via SSH_USER.
+    unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
+    execute("chmod -R g+wrx %s" % rabbit.LIB_PATH)
 
 
 def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
@@ -73,8 +79,17 @@ def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
         relation_settings['rid'] = relation_id
     utils.relation_set(**relation_settings)
 
+    unison.ssh_authorized_peers(users=rabbit.SSH_USER,
+                                group='rabbit',
+                                peer_interface='cluster',
+                                ensure_local_user=True)
+
 
 def cluster_joined():
+    unison.ssh_authorized_peers(users=rabbit.SSH_USER,
+                                group='rabbit',
+                                peer_interface='cluster',
+                                ensure_local_user=True)
     if utils.is_relation_made('ha'):
         utils.juju_log('INFO',
                        'hacluster relation is present, skipping native '
@@ -95,6 +110,10 @@ def cluster_joined():
 
 
 def cluster_changed():
+    unison.ssh_authorized_peers(users=rabbit.SSH_USER,
+                                group='rabbit',
+                                peer_interface='cluster',
+                                ensure_local_user=True)
     if utils.is_relation_made('ha'):
         utils.juju_log('INFO',
                        'hacluster relation is present, skipping native '
@@ -123,6 +142,7 @@ def cluster_changed():
         out.write(cookie)
     rabbit.service('start')
     rabbit.cluster_with(remote_host)
+
 
 def ha_joined():
     corosync_bindiface = utils.config_get('ha-bindiface')
@@ -295,6 +315,9 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 
 def config_changed():
+    unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
+    execute("chmod -R g+wrx %s" % rabbit.LIB_PATH)
+
     if utils.config_get('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
         utils.open_port(55672)
