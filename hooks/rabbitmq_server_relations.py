@@ -82,7 +82,7 @@ def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
     # sync new creds to all peers
     unison.sync_to_peers(peer_interface='cluster',
                          paths=[rabbit.LIB_PATH],
-                         user=SSH_USER,
+                         user=rabbit.SSH_USER,
                          verbose=True)
 
 
