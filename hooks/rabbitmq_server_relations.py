@@ -35,7 +35,7 @@ def install():
     # ensure user + permissions for peer relations that
     # may be syncing data there via SSH_USER.
     unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
-    execute("chmod -R g+wrx %s" % rabbit.LIB_PATH)
+    rabbit_utils.execute("chmod -R g+wrx %s" % rabbit.LIB_PATH)
 
 
 def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
@@ -316,7 +316,7 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 def config_changed():
     unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
-    execute("chmod -R g+wrx %s" % rabbit.LIB_PATH)
+    rabbit_utils.execute("chmod -R g+wrx %s" % rabbit.LIB_PATH)
 
     if utils.config_get('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)

@@ -180,3 +180,38 @@ def enable_ssl(ssl_key, ssl_cert, ssl_port):
                                              {"ssl_port": ssl_port,
                                               "ssl_cert_file": ssl_cert_file,
                                               "ssl_key_file": ssl_key_file}))
+
+
+def execute(cmd, die=False, echo=False):
+    """ Executes a command
+
+    if die=True, script will exit(1) if command does not return 0
+    if echo=True, output of command will be printed to stdout
+
+    returns a tuple: (stdout, stderr, return code)
+    """
+    p = subprocess.Popen(cmd.split(" "),
+                         stdout=subprocess.PIPE,
+                         stdin=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    stdout = ""
+    stderr = ""
+
+    def print_line(l):
+        if echo:
+            print l.strip('\n')
+            sys.stdout.flush()
+
+    for l in iter(p.stdout.readline, ''):
+        print_line(l)
+        stdout += l
+    for l in iter(p.stderr.readline, ''):
+        print_line(l)
+        stderr += l
+
+    p.communicate()
+    rc = p.returncode
+
+    if die and rc != 0:
+        error_out("ERROR: command %s return non-zero.\n" % cmd)
+    return (stdout, stderr, rc)
