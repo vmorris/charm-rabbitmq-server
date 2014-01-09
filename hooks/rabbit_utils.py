@@ -233,6 +233,10 @@ def synchronize_service_credentials():
         return
 
     utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
-    unison.sync_to_peers(peer_interface='cluster',
-                         paths=[LIB_PATH], user=SSH_USER,
-                         verbose=True)
+    try:
+        unison.sync_to_peers(peer_interface='cluster',
+                             paths=[LIB_PATH+'*.passwd'], user=SSH_USER,
+                             verbose=True)
+    except Exception:
+        # to skip files without perms safely
+        pass
