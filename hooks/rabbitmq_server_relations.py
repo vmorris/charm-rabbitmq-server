@@ -16,6 +16,7 @@ import lib.openstack_common as openstack
 import _pythonpath
 _ = _pythonpath
 
+from charmhelpers.core import hookenv
 from charmhelpers.core.host import rsync
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
 
@@ -32,20 +33,8 @@ def install():
     utils.expose(5672)
 
 
-def amqp_changed(relation_id=None, remote_unit=None):
-    if not cluster.eligible_leader('res_rabbitmq_vip'):
-        msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
-        utils.juju_log('INFO', msg)
-        return
-
-    rabbit_user = utils.relation_get('username', rid=relation_id,
-                                     unit=remote_unit)
-    vhost = utils.relation_get('vhost', rid=relation_id, unit=remote_unit)
-    if None in [rabbit_user, vhost]:
-        utils.juju_log('INFO', 'amqp_changed(): Relation not ready.')
-        return
-
-    password_file = os.path.join(RABBIT_DIR, '%s.passwd' % rabbit_user)
+def configure_amqp(username, vhost):
+    password_file = os.path.join(RABBIT_DIR, '%s.passwd' % username)
     if os.path.exists(password_file):
         password = open(password_file).read().strip()
     else:
@@ -55,14 +44,48 @@ def amqp_changed(relation_id=None, remote_unit=None):
             out.write(password)
 
     rabbit.create_vhost(vhost)
-    rabbit.create_user(rabbit_user, password)
-    rabbit.grant_permissions(rabbit_user, vhost)
-    rabbit_hostname = utils.unit_get('private-address')
+    rabbit.create_user(username, password)
+    rabbit.grant_permissions(username, vhost)
 
-    relation_settings = {
-        'password': password,
-        'hostname': rabbit_hostname
-    }
+    return password
+
+
+def amqp_changed(relation_id=None, remote_unit=None):
+    if not cluster.eligible_leader('res_rabbitmq_vip'):
+        msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
+        utils.juju_log('INFO', msg)
+        return
+
+    relation_settings = {}
+    settings = hookenv.relation_get(rid=relation_id, unit=remote_unit)
+
+    singleset = set([
+        'username',
+        'vhost'
+        ])
+
+    if singleset.issubset(settings):
+        if None in [settings['username'], settings['vhost']]:
+            utils.juju_log('INFO', 'amqp_changed(): Relation not ready.')
+            return
+
+        relation_settings['password'] = configure_amqp(username=settings['username'],
+                                                       vhost=settings['vhost'])
+    else:
+        queues = {}
+        for k, v in settings.iteritems():
+            amqp = k.split('_')[0]
+            x = '_'.join(k.split('_')[1:])
+            if amqp not in queues:
+                queues[amqp] = {}
+            queues[amqp][x] = v
+        relation_settings = {}
+        for amqp in queues:
+            if singleset.issubset(queues[amqp]):
+                relation_settings['_'.join([amqp, 'password'])] = configure_amqp(queues[amqp]['username'],
+                                                                                 queues[amqp]['vhost'])
+
+    relation_settings['hostname'] = utils.unit_get('private-address')
     if cluster.is_clustered():
         relation_settings['clustered'] = 'true'
         relation_settings['vip'] = utils.config_get('vip')
