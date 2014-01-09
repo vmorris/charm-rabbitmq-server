@@ -31,6 +31,7 @@ def ensure_unison_rabbit_permissions():
     rabbit.execute("chmod g+wrx %s" % rabbit.LIB_PATH)
     rabbit.execute("chmod g+wrx %s*.passwd" % rabbit.LIB_PATH)
 
+
 def install():
     pre_install_hooks()
     utils.install(*rabbit.PACKAGES)
@@ -64,7 +65,8 @@ def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
         with open(password_file, 'wb') as out:
             out.write(password)
         # assign current user and permissions
-        rabbit.execute("chown %s:%s %s" % (rabbit.RABBIT_USER, rabbit.RABBIT_USER, password_file))
+        rabbit.execute("chown %s:%s %s" %
+                       (rabbit.RABBIT_USER, rabbit.RABBIT_USER, password_file))
         rabbit.execute("chmod g+wrx %s" % password_file)
 
     rabbit.create_vhost(vhost)
@@ -139,15 +141,16 @@ def cluster_changed():
                        'cluster_joined: remote_host|cookie not yet set.')
         return
 
-    #if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
-    #    utils.juju_log('INFO', 'Cookie already synchronized with peer.')
-    #    return
+    if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
+        utils.juju_log('INFO', 'Cookie already synchronized with peer.')
+    else:
+        utils.juju_log('INFO', 'Synchronizing erlang cookie from peer.')
+        rabbit.service('stop')
+        with open(rabbit.COOKIE_PATH, 'wb') as out:
+            out.write(cookie)
+        rabbit.service('start')
 
-    utils.juju_log('INFO', 'Synchronizing erlang cookie from peer.')
-    rabbit.service('stop')
-    with open(rabbit.COOKIE_PATH, 'wb') as out:
-        out.write(cookie)
-    rabbit.service('start')
+    # cluster with other nodes
     rabbit.cluster_with(remote_host)
 
 
