@@ -121,7 +121,6 @@ def cluster_changed():
                                 ensure_local_user=True)
     rabbit.synchronize_service_credentials()
 
-
     if utils.is_relation_made('ha'):
         utils.juju_log('INFO',
                        'hacluster relation is present, skipping native '
@@ -140,9 +139,9 @@ def cluster_changed():
                        'cluster_joined: remote_host|cookie not yet set.')
         return
 
-    if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
-        utils.juju_log('INFO', 'Cookie already synchronized with peer.')
-        return
+    #if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
+    #    utils.juju_log('INFO', 'Cookie already synchronized with peer.')
+    #    return
 
     utils.juju_log('INFO', 'Synchronizing erlang cookie from peer.')
     rabbit.service('stop')
