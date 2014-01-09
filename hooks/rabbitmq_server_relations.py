@@ -27,6 +27,10 @@ RABBIT_DIR = '/var/lib/rabbitmq'
 NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 
+def ensure_unison_rabbit_permissions():
+    rabbit.execute("chmod g+wrx %s" % rabbit.LIB_PATH)
+    rabbit.execute("chmod g+wrx %s*.passwd" % rabbit.LIB_PATH)
+
 def install():
     pre_install_hooks()
     utils.install(*rabbit.PACKAGES)
@@ -35,7 +39,7 @@ def install():
     # ensure user + permissions for peer relations that
     # may be syncing data there via SSH_USER.
     unison.ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
-    rabbit.execute("chmod g+wrx %s" % rabbit.LIB_PATH)
+    ensure_unison_rabbit_permissions()
 
 
 def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
@@ -60,8 +64,8 @@ def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
         with open(password_file, 'wb') as out:
             out.write(password)
         # assign current user and permissions
+        rabbit.execute("chown %s:%s %s" % (rabbit.RABBIT_USER, rabbit.RABBIT_USER, password_file))
         rabbit.execute("chmod g+wrx %s" % password_file)
-        rabbit.execute("chown %s:%s %s" % rabbit.RABBIT_USER, rabbit.RABBIT_USER, password_file)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(rabbit_user, password)
@@ -320,7 +324,7 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 def config_changed():
     unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
-    rabbit.execute("chmod g+wrx %s" % rabbit.LIB_PATH)
+    ensure_unison_rabbit_permissions()
 
     if utils.config_get('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
