@@ -226,7 +226,7 @@ def synchronize_service_credentials():
     '''
     if not os.path.isdir(LIB_PATH):
         return
-    peers = cluster.peers_units()
+    peers = cluster.peer_units()
     if peers and not cluster.oldest_peers(peers):
         utils.juju_log('INFO', 'Deferring action to oldest service unit.')
 
