@@ -16,6 +16,7 @@ COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
 ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
 RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
 SSH_USER = 'juju_rabbit'
+RABBIT_USER = 'rabbitmq'
 LIB_PATH = '/var/lib/rabbitmq/'
 
 
@@ -229,6 +230,7 @@ def synchronize_service_credentials():
     peers = cluster.peer_units()
     if peers and not cluster.oldest_peer(peers):
         utils.juju_log('INFO', 'Deferring action to oldest service unit.')
+        return
 
     utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
     unison.sync_to_peers(peer_interface='cluster',

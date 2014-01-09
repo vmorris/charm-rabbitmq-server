@@ -34,8 +34,8 @@ def install():
 
     # ensure user + permissions for peer relations that
     # may be syncing data there via SSH_USER.
-    unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
-    rabbit.execute("chmod -R u+wrx %s" % rabbit.LIB_PATH)
+    unison.ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
+    rabbit.execute("chmod g+wrx %s" % rabbit.LIB_PATH)
 
 
 def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
@@ -59,6 +59,9 @@ def amqp_changed(relation_id=None, remote_unit=None, needs_leader=True):
         password = subprocess.check_output(cmd).strip()
         with open(password_file, 'wb') as out:
             out.write(password)
+        # assign current user and permissions
+        rabbit.execute("chmod g+wrx %s" % password_file)
+        rabbit.execute("chown %s:%s %s" % rabbit.RABBIT_USER, rabbit.RABBIT_USER, password_file)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(rabbit_user, password)
@@ -290,7 +293,7 @@ def update_nrpe_checks():
 
     nrpe_compat = NRPE()
     nrpe_compat.add_check(
-        shortname='rabbitmq',
+        shortname=rabbit.RABBIT_USER,
         description='Check RabbitMQ',
         check_cmd='{}/check_rabbitmq.py --user {} --password {} --vhost {}'
                   ''.format(NAGIOS_PLUGINS, user, password, vhost)
@@ -317,7 +320,7 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 def config_changed():
     unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
-    rabbit.execute("chmod -R u+wrx %s" % rabbit.LIB_PATH)
+    rabbit.execute("chmod g+wrx %s" % rabbit.LIB_PATH)
 
     if utils.config_get('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
