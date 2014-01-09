@@ -6,6 +6,7 @@ import subprocess
 import glob
 import lib.utils as utils
 import lib.unison as unison
+import lib.cluster_utils as cluster
 import apt_pkg as apt
 
 PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib', 'unison']
@@ -225,6 +226,10 @@ def synchronize_service_credentials():
     '''
     if not os.path.isdir(LIB_PATH):
         return
+    peers = cluster.peers_units()
+    if peers and not cluster.oldest_peers(peers):
+        utils.juju_log('INFO', 'Deferring action to oldest service unit.')
+
     utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
     unison.sync_to_peers(peer_interface='cluster',
                          paths=[LIB_PATH], user=SSH_USER,
