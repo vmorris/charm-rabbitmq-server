@@ -93,21 +93,23 @@ def cluster_with(nodes):
     # iterate over all the available nodes, and try to cluster
     vers = rabbit_version()
     if vers >= '3.0.1-1':
-        cluster_cmd = 'join_cluster --ram'
+        cluster_cmd = 'join_cluster'
         cmd = [RABBITMQ_CTL, 'set_policy HA \'^(?!amq\.).*\' '
                '\'{"ha-mode": "all"}\'']
         subprocess.check_call(cmd)
     else:
-        cluster_cmd = 'cluster --ram'
+        cluster_cmd = 'cluster'
     out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
     current_host = subprocess.check_output(['hostname']).strip()
 
     for node in nodes:
-        if current_host!=node:
-            utils.juju_log('INFO', 'Clustering with remote rabbit host (%s).' % node)
+        if current_host != node:
+            utils.juju_log('INFO',
+                           'Clustering with remote rabbit host (%s).' % node)
             for line in out.split('\n'):
                 if re.search(node, line):
-                    utils.juju_log('INFO', 'Host already clustered with %s.' % node)
+                    utils.juju_log('INFO',
+                                   'Host already clustered with %s.' % node)
                     return
 
                 try:
@@ -117,7 +119,8 @@ def cluster_with(nodes):
                     subprocess.check_call(cmd)
                     cmd = [RABBITMQ_CTL, 'start_app']
                     subprocess.check_call(cmd)
-                    utils.juju_log('INFO', 'Host successfully clustered with %s.' % node)
+                    utils.juju_log('INFO',
+                                   'Host clustered with %s.' % node)
                     return
                 except:
                     # continue to the next node

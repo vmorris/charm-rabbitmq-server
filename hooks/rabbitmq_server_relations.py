@@ -19,6 +19,7 @@ _ = _pythonpath
 
 from charmhelpers.core.host import rsync
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
+from charmhelpers.contrib.openstack.utils import get_hostname
 
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
@@ -116,12 +117,13 @@ def cluster_joined():
 
     # maintain the list of available nodes
     available_nodes = []
-    available_nodes.append(utils.unit_get('private-address'))
+    available_nodes.append(get_hostname(utils.unit_get('private-address')))
 
     for r_id in utils.relation_ids('cluster'):
         for unit in utils.relation_list(r_id):
-            available_nodes.append(utils.relation_get('private-address',
-                                   rid=r_id, unit=unit))
+            current_node = get_hostname(utils.relation_get('private_address',
+                                        rid=r_id, unit=unit))
+            available_nodes.append(current_node)
     utils.relation_set(cookie=cookie, nodes=','.join(available_nodes))
 
 
