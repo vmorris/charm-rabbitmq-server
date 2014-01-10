@@ -117,13 +117,16 @@ def cluster_joined():
 
     # maintain the list of available nodes
     available_nodes = []
-    available_nodes.append(get_hostname(utils.unit_get('private-address')))
+    available_nodes.append(get_hostname(utils.unit_get('private-address'),
+                                        only_instance_name=True))
 
     for r_id in utils.relation_ids('cluster'):
         for unit in utils.relation_list(r_id):
-            current_node = get_hostname(utils.relation_get('private_address',
-                                        rid=r_id, unit=unit))
-            available_nodes.append(current_node)
+            address = utils.relation_get('private_address',
+                                         rid=r_id, unit=unit)
+            if address is not None:
+                available_nodes.append(get_hostname(address,
+                                       only_instance_name=True))
     utils.relation_set(cookie=cookie, nodes=','.join(available_nodes))
 
 
