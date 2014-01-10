@@ -113,13 +113,13 @@ def cluster_joined():
                        rabbit.COOKIE_PATH)
     cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
 
-    # don't tie to one host, we can cluster with any node
-    peers = cluster.peer_units()
+    # maintain the list of available nodes
     available_nodes = []
-    for peer in peers:
-        available_nodes.add(peer)
-
-    utils.relation_set(cookie=cookie, nodes=available_nodes)
+    for r_id in utils.relation_ids('cluster'):
+        for unit in utils.relation_list(r_id):
+            available_nodes.append(relation_get('private-address',
+                                   rid=rid, unit=unit))
+    utils.relation_set(cookie=cookie, nodes=','.join(available_nodes))
 
 
 def cluster_changed():
