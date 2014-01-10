@@ -89,27 +89,41 @@ def rabbit_version():
         return None
 
 
-def cluster_with(host):
-    utils.juju_log('INFO', 'Clustering with remote rabbit host (%s).' % host)
+def cluster_with(nodes):
+    # iterate over all the available nodes, and try to cluster
     vers = rabbit_version()
     if vers >= '3.0.1-1':
-        cluster_cmd = 'join_cluster'
+        cluster_cmd = 'join_cluster --ram'
         cmd = [RABBITMQ_CTL, 'set_policy HA \'^(?!amq\.).*\' '
                '\'{"ha-mode": "all"}\'']
         subprocess.check_call(cmd)
     else:
-        cluster_cmd = 'cluster'
+        cluster_cmd = 'cluster --ram'
     out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
-    for line in out.split('\n'):
-        if re.search(host, line):
-            utils.juju_log('INFO', 'Host already clustered with %s.' % host)
-            return
-    cmd = [RABBITMQ_CTL, 'stop_app']
-    subprocess.check_call(cmd)
-    cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % host]
-    subprocess.check_call(cmd)
-    cmd = [RABBITMQ_CTL, 'start_app']
-    subprocess.check_call(cmd)
+
+    for node in nodes:
+        utils.juju_log('INFO', 'Clustering with remote rabbit host (%s).' % node)
+        for line in out.split('\n'):
+            if re.search(node, line):
+                utils.juju_log('INFO', 'Host already clustered with %s.' % node)
+                return
+
+            try:
+                cmd = [RABBITMQ_CTL, 'stop_app']
+                subprocess.check_call(cmd)
+                cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
+                subprocess.check_call(cmd)
+                cmd = [RABBITMQ_CTL, 'start_app']
+                subprocess.check_call(cmd)
+                utils.juju_log('INFO', 'Host successfully clustered with %s.' % node)
+                return
+            except:
+                # continue to the next node
+                pass
+
+    # error, no nodes available for clustering
+    utils.juju_log('ERROR', 'No nodes available for clustering')
+    sys.exit(1)
 
 
 def set_node_name(name):

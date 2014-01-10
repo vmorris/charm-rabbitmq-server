@@ -112,8 +112,14 @@ def cluster_joined():
         utils.juju_log('ERROR', 'erlang cookie missing from %s' %
                        rabbit.COOKIE_PATH)
     cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
-    local_hostname = subprocess.check_output(['hostname']).strip()
-    utils.relation_set(cookie=cookie, host=local_hostname)
+
+    # don't tie to one host, we can cluster with any node
+    peers = cluster.peer_units()
+    available_nodes = []
+    for peer in peers:
+        available_nodes.add(peer)
+
+    utils.relation_set(cookie=cookie, nodes=available_nodes)
 
 
 def cluster_changed():
@@ -134,9 +140,9 @@ def cluster_changed():
         utils.juju_log('INFO', 'cluster_joined: Relation lesser.')
         return
 
-    remote_host = utils.relation_get('host')
+    nodes = utils.relation_get('nodes')
     cookie = utils.relation_get('cookie')
-    if None in [remote_host, cookie]:
+    if None in [nodes, cookie]:
         utils.juju_log('INFO',
                        'cluster_joined: remote_host|cookie not yet set.')
         return
@@ -151,7 +157,7 @@ def cluster_changed():
         rabbit.service('start')
 
     # cluster with other nodes
-    rabbit.cluster_with(remote_host)
+    rabbit.cluster_with(nodes)
 
 
 def ha_joined():
