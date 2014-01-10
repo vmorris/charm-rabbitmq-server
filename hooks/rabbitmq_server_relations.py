@@ -115,19 +115,7 @@ def cluster_joined():
         return
     cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
 
-    # maintain the list of available nodes
-    available_nodes = []
-    available_nodes.append(get_hostname(utils.unit_get('private-address'),
-                                        only_instance_name=True))
-
-    for r_id in utils.relation_ids('cluster'):
-        for unit in utils.relation_list(r_id):
-            address = utils.relation_get('private_address',
-                                         rid=r_id, unit=unit)
-            if address is not None:
-                available_nodes.append(get_hostname(address,
-                                       only_instance_name=True))
-    utils.relation_set(cookie=cookie, nodes=','.join(available_nodes))
+    utils.relation_set(cookie=cookie)
 
 
 def cluster_changed():
@@ -148,11 +136,10 @@ def cluster_changed():
         utils.juju_log('INFO', 'cluster_joined: Relation lesser.')
         return
 
-    nodes = utils.relation_get('nodes')
     cookie = utils.relation_get('cookie')
-    if None in [nodes, cookie]:
+    if cookie is None:
         utils.juju_log('INFO',
-                       'cluster_joined: remote_host|cookie not yet set.')
+                       'cluster_joined: cookie not yet set.')
         return
 
     if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
@@ -165,7 +152,7 @@ def cluster_changed():
         rabbit.service('start')
 
     # cluster with other nodes
-    rabbit.cluster_with(nodes.split(','))
+    rabbit.cluster_with()
 
 
 def ha_joined():

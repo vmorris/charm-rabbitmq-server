@@ -90,8 +90,7 @@ def rabbit_version():
         return None
 
 
-def cluster_with(nodes):
-    # iterate over all the available nodes, and try to cluster
+def cluster_with():
     vers = rabbit_version()
     if vers >= '3.0.1-1':
         cluster_cmd = 'join_cluster'
@@ -103,29 +102,35 @@ def cluster_with(nodes):
     out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
     current_host = subprocess.check_output(['hostname']).strip()
 
-    for node in nodes:
-        if current_host != node:
-            utils.juju_log('INFO',
-                           'Clustering with remote rabbit host (%s).' % node)
-            for line in out.split('\n'):
-                if re.search(node, line):
+    # check all peers and try to cluster with them
+    for r_id in (relation_ids('cluster') or []):
+        for unit in (relation_list(r_id) or []):
+            address = utils.relation_get('private_address',
+                                         rid=r_id, unit=unit)
+            if address is not None:
+                node = get_hostname(address, only_instance_name=True)
+                if current_host != node:
                     utils.juju_log('INFO',
-                                   'Host already clustered with %s.' % node)
-                    return
+                                   'Clustering with remote rabbit host (%s).' % node)
+                    for line in out.split('\n'):
+                        if re.search(node, line):
+                            utils.juju_log('INFO',
+                                           'Host already clustered with %s.' % node)
+                            return
 
-                try:
-                    cmd = [RABBITMQ_CTL, 'stop_app']
-                    subprocess.check_call(cmd)
-                    cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
-                    subprocess.check_call(cmd)
-                    cmd = [RABBITMQ_CTL, 'start_app']
-                    subprocess.check_call(cmd)
-                    utils.juju_log('INFO',
-                                   'Host clustered with %s.' % node)
-                    return
-                except:
-                    # continue to the next node
-                    pass
+                    try:
+                        cmd = [RABBITMQ_CTL, 'stop_app']
+                        subprocess.check_call(cmd)
+                        cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
+                        subprocess.check_call(cmd)
+                        cmd = [RABBITMQ_CTL, 'start_app']
+                        subprocess.check_call(cmd)
+                        utils.juju_log('INFO',
+                                       'Host clustered with %s.' % node)
+                        return
+                    except:
+                        # continue to the next node
+                        pass
 
     # error, no nodes available for clustering
     utils.juju_log('ERROR', 'No nodes available for clustering')
