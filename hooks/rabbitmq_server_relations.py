@@ -111,14 +111,17 @@ def cluster_joined():
     if not os.path.isfile(rabbit.COOKIE_PATH):
         utils.juju_log('ERROR', 'erlang cookie missing from %s' %
                        rabbit.COOKIE_PATH)
+        return
     cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
 
     # maintain the list of available nodes
     available_nodes = []
+    available_nodes.append(subprocess.check_output(['hostname']).strip())
+
     for r_id in utils.relation_ids('cluster'):
         for unit in utils.relation_list(r_id):
-            available_nodes.append(relation_get('private-address',
-                                   rid=rid, unit=unit))
+            available_nodes.append(utils.relation_get('private-address',
+                                   rid=r_id, unit=unit))
     utils.relation_set(cookie=cookie, nodes=','.join(available_nodes))
 
 
@@ -157,7 +160,7 @@ def cluster_changed():
         rabbit.service('start')
 
     # cluster with other nodes
-    rabbit.cluster_with(nodes)
+    rabbit.cluster_with(nodes.strip(','))
 
 
 def ha_joined():

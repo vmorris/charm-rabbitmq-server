@@ -100,26 +100,28 @@ def cluster_with(nodes):
     else:
         cluster_cmd = 'cluster --ram'
     out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
+    current_host = subprocess.check_output(['hostname']).strip()
 
     for node in nodes:
-        utils.juju_log('INFO', 'Clustering with remote rabbit host (%s).' % node)
-        for line in out.split('\n'):
-            if re.search(node, line):
-                utils.juju_log('INFO', 'Host already clustered with %s.' % node)
-                return
+        if current_host!=node:
+            utils.juju_log('INFO', 'Clustering with remote rabbit host (%s).' % node)
+            for line in out.split('\n'):
+                if re.search(node, line):
+                    utils.juju_log('INFO', 'Host already clustered with %s.' % node)
+                    return
 
-            try:
-                cmd = [RABBITMQ_CTL, 'stop_app']
-                subprocess.check_call(cmd)
-                cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
-                subprocess.check_call(cmd)
-                cmd = [RABBITMQ_CTL, 'start_app']
-                subprocess.check_call(cmd)
-                utils.juju_log('INFO', 'Host successfully clustered with %s.' % node)
-                return
-            except:
-                # continue to the next node
-                pass
+                try:
+                    cmd = [RABBITMQ_CTL, 'stop_app']
+                    subprocess.check_call(cmd)
+                    cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
+                    subprocess.check_call(cmd)
+                    cmd = [RABBITMQ_CTL, 'start_app']
+                    subprocess.check_call(cmd)
+                    utils.juju_log('INFO', 'Host successfully clustered with %s.' % node)
+                    return
+                except:
+                    # continue to the next node
+                    pass
 
     # error, no nodes available for clustering
     utils.juju_log('ERROR', 'No nodes available for clustering')
