@@ -116,7 +116,7 @@ def cluster_joined():
 
     # maintain the list of available nodes
     available_nodes = []
-    available_nodes.append(subprocess.check_output(['hostname']).strip())
+    available_nodes.append(utils.unit_get('private-address'))
 
     for r_id in utils.relation_ids('cluster'):
         for unit in utils.relation_list(r_id):
@@ -160,7 +160,7 @@ def cluster_changed():
         rabbit.service('start')
 
     # cluster with other nodes
-    rabbit.cluster_with(nodes.strip(','))
+    rabbit.cluster_with(nodes.split(','))
 
 
 def ha_joined():
