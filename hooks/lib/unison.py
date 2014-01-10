@@ -213,8 +213,11 @@ def sync_to_peers(peer_interface, user, paths=[], verbose=False):
         if path.endswith('/'):
             path = path[:(len(path) - 1)]
         for host in hosts:
-            cmd = base_cmd + [path, 'ssh://%s@%s/%s' % (user, host, path)]
-            utils.juju_log('INFO', 'Syncing local path %s to %s@%s:%s' %\
-                            (path, user, host, path))
-            print ' '.join(cmd)
-            run_as_user(user, cmd)
+            try:
+                cmd = base_cmd + [path, 'ssh://%s@%s/%s' % (user, host, path)]
+                utils.juju_log('INFO', 'Syncing local path %s to %s@%s:%s' %
+                               (path, user, host, path))
+                run_as_user(user, cmd)
+            except:
+                # it may fail for permissions on some files
+                pass
