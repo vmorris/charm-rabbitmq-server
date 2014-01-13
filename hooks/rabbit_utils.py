@@ -9,6 +9,7 @@ import lib.utils as utils
 import lib.unison as unison
 import lib.cluster_utils as cluster
 import apt_pkg as apt
+from charmhelpers.contrib.openstack.utils import get_hostname
 
 PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib', 'unison']
 
@@ -112,7 +113,7 @@ def cluster_with():
             address = utils.relation_get('private_address',
                                          rid=r_id, unit=unit)
             if address is not None:
-                node = get_hostname(address, only_instance_name=True)
+                node = get_hostname(address, fqdn=False)
                 if current_host != node:
                     available_nodes.append(node)
 
