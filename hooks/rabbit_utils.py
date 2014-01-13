@@ -118,10 +118,12 @@ def cluster_with():
 
     # iterate over all the nodes, join to the first available
     for node in available_nodes:
-        utils.juju_log('INFO', 'Clustering with remote rabbit host (%s).' % node)
+        utils.juju_log('INFO',
+                       'Clustering with remote rabbit host (%s).' % node)
         for line in out.split('\n'):
             if re.search(node, line):
-                utils.juju_log('INFO', 'Host already clustered with %s.' % node)
+                utils.juju_log('INFO',
+                               'Host already clustered with %s.' % node)
                 return
 
             try:
@@ -140,6 +142,22 @@ def cluster_with():
     # error, no nodes available for clustering
     utils.juju_log('ERROR', 'No nodes available for clustering')
     sys.exit(1)
+
+
+def break_cluster():
+    try:
+        cmd = [RABBITMQ_CTL, 'stop_app']
+        subprocess.check_call(cmd)
+        cmd = [RABBITMQ_CTL, 'reset']
+        subprocess.check_call(cmd)
+        cmd = [RABBITMQ_CTL, 'start_app']
+        subprocess.check_call(cmd)
+        utils.juju_log('INFO', 'Cluster successfully broken.')
+        return
+    except:
+        # error, no nodes available for clustering
+        utils.juju_log('ERROR', 'Error breaking rabbit cluster')
+        sys.exit(1)
 
 
 def set_node_name(name):

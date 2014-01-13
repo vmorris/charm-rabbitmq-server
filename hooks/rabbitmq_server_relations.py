@@ -157,6 +157,20 @@ def cluster_changed():
     rabbit.cluster_with()
 
 
+def cluster_departed():
+    if utils.is_relation_made('ha'):
+        utils.juju_log('INFO',
+                       'hacluster relation is present, skipping native '
+                       'rabbitmq cluster config.')
+        return
+    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
+    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
+    if l_unit_no < r_unit_no:
+        utils.juju_log('INFO', 'cluster_joined: Relation lesser.')
+        return
+    rabbit.break_cluster()
+
+
 def ha_joined():
     corosync_bindiface = utils.config_get('ha-bindiface')
     corosync_mcastport = utils.config_get('ha-mcastport')
@@ -371,6 +385,7 @@ hooks = {
     'amqp-relation-changed': amqp_changed,
     'cluster-relation-joined': cluster_joined,
     'cluster-relation-changed': cluster_changed,
+    'cluster-relation-departed': cluster_departed,
     'ha-relation-joined': ha_joined,
     'ha-relation-changed': ha_changed,
     'ceph-relation-joined': ceph_joined,
