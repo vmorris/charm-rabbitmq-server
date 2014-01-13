@@ -9,6 +9,10 @@ import lib.utils as utils
 import lib.unison as unison
 import lib.cluster_utils as cluster
 import apt_pkg as apt
+
+import _pythonpath
+_ = _pythonpath
+
 from charmhelpers.contrib.openstack.utils import get_hostname
 
 PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib', 'unison']
