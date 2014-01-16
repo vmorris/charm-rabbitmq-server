@@ -14,9 +14,11 @@ options:
   ssl_key:
     type: string
     description: private unencrypted key in PEM format (starts "-----BEGIN RSA PRIVATE KEY-----")
+    default: ""
   ssl_cert:
     type: string
     description: X.509 certificate in PEM format (starts "-----BEGIN CERTIFICATE-----")
+    default: ""
   nagios_context:
     default: "juju"
     type: string
@@ -31,6 +33,7 @@ options:
   vip:
       type: string
       description: "Virtual IP to use to front rabbitmq in ha configuration"
+      default: ""
   vip_iface:
       type: string
       default: eth0
