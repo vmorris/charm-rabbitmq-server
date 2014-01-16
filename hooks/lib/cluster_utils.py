@@ -14,8 +14,7 @@ from lib.utils import (
     relation_list,
     relation_get,
     get_unit_hostname,
-    config_get
-    )
+    config_get)
 import subprocess
 import os
 
@@ -34,8 +33,7 @@ def is_clustered():
 def is_leader(resource):
     cmd = [
         "crm", "resource",
-        "show", resource
-        ]
+        "show", resource]
     try:
         status = subprocess.check_output(cmd)
     except subprocess.CalledProcessError:
