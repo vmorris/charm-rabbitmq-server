@@ -123,6 +123,7 @@ def cluster_with():
         first_hostname = utils.relation_get('host')
         available_nodes.append(first_hostname)
 
+        num_tries = 0
         for r_id in (utils.relation_ids('cluster') or []):
             for unit in (utils.relation_list(r_id) or []):
                 address = utils.relation_get('private_address',
@@ -131,10 +132,12 @@ def cluster_with():
                     node = get_hostname(address, fqdn=False)
                     if current_host != node:
                         available_nodes.append(node)
+                else:
+                    # node is down, add to max tries
+                    num_tries+=1
 
         # iterate over all the nodes, join to the first available
         max_tries = config('max-cluster-tries')
-        num_tries = 0
         for node in available_nodes:
             utils.juju_log('INFO',
                            'Clustering with remote rabbit host (%s).' % node)
