@@ -107,46 +107,50 @@ def cluster_with():
     out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
     current_host = subprocess.check_output(['hostname']).strip()
 
-    # check all peers and try to cluster with them
-    available_nodes = []
-    first_hostname = utils.relation_get('host')
-    available_nodes.append(first_hostname)
+    # check if node is already clustered
+    pattern = '{running_nodes,[]}'
+    if re.search(pattern, out):
+        # check all peers and try to cluster with them
+        available_nodes = []
+        first_hostname = utils.relation_get('host')
+        available_nodes.append(first_hostname)
 
-    for r_id in (utils.relation_ids('cluster') or []):
-        for unit in (utils.relation_list(r_id) or []):
-            address = utils.relation_get('private_address',
+        for r_id in (utils.relation_ids('cluster') or []):
+            for unit in (utils.relation_list(r_id) or []):
+                address = utils.relation_get('private_address',
                                          rid=r_id, unit=unit)
-            if address is not None:
-                node = get_hostname(address, fqdn=False)
-                if current_host != node:
-                    available_nodes.append(node)
+                if address is not None:
+                    node = get_hostname(address, fqdn=False)
+                    if current_host != node:
+                        available_nodes.append(node)
 
-    # iterate over all the nodes, join to the first available
-    for node in available_nodes:
-        utils.juju_log('INFO',
-                       'Clustering with remote rabbit host (%s).' % node)
-        for line in out.split('\n'):
-            if re.search(node, line):
-                utils.juju_log('INFO',
-                               'Host already clustered with %s.' % node)
-                return
+        # iterate over all the nodes, join to the first available
+        for node in available_nodes:
+            utils.juju_log('INFO',
+                           'Clustering with remote rabbit host (%s).' % node)
+            for line in out.split('\n'):
+                if re.search(node, line):
+                    utils.juju_log('INFO',
+                                   'Host already clustered with %s.' % node)
+                    return
 
-            try:
-                cmd = [RABBITMQ_CTL, 'stop_app']
-                subprocess.check_call(cmd)
-                cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
-                subprocess.check_call(cmd)
-                cmd = [RABBITMQ_CTL, 'start_app']
-                subprocess.check_call(cmd)
-                utils.juju_log('INFO', 'Host clustered with %s.' % node)
-                return
-            except:
-                # continue to the next node
-                pass
+                try:
+                    cmd = [RABBITMQ_CTL, 'stop_app']
+                    subprocess.check_call(cmd)
+                    cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
+                    subprocess.check_call(cmd)
+                    cmd = [RABBITMQ_CTL, 'start_app']
+                    subprocess.check_call(cmd)
+                    utils.juju_log('INFO', 'Host clustered with %s.' % node)
+                    return
+                except:
+                    # continue to the next node
+                    pass
 
-    # error, no nodes available for clustering
-    utils.juju_log('ERROR', 'No nodes available for clustering')
-    sys.exit(1)
+        # error, no nodes available for clustering
+        utils.juju_log('ERROR', 'No nodes available for clustering, retrying')
+    else:
+        utils.juju_log('INFO', 'Node is already clustered, skipping') 
 
 
 def break_cluster():
