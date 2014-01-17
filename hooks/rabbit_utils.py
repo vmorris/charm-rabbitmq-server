@@ -164,6 +164,7 @@ def cluster_with():
         # error, no nodes available for clustering
         utils.juju_log('ERROR', 'No nodes available for clustering, retrying')
         if num_tries>max_tries:
+            utils.juju_log('ERROR', 'Max tries number exhausted, exiting')
             sys.exit(1)
 
 
