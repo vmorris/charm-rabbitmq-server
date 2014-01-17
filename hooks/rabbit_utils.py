@@ -116,6 +116,8 @@ def cluster_with():
         total_nodes = len(m.group(1).split(','))
 
     if total_nodes>1:
+        utils.juju_log('INFO', 'Node is already clustered, skipping') 
+    else:
         # check all peers and try to cluster with them
         available_nodes = []
         first_hostname = utils.relation_get('host')
@@ -152,15 +154,14 @@ def cluster_with():
                     utils.juju_log('INFO', 'Host clustered with %s.' % node)
                     return
                 except:
-                    # continue to the next node
-                    num_tries+=1
+                    pass
+            # continue to the next node
+            num_tries+=1
 
         # error, no nodes available for clustering
         utils.juju_log('ERROR', 'No nodes available for clustering, retrying')
         if num_tries>max_tries:
             sys.exit(1)
-    else:
-        utils.juju_log('INFO', 'Node is already clustered, skipping') 
 
 
 def break_cluster():
