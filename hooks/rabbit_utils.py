@@ -14,6 +14,7 @@ import _pythonpath
 _ = _pythonpath
 
 from charmhelpers.contrib.openstack.utils import get_hostname
+from charmhelpers.core.hookenv import config
 
 PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib', 'unison']
 
@@ -108,8 +109,13 @@ def cluster_with():
     current_host = subprocess.check_output(['hostname']).strip()
 
     # check if node is already clustered
+    total_nodes = 1
     pattern = '{running_nodes,[]}'
-    if re.search(pattern, out):
+    m = re.search("\{running_nodes,\[(.*)\]\}", out.strip())
+    if m is not None:
+        total_nodes = len(m.group(1).split(','))
+
+    if total_nodes>1:
         # check all peers and try to cluster with them
         available_nodes = []
         first_hostname = utils.relation_get('host')
@@ -125,6 +131,8 @@ def cluster_with():
                         available_nodes.append(node)
 
         # iterate over all the nodes, join to the first available
+        max_tries = config('max-cluster-tries')
+        num_tries = 0
         for node in available_nodes:
             utils.juju_log('INFO',
                            'Clustering with remote rabbit host (%s).' % node)
@@ -145,10 +153,12 @@ def cluster_with():
                     return
                 except:
                     # continue to the next node
-                    pass
+                    num_tries+=1
 
         # error, no nodes available for clustering
         utils.juju_log('ERROR', 'No nodes available for clustering, retrying')
+        if num_tries>max_tries:
+            sys.exit(1)
     else:
         utils.juju_log('INFO', 'Node is already clustered, skipping') 
 
