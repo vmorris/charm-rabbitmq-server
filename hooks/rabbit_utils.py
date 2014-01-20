@@ -326,13 +326,12 @@ def propagate_service_credentials():
         utils.juju_log('INFO', 'Deferring action to oldest service unit.')
         return
 
-    # get the remote unit address
-    r_unit = os.getenv('JUJU_REMOTE_UNIT')
-    r_address = utils.relation_get('private_address', unit=r_unit)
+    # sync only to remote unit
+    address = utils.relation_get('slave_host')
     utils.juju_log('INFO', 'Synchronizing service passwords to unit %s.' %
-                   str(r_address))
+                   str(address))
     try:
-        unison.sync_to_peer(r_address, paths=[LIB_PATH], user=SSH_USER,
+        unison.sync_to_peer(address, paths=[LIB_PATH], user=SSH_USER,
                             verbose=True)
     except Exception:
         # to skip files without perms safely

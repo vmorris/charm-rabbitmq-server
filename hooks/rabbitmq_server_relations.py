@@ -123,6 +123,9 @@ def cluster_joined():
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
     if l_unit_no > r_unit_no:
+        # exit but set the host
+        local_hostname = subprocess.check_output(['hostname']).strip()
+        utils.relation_set(slave_host=local_hostname)
         utils.juju_log('INFO', 'cluster_joined: Relation greater.')
         return
     rabbit.COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
@@ -148,11 +151,9 @@ def cluster_changed():
                                 group='rabbit',
                                 peer_interface='cluster',
                                 ensure_local_user=True)
-    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
-    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
-    rabbit.propagate_service_credentials()
 
     if l_unit_no < r_unit_no:
+        rabbit.propagate_service_credentials()
         utils.juju_log('INFO', 'cluster_joined: Relation lesser.')
         return
 
