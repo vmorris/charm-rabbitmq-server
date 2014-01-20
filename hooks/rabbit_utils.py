@@ -115,8 +115,8 @@ def cluster_with():
     if m is not None:
         total_nodes = len(m.group(1).split(','))
 
-    if total_nodes>1:
-        utils.juju_log('INFO', 'Node is already clustered, skipping') 
+    if total_nodes > 1:
+        utils.juju_log('INFO', 'Node is already clustered, skipping')
     else:
         # check all peers and try to cluster with them
         available_nodes = []
@@ -127,14 +127,14 @@ def cluster_with():
         for r_id in (utils.relation_ids('cluster') or []):
             for unit in (utils.relation_list(r_id) or []):
                 address = utils.relation_get('private_address',
-                                         rid=r_id, unit=unit)
+                                             rid=r_id, unit=unit)
                 if address is not None:
                     node = get_hostname(address, fqdn=False)
                     if current_host != node:
                         available_nodes.append(node)
                 else:
                     # node is down, add to max tries
-                    num_tries+=1
+                    num_tries += 1
 
         # iterate over all the nodes, join to the first available
         max_tries = config('max-cluster-tries')
@@ -159,11 +159,11 @@ def cluster_with():
                 except:
                     pass
             # continue to the next node
-            num_tries+=1
+            num_tries += 1
 
         # error, no nodes available for clustering
         utils.juju_log('ERROR', 'No nodes available for clustering, retrying')
-        if num_tries>max_tries:
+        if num_tries > max_tries:
             utils.juju_log('ERROR', 'Max tries number exhausted, exiting')
             sys.exit(1)
 
@@ -309,6 +309,31 @@ def synchronize_service_credentials():
         unison.sync_to_peers(peer_interface='cluster',
                              paths=[LIB_PATH], user=SSH_USER,
                              verbose=True)
+    except Exception:
+        # to skip files without perms safely
+        pass
+
+
+def propagate_service_credentials():
+    '''
+    Broadcast service credentials to peers or consume those that have been
+    broadcasted by peer, depending on hook context.
+    '''
+    if not os.path.isdir(LIB_PATH):
+        return
+    peers = cluster.peer_units()
+    if peers and not cluster.oldest_peer(peers):
+        utils.juju_log('INFO', 'Deferring action to oldest service unit.')
+        return
+
+    # get the remote unit address
+    r_unit = os.getenv('JUJU_REMOTE_UNIT')
+    r_address = utils.relation_get('private_address', unit=r_unit)
+    utils.juju_log('INFO', 'Synchronizing service passwords to unit %s.' %
+                   str(r_address))
+    try:
+        unison.sync_to_peer(r_address, paths=[LIB_PATH], user=SSH_USER,
+                            verbose=True)
     except Exception:
         # to skip files without perms safely
         pass

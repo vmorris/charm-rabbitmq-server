@@ -221,3 +221,25 @@ def sync_to_peers(peer_interface, user, paths=[], verbose=False):
             except:
                 # it may fail for permissions on some files
                 pass
+
+
+def sync_to_peer(host, user, paths=[], verbose=False):
+    base_cmd = ['unison', '-auto', '-batch=true', '-confirmbigdel=false',
+                '-fastcheck=true', '-group=false', '-owner=false',
+                '-prefer=newer', '-times=true']
+    if not verbose:
+        base_cmd.append('-silent')
+
+    for path in paths:
+        # removing trailing slash from directory paths, unison
+        # doesn't like these.
+        if path.endswith('/'):
+            path = path[:(len(path) - 1)]
+        try:
+            cmd = base_cmd + [path, 'ssh://%s@%s/%s' % (user, host, path)]
+            utils.juju_log('INFO', 'Syncing local path %s to %s@%s:%s' %
+                           (path, user, host, path))
+            run_as_user(user, cmd)
+        except:
+            # it may fail for permissions on some files
+            pass

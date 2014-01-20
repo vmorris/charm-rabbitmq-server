@@ -71,8 +71,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
     singleset = set([
         'username',
-        'vhost'
-        ])
+        'vhost'])
 
     if singleset.issubset(settings):
         if None in [settings['username'], settings['vhost']]:
@@ -149,10 +148,10 @@ def cluster_changed():
                                 group='rabbit',
                                 peer_interface='cluster',
                                 ensure_local_user=True)
-    rabbit.synchronize_service_credentials()
-
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
+    rabbit.propagate_service_credentials()
+
     if l_unit_no < r_unit_no:
         utils.juju_log('INFO', 'cluster_joined: Relation lesser.')
         return
