@@ -155,7 +155,7 @@ def cluster_changed():
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
     if l_unit_no < r_unit_no:
         rabbit.propagate_service_credentials()
-        utils.juju_log('INFO', 'cluster_joined: Relation lesser.')
+        utils.juju_log('INFO', 'cluster_changed: Relation lesser.')
         return
 
     cookie = utils.relation_get('cookie')
