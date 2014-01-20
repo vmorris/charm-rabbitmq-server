@@ -144,6 +144,13 @@ def cluster_changed():
                        'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
         return
+
+    unison.ssh_authorized_peers(user=rabbit.SSH_USER,
+                                group='rabbit',
+                                peer_interface='cluster',
+                                ensure_local_user=True)
+    rabbit.synchronize_service_credentials()
+
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
     if l_unit_no < r_unit_no:
@@ -155,12 +162,6 @@ def cluster_changed():
         utils.juju_log('INFO',
                        'cluster_joined: cookie not yet set.')
         return
-
-    unison.ssh_authorized_peers(user=rabbit.SSH_USER,
-                                group='rabbit',
-                                peer_interface='cluster',
-                                ensure_local_user=True)
-    rabbit.synchronize_service_credentials()
 
     if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
         utils.juju_log('INFO', 'Cookie already synchronized with peer.')
