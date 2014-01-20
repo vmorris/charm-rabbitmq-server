@@ -152,6 +152,8 @@ def cluster_changed():
                                 peer_interface='cluster',
                                 ensure_local_user=True)
 
+    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
+    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
     if l_unit_no < r_unit_no:
         rabbit.propagate_service_credentials()
         utils.juju_log('INFO', 'cluster_joined: Relation lesser.')
