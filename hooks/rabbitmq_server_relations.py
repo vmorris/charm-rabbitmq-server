@@ -124,8 +124,7 @@ def cluster_joined():
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
     if l_unit_no > r_unit_no:
         # exit but set the host
-        local_hostname = subprocess.check_output(['hostname']).strip()
-        utils.relation_set(slave_host=local_hostname)
+        utils.relation_set(slave_host=utils.unit_get('private-address'))
         utils.juju_log('INFO', 'cluster_joined: Relation greater.')
         return
     rabbit.COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
