@@ -139,12 +139,6 @@ def cluster_joined():
 
 
 def cluster_changed():
-    unison.ssh_authorized_peers(user=rabbit.SSH_USER,
-                                group='rabbit',
-                                peer_interface='cluster',
-                                ensure_local_user=True)
-    rabbit.synchronize_service_credentials()
-
     if utils.is_relation_made('ha'):
         utils.juju_log('INFO',
                        'hacluster relation is present, skipping native '
@@ -161,6 +155,12 @@ def cluster_changed():
         utils.juju_log('INFO',
                        'cluster_joined: cookie not yet set.')
         return
+
+    unison.ssh_authorized_peers(user=rabbit.SSH_USER,
+                                group='rabbit',
+                                peer_interface='cluster',
+                                ensure_local_user=True)
+    rabbit.synchronize_service_credentials()
 
     if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
         utils.juju_log('INFO', 'Cookie already synchronized with peer.')
