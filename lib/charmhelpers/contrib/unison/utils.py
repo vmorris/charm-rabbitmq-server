@@ -56,7 +56,6 @@ from charmhelpers.core.hookenv import (
     relation_set,
     relation_ids,
     related_units as relation_list,
-    relation_get_dict,
     unit_get
 )
 
@@ -153,8 +152,7 @@ def ssh_authorized_peers(peer_interface, user, group=None, ensure_local_user=Fal
         keys = []
         for r_id in relation_ids(peer_interface):
             for unit in relation_list(r_id):
-                settings = relation_get_dict(relation_id=r_id,
-                                             remote_unit=unit)
+                settings = relation_get(rid=r_id, unit=unit)
                 if 'ssh_pub_key' in settings:
                     keys.append(settings['ssh_pub_key'])
                     hosts.append(settings['private-address'])
