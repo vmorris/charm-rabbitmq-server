@@ -154,7 +154,13 @@ def cluster_changed():
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
     if l_unit_no < r_unit_no:
-        rabbit.propagate_service_credentials()
+        slave_address = utils.relation_get('slave_host')
+        if slave_address is not None:
+            rabbit.synchronize_service_credentials(slave_address)
+        else:
+            utils.juju_log('ERROR',
+                           'Slave address not found, skipping password sync')
+            return
         utils.juju_log('INFO', 'cluster_changed: Relation lesser.')
         return
 

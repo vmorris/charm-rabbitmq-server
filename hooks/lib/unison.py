@@ -183,7 +183,6 @@ def sync_to_peers(peer_interface, user, paths=[], verbose=False):
     if not verbose:
         base_cmd.append('-silent')
 
-    hosts = []
     for r_id in (utils.relation_ids(peer_interface) or []):
         for unit in utils.relation_list(r_id):
             settings = utils.relation_get_dict(relation_id=r_id,
@@ -201,27 +200,13 @@ def sync_to_peers(peer_interface, user, paths=[], verbose=False):
                 if unit_hostname == authed_host:
                     add_host = settings['private-address']
             if add_host:
-                hosts.append(settings['private-address'])
+                # sync to this peer
+                self.sync_to_peer(settings['private-address'], user, paths, verbose)
             else:
                 print 'unison sync_to_peers: peer (%s) has not authorized '\
                       '*this* host yet, skipping.' %\
                        settings['private-address']
-
-    for path in paths:
-        # removing trailing slash from directory paths, unison
-        # doesn't like these.
-        if path.endswith('/'):
-            path = path[:(len(path) - 1)]
-        for host in hosts:
-            try:
-                cmd = base_cmd + [path, 'ssh://%s@%s/%s' % (user, host, path)]
-                utils.juju_log('INFO', 'Syncing local path %s to %s@%s:%s' %
-                               (path, user, host, path))
-                run_as_user(user, cmd)
-            except:
-                # it may fail for permissions on some files
-                pass
-
+    
 
 def sync_to_peer(host, user, paths=[], verbose=False):
     base_cmd = ['unison', '-auto', '-batch=true', '-confirmbigdel=false',

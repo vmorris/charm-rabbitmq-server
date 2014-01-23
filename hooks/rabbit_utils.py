@@ -110,7 +110,6 @@ def cluster_with():
 
     # check if node is already clustered
     total_nodes = 1
-    pattern = '{running_nodes,[]}'
     m = re.search("\{running_nodes,\[(.*)\]\}", out.strip())
     if m is not None:
         total_nodes = len(m.group(1).split(','))
@@ -292,7 +291,7 @@ def execute(cmd, die=False, echo=False):
     return (stdout, stderr, rc)
 
 
-def synchronize_service_credentials():
+def synchronize_service_credentials(target=None):
     '''
     Broadcast service credentials to peers or consume those that have been
     broadcasted by peer, depending on hook context.
@@ -304,35 +303,27 @@ def synchronize_service_credentials():
         utils.juju_log('INFO', 'Deferring action to oldest service unit.')
         return
 
-    utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
-    try:
-        unison.sync_to_peers(peer_interface='cluster',
-                             paths=[LIB_PATH], user=SSH_USER,
-                             verbose=True)
-    except Exception:
-        # to skip files without perms safely
-        pass
-
-
-def propagate_service_credentials():
-    '''
-    Broadcast service credentials to peers or consume those that have been
-    broadcasted by peer, depending on hook context.
-    '''
-    if not os.path.isdir(LIB_PATH):
-        return
-    peers = cluster.peer_units()
-    if peers and not cluster.oldest_peer(peers):
-        utils.juju_log('INFO', 'Deferring action to oldest service unit.')
-        return
-
-    # sync only to remote unit
-    address = utils.relation_get('slave_host')
-    utils.juju_log('INFO', 'Synchronizing service passwords to unit %s.' %
-                   str(address))
-    try:
-        unison.sync_to_peer(address, paths=[LIB_PATH], user=SSH_USER,
-                            verbose=True)
-    except Exception:
-        # to skip files without perms safely
-        pass
+    # generate paths to sync: only the .passwd files
+    sync_paths = glob.glob('%s*.passwd' % LIB_PATH)
+    if sync_paths is not None:
+        if target is None:
+            utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
+            try:
+                unison.sync_to_peers(peer_interface='cluster',
+                                     paths=sync_paths, user=SSH_USER,
+                                     verbose=True)
+            except Exception:
+                # to skip files without perms safely
+                pass
+        else:
+            # sync only to remote unit
+            utils.juju_log('INFO', 'Synchronizing service passwords to unit %s.' %
+                           str(target))
+            try:
+                unison.sync_to_peer(target, paths=sync_paths, user=SSH_USER,
+                                    verbose=True)
+            except Exception:
+                # to skip files without perms safely
+                pass
+    else:
+        utils.juju_log('INFO', 'No passwords available, skipping sync')
