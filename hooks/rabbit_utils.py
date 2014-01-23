@@ -15,6 +15,9 @@ _ = _pythonpath
 
 from charmhelpers.contrib.openstack.utils import get_hostname
 from charmhelpers.core.hookenv import config
+from charmhelpers.contrib.unison.utils import (
+    sync_to_peers,
+    sync_to_peer)
 
 PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib', 'unison']
 
@@ -309,9 +312,9 @@ def synchronize_service_credentials(target=None):
         if target is None:
             utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
             try:
-                unison.sync_to_peers(peer_interface='cluster',
-                                     paths=sync_paths, user=SSH_USER,
-                                     verbose=True)
+                sync_to_peers(peer_interface='cluster',
+                              paths=sync_paths, user=SSH_USER,
+                              verbose=True)
             except Exception:
                 # to skip files without perms safely
                 pass
@@ -320,8 +323,8 @@ def synchronize_service_credentials(target=None):
             utils.juju_log('INFO', 'Synchronizing service passwords to unit %s.' %
                            str(target))
             try:
-                unison.sync_to_peer(target, paths=sync_paths, user=SSH_USER,
-                                    verbose=True)
+                sync_to_peer(target, paths=sync_paths, user=SSH_USER,
+                             verbose=True)
             except Exception:
                 # to skip files without perms safely
                 pass

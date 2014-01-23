@@ -12,7 +12,6 @@ import lib.utils as utils
 import lib.cluster_utils as cluster
 import lib.ceph_utils as ceph
 import lib.openstack_common as openstack
-import lib.unison as unison
 
 import _pythonpath
 _ = _pythonpath
@@ -20,6 +19,9 @@ _ = _pythonpath
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import rsync
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
+from charmhelpers.contrib.unison.utils import (
+    ensure_user,
+    ssh_authorized_peers)
 
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
@@ -39,7 +41,7 @@ def install():
     utils.expose(5672)
     # ensure user + permissions for peer relations that
     # may be syncing data there via SSH_USER.
-    unison.ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
+    ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
     ensure_unison_rabbit_permissions()
 
 
@@ -111,10 +113,10 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
 
 def cluster_joined():
-    unison.ssh_authorized_peers(user=rabbit.SSH_USER,
-                                group='rabbit',
-                                peer_interface='cluster',
-                                ensure_local_user=True)
+    ssh_authorized_peers(user=rabbit.SSH_USER,
+                         group='rabbit',
+                         peer_interface='cluster',
+                         ensure_local_user=True)
     if utils.is_relation_made('ha'):
         utils.juju_log('INFO',
                        'hacluster relation is present, skipping native '
@@ -146,10 +148,10 @@ def cluster_changed():
                        'rabbitmq cluster config.')
         return
 
-    unison.ssh_authorized_peers(user=rabbit.SSH_USER,
-                                group='rabbit',
-                                peer_interface='cluster',
-                                ensure_local_user=True)
+    ssh_authorized_peers(user=rabbit.SSH_USER,
+                         group='rabbit',
+                         peer_interface='cluster',
+                         ensure_local_user=True)
 
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
@@ -368,7 +370,7 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 
 def config_changed():
-    unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
+    ensure_user(user=rabbit.SSH_USER, group='rabbit')
     ensure_unison_rabbit_permissions()
 
     if utils.config_get('management_plugin') is True:
