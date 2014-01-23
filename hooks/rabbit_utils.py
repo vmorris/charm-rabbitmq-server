@@ -6,7 +6,6 @@ import sys
 import subprocess
 import glob
 import lib.utils as utils
-import lib.unison as unison
 import lib.cluster_utils as cluster
 import apt_pkg as apt
 

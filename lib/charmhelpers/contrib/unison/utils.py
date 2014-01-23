@@ -55,7 +55,7 @@ from charmhelpers.core.hookenv import (
     relation_get,
     relation_set,
     relation_ids,
-    relation_list,
+    related_units as relation_list,
     relation_get_dict,
     unit_get
 )
