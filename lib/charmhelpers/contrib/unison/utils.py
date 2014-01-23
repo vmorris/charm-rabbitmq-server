@@ -216,8 +216,7 @@ def sync_to_peers(peer_interface, user, paths=[], verbose=False):
 
     for r_id in (relation_ids(peer_interface) or []):
         for unit in relation_list(r_id):
-            settings = relation_get_dict(relation_id=r_id,
-                                         remote_unit=unit)
+            settings = relation_get(rid=r_id,unit=unit)
             try:
                 authed_hosts = settings['ssh_authorized_hosts'].split(':')
             except KeyError:

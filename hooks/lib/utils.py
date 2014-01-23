@@ -210,27 +210,6 @@ def relation_get(attribute, unit=None, rid=None):
         return value
 
 
-@cached
-def relation_get_dict(relation_id=None, remote_unit=None):
-    """Obtain all relation data as dict by way of JSON"""
-    cmd = [
-        'relation-get', '--format=json'
-        ]
-    if relation_id:
-        cmd.append('-r')
-        cmd.append(relation_id)
-    if remote_unit:
-        cmd.append('-')
-        cmd.append(remote_unit)
-    j = subprocess.check_output(cmd)
-    d = json.loads(j)
-    settings = {}
-    # convert unicode to strings
-    for k, v in d.iteritems():
-        settings[str(k)] = str(v)
-    return settings
-
-
 def relation_set(**kwargs):
     cmd = [
         'relation-set'
