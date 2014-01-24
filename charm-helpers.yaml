@@ -4,4 +4,5 @@ include:
     - core
     - contrib.charmsupport
     - contrib.openstack
+    - contrib.storage
     - contrib.unison
