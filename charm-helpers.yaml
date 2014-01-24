@@ -1,6 +1,7 @@
 destination: lib/charmhelpers
 branch: lp:charm-helpers
 include:
+    - fetch
     - core
     - contrib.charmsupport
     - contrib.openstack
