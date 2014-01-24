@@ -47,9 +47,7 @@ import subprocess
 import sys
 
 from charmhelpers.core.hookenv import (
-    config,
-    log as juju_log,
-    charm_dir,
+    log,
     ERROR,
     INFO,
     relation_get,
@@ -59,13 +57,13 @@ from charmhelpers.core.hookenv import (
     unit_get
 )
 
+
 def get_homedir(user):
     try:
         user = pwd.getpwnam(user)
         return user.pw_dir
     except KeyError:
-        juju_log('INFO',
-                 'Could not get homedir for user %s: user exists?')
+        log('INFO', 'Could not get homedir for user %s: user exists?')
         sys.exit(1)
 
 
@@ -77,29 +75,28 @@ def get_keypair(user):
 
     priv_key = os.path.join(ssh_dir, 'id_rsa')
     if not os.path.isfile(priv_key):
-        juju_log('INFO', 'Generating new ssh key for user %s.' % user)
+        log('INFO', 'Generating new ssh key for user %s.' % user)
         cmd = ['ssh-keygen', '-q', '-N', '', '-t', 'rsa', '-b', '2048',
                '-f', priv_key]
         subprocess.check_call(cmd)
 
     pub_key = '%s.pub' % priv_key
     if not os.path.isfile(pub_key):
-        juju_log('INFO', 'Generatring missing ssh public key @ %s.' % \
-                 pub_key)
+        log('INFO', 'Generatring missing ssh public key @ %s.' % pub_key)
         cmd = ['ssh-keygen', '-y', '-f', priv_key]
         p = subprocess.check_output(cmd).strip()
         with open(pub_key, 'wb') as out:
             out.write(p)
     subprocess.check_call(['chown', '-R', user, ssh_dir])
     return open(priv_key, 'r').read().strip(), \
-           open(pub_key, 'r').read().strip()
+        open(pub_key, 'r').read().strip()
 
 
 def write_authorized_keys(user, keys):
     home_dir = get_homedir(user)
     ssh_dir = os.path.join(home_dir, '.ssh')
     auth_keys = os.path.join(ssh_dir, 'authorized_keys')
-    juju_log('INFO', 'Syncing authorized_keys @ %s.' % auth_keys)
+    log('INFO', 'Syncing authorized_keys @ %s.' % auth_keys)
     with open(auth_keys, 'wb') as out:
         for k in keys:
             out.write('%s\n' % k)
@@ -114,7 +111,7 @@ def write_known_hosts(user, hosts):
         cmd = ['ssh-keyscan', '-H', '-t', 'rsa', host]
         remote_key = subprocess.check_output(cmd).strip()
         khosts.append(remote_key)
-    juju_log('INFO', 'Syncing known_hosts @ %s.' % known_hosts)
+    log('INFO', 'Syncing known_hosts @ %s.' % known_hosts)
     with open(known_hosts, 'wb') as out:
         for host in khosts:
             out.write('%s\n' % host)
@@ -125,7 +122,7 @@ def ensure_user(user, group=None):
     try:
         pwd.getpwnam(user)
     except KeyError:
-        juju_log('INFO', 'Creating new user %s.%s.' % (user, group))
+        log('INFO', 'Creating new user %s.%s.' % (user, group))
         cmd = ['adduser', '--system', '--shell', '/bin/bash', user]
         if group:
             try:
@@ -136,7 +133,8 @@ def ensure_user(user, group=None):
         subprocess.check_call(cmd)
 
 
-def ssh_authorized_peers(peer_interface, user, group=None, ensure_local_user=False):
+def ssh_authorized_peers(peer_interface, user, group=None,
+                         ensure_local_user=False):
     """
     Main setup function, should be called from both peer -changed and -joined
     hooks with the same parameters.
@@ -157,9 +155,8 @@ def ssh_authorized_peers(peer_interface, user, group=None, ensure_local_user=Fal
                     keys.append(settings['ssh_pub_key'])
                     hosts.append(settings['private-address'])
                 else:
-                    juju_log('INFO',
-                             'ssh_authorized_peers(): ssh_pub_key '\
-                             'missing for unit %s, skipping.' % unit)
+                    log('INFO', 'ssh_authorized_peers(): ssh_pub_key '
+                        'missing for unit %s, skipping.' % unit)
         write_authorized_keys(user, keys)
         write_known_hosts(user, hosts)
         authed_hosts = ':'.join(hosts)
@@ -170,7 +167,7 @@ def _run_as_user(user):
     try:
         user = pwd.getpwnam(user)
     except KeyError:
-        juju_log('INFO', 'Invalid user: %s' % user)
+        log('INFO', 'Invalid user: %s' % user)
         sys.exit(1)
     uid, gid = user.pw_uid, user.pw_gid
     os.environ['HOME'] = user.pw_dir
@@ -199,29 +196,24 @@ def sync_to_peer(host, user, paths=[], verbose=False):
             path = path[:(len(path) - 1)]
         try:
             cmd = base_cmd + [path, 'ssh://%s@%s/%s' % (user, host, path)]
-            juju_log('INFO', 'Syncing local path %s to %s@%s:%s' %
-                     (path, user, host, path))
+            log('INFO', 'Syncing local path %s to %s@%s:%s' %
+                (path, user, host, path))
             run_as_user(user, cmd)
         except:
             # it may fail for permissions on some files
-            juju_log('INFO', 'Error syncing rabbit passwd files')
+            log('INFO', 'Error syncing rabbit passwd files')
 
 
 def sync_to_peers(peer_interface, user, paths=[], verbose=False):
-    base_cmd = ['unison', '-auto', '-batch=true', '-confirmbigdel=false',
-                '-fastcheck=true', '-group=false', '-owner=false',
-                '-prefer=newer', '-times=true']
-    if not verbose:
-        base_cmd.append('-silent')
-
     for r_id in (relation_ids(peer_interface) or []):
         for unit in relation_list(r_id):
-            settings = relation_get(rid=r_id,unit=unit)
+            settings = relation_get(rid=r_id, unit=unit)
             try:
                 authed_hosts = settings['ssh_authorized_hosts'].split(':')
             except KeyError:
-                juju_log('INFO',
-                         'unison sync_to_peers: peer has not authorized *any* hosts yet.')
+                log('INFO',
+                    'unison sync_to_peers: peer has not authorized '
+                    '*any* hosts yet.')
                 return
 
             unit_hostname = unit_get('private-address')
@@ -233,5 +225,6 @@ def sync_to_peers(peer_interface, user, paths=[], verbose=False):
                 # sync to this peer
                 sync_to_peer(settings['private-address'], user, paths, verbose)
             else:
-                juju_log('INFO', 'unison sync_to_peers: peer (%s) has not authorized '\
-                         '*this* host yet, skipping.' % settings['private-address'])
+                log('INFO', 'unison sync_to_peers: peer (%s) '
+                    'has not authorized *this* host yet, skipping.' %
+                    settings['private-address'])
