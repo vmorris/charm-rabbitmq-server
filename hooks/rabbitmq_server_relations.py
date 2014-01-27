@@ -39,6 +39,13 @@ def install():
     pre_install_hooks()
     utils.install(*rabbit.PACKAGES)
     utils.expose(5672)
+
+    homedir = utils.get_homedir(rabbit.RABBIT_USER)
+    if not os.path.isdir(homedir):
+        os.mkdir(homedir)
+        subprocess.check_call(['chown', '-R', rabbit.RABBIT_USER,
+                              homedir])
+
     # ensure user + permissions for peer relations that
     # may be syncing data there via SSH_USER.
     ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
