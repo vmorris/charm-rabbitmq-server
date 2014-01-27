@@ -40,7 +40,7 @@ def install():
     utils.install(*rabbit.PACKAGES)
     utils.expose(5672)
 
-    homedir = utils.get_homedir(rabbit.RABBIT_USER)
+    homedir = '/home/%s' % rabbit.RABBIT_USER
     if not os.path.isdir(homedir):
         os.mkdir(homedir)
         subprocess.check_call(['chown', '-R', rabbit.RABBIT_USER,
