@@ -119,7 +119,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
 def cluster_joined():
     ssh_authorized_peers(user=rabbit.SSH_USER,
-                         group='rabbit',
+                         group='rabbitmq',
                          peer_interface='cluster',
                          ensure_local_user=True)
     if utils.is_relation_made('ha'):
@@ -154,7 +154,7 @@ def cluster_changed():
         return
 
     ssh_authorized_peers(user=rabbit.SSH_USER,
-                         group='rabbit',
+                         group='rabbitmq',
                          peer_interface='cluster',
                          ensure_local_user=True)
 
