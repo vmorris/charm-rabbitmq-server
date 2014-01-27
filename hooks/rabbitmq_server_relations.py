@@ -19,7 +19,7 @@ _ = _pythonpath
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import rsync
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
-from charmhelpers.contrib.unison.utils import (
+from charmhelpers.contrib.unison import (
     ensure_user,
     ssh_authorized_peers)
 
