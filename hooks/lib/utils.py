@@ -322,3 +322,12 @@ def is_relation_made(relation, key='private-address'):
             if relation_get(key, rid=r_id, unit=unit):
                 return True
     return False
+
+
+def get_homedir(user):
+    try:
+        user = pwd.getpwnam(user)
+        return user.pw_dir
+    except KeyError:
+        log('Could not get homedir for user %s: user exists?', ERROR)
+        raise Exception

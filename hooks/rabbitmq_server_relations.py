@@ -40,16 +40,15 @@ def install():
     utils.install(*rabbit.PACKAGES)
     utils.expose(5672)
 
-    homedir = '/home/%s' % rabbit.SSH_USER
+    # ensure user + permissions for peer relations that
+    # may be syncing data there via SSH_USER.
+    ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
+    homedir = utils.get_homedir(rabbit.SSH_USER)
     if not os.path.isdir(homedir):
         os.mkdir(homedir)
         subprocess.check_call(['chown', '-R',
                               rabbit.SSH_USER+':'+rabbit.RABBIT_USER,
                               homedir])
-
-    # ensure user + permissions for peer relations that
-    # may be syncing data there via SSH_USER.
-    ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
     ensure_unison_rabbit_permissions()
 
 
