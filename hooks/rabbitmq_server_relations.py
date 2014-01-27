@@ -40,11 +40,11 @@ def install():
     utils.install(*rabbit.PACKAGES)
     utils.expose(5672)
 
-    homedir = '/home/%s' % rabbit.RABBIT_USER
+    homedir = '/home/%s' % rabbit.SSH_USER
     if not os.path.isdir(homedir):
         os.mkdir(homedir)
         subprocess.check_call(['chown', '-R',
-                              rabbit.RABBIT_USER+':'+rabbit.RABBIT_USER,
+                              rabbit.SSH_USER+':'+rabbit.RABBIT_USER,
                               homedir])
 
     # ensure user + permissions for peer relations that
