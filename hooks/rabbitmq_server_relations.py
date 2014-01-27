@@ -43,7 +43,8 @@ def install():
     homedir = '/home/%s' % rabbit.RABBIT_USER
     if not os.path.isdir(homedir):
         os.mkdir(homedir)
-        subprocess.check_call(['chown', '-R', rabbit.RABBIT_USER,
+        subprocess.check_call(['chown', '-R',
+                              rabbit.RABBIT_USER+':'+rabbit.RABBIT_USER,
                               homedir])
 
     # ensure user + permissions for peer relations that
