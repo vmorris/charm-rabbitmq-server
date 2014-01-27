@@ -1,5 +1,3 @@
-#!/usr/bin/python
-#
 # Easy file synchronization among peer units using ssh + unison.
 #
 # From *both* peer relation -joined and -changed, add a call to
@@ -41,7 +39,6 @@
 #              paths=[files], verbose=False)
 
 import os
-import grp
 import pwd
 
 from copy import copy
