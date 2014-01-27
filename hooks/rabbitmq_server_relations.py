@@ -375,7 +375,7 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 
 def config_changed():
-    ensure_user(user=rabbit.SSH_USER, group='rabbit')
+    ensure_user(user=rabbit.SSH_USER, group='rabbitmq')
     ensure_unison_rabbit_permissions()
 
     if utils.config_get('management_plugin') is True:
