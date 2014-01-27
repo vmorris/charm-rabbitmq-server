@@ -103,7 +103,7 @@ def get_keypair(user):
     pub_key = '%s.pub' % priv_key
 
     if not os.path.isdir(ssh_dir):
-        os.mkdir(ssh_dir)
+        os.makedirs(ssh_dir)
         check_call(['chown', '-R', user, ssh_dir])
 
     create_private_key(user, priv_key)
