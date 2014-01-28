@@ -389,8 +389,9 @@ def upgrade_charm():
             shutil.move(s, d)
     # explicitly update buggy file name naigos.passwd
     old = os.path.join('var/lib/rabbitmq', 'naigos.passwd')
-    new = os.path.join('var/lib/rabbitmq', 'nagios.passwd')
-    shutil.move(old, new)
+    if os.path.isfile(old):
+        new = os.path.join('var/lib/rabbitmq', 'nagios.passwd')
+        shutil.move(old, new)
 
     # ensure unison homedir and permissions
     ensure_unison_user()
