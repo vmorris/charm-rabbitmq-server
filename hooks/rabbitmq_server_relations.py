@@ -35,13 +35,7 @@ def ensure_unison_rabbit_permissions():
     rabbit.execute("chmod g+wrx %s*.passwd" % rabbit.LIB_PATH)
 
 
-def install():
-    pre_install_hooks()
-    utils.install(*rabbit.PACKAGES)
-    utils.expose(5672)
-
-    # ensure user + permissions for peer relations that
-    # may be syncing data there via SSH_USER.
+def ensure_unison_user():
     ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
     homedir = utils.get_homedir(rabbit.SSH_USER)
     if not os.path.isdir(homedir):
@@ -49,6 +43,17 @@ def install():
         subprocess.check_call(['chown', '-R',
                               rabbit.SSH_USER+':'+rabbit.RABBIT_USER,
                               homedir])
+
+
+def install():
+    pre_install_hooks()
+    utils.install(*rabbit.PACKAGES)
+    utils.install(*rabbit.EXTRA_PACKAGES)
+    utils.expose(5672)
+
+    # ensure user + permissions for peer relations that
+    # may be syncing data there via SSH_USER.
+    ensure_unison_user()
     ensure_unison_rabbit_permissions()
 
 
@@ -339,7 +344,7 @@ def update_nrpe_checks():
         rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts',
                            'check_rabbitmq.py'),
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
-    user = 'naigos'
+    user = 'nagios'
     vhost = 'nagios'
     password_file = os.path.join(RABBIT_DIR, '%s.passwd' % user)
     if os.path.exists(password_file):
@@ -349,6 +354,8 @@ def update_nrpe_checks():
         password = subprocess.check_output(cmd).strip()
         with open(password_file, 'wb') as out:
             out.write(password)
+    # fixing perms
+    rabbit.execute("chmod g+wrx %s" % password_file)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
@@ -366,6 +373,7 @@ def update_nrpe_checks():
 
 def upgrade_charm():
     pre_install_hooks()
+    utils.install(*rabbit.EXTRA_PACKAGES)
     # Ensure older passwd files in /var/lib/juju are moved to
     # /var/lib/rabbitmq which will end up replicated if clustered.
     for f in [f for f in os.listdir('/var/lib/juju')
@@ -377,6 +385,14 @@ def upgrade_charm():
                            'upgrade_charm: Migrating stored passwd'
                            ' from %s to %s.' % (s, d))
             shutil.move(s, d)
+    # explicitly update buggy file name naigos.passwd
+    old = os.path.join('var/lib/rabbitmq', 'naigos.passwd')
+    new = os.path.join('var/lib/rabbitmq', 'nagios.passwd')
+    shutil.move(old, new)
+
+    # ensure unison homedir and permissions
+    ensure_unison_user()
+    ensure_unison_rabbit_permissions()
 
 MAN_PLUGIN = 'rabbitmq_management'
 
