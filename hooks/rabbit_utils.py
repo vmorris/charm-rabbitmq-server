@@ -19,7 +19,7 @@ from charmhelpers.contrib.unison import (
     sync_to_peer)
 
 PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib']
-EXTRA_PACKAGES = ['unison',]
+EXTRA_PACKAGES = ['unison', ]
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'

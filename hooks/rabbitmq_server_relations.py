@@ -356,6 +356,8 @@ def update_nrpe_checks():
             out.write(password)
     # fixing perms
     rabbit.execute("chmod g+wrx %s" % password_file)
+    subprocess.check_call(['chown', rabbit.SSH_USER+':'+rabbit.RABBIT_USER,
+                          password_file])
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
