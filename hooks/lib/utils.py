@@ -331,3 +331,15 @@ def get_homedir(user):
     except KeyError:
         log('Could not get homedir for user %s: user exists?', ERROR)
         raise Exception
+
+
+def is_relation_greater():
+    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
+    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
+    return (l_unit_no > r_unit_no)
+
+
+def is_relation_lesser():
+    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
+    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
+    return (l_unit_no < r_unit_no)

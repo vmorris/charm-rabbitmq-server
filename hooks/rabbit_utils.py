@@ -306,8 +306,9 @@ def synchronize_service_credentials(target=None):
         utils.juju_log('INFO', 'Deferring action to oldest service unit.')
         return
 
-    # generate paths to sync: only the .passwd files
+    # generate paths to sync: only the .passwd files, skip nagios
     sync_paths = glob.glob('%s*.passwd' % LIB_PATH)
+    sync_paths = [f for f in sync_paths if 'nagios.passwd' not in f]
     if sync_paths is not None:
         if target is None:
             utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')

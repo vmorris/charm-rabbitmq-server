@@ -139,9 +139,8 @@ def cluster_joined():
                        'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
         return
-    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
-    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
-    if l_unit_no > r_unit_no:
+
+    if utils.is_relation_greater():
         # exit but set the host
         utils.relation_set(slave_host=utils.unit_get('private-address'))
         utils.juju_log('INFO', 'cluster_joined: Relation greater.')
@@ -170,9 +169,7 @@ def cluster_changed():
                          peer_interface='cluster',
                          ensure_local_user=True)
 
-    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
-    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
-    if l_unit_no < r_unit_no:
+    if utils.is_relation_lesser():
         slave_address = utils.relation_get('slave_host')
         if slave_address is not None:
             rabbit.synchronize_service_credentials(slave_address)
@@ -208,9 +205,7 @@ def cluster_departed():
                        'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
         return
-    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
-    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
-    if l_unit_no < r_unit_no:
+    if utils.is_relation_lesser():
         utils.juju_log('INFO', 'cluster_joined: Relation lesser.')
         return
     rabbit.break_cluster()
@@ -344,8 +339,10 @@ def update_nrpe_checks():
         rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts',
                            'check_rabbitmq.py'),
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
-    user = 'nagios'
-    vhost = 'nagios'
+
+    # create unique user and vhost for each unit
+    user = 'nagios-%s' % hookenv.local_unit
+    vhost = 'nagios-%s' % hookenv.local_unit
     password_file = os.path.join(RABBIT_DIR, '%s.passwd' % user)
     if os.path.exists(password_file):
         password = open(password_file).read().strip()
@@ -354,10 +351,6 @@ def update_nrpe_checks():
         password = subprocess.check_output(cmd).strip()
         with open(password_file, 'wb') as out:
             out.write(password)
-    # fixing perms
-    rabbit.execute("chmod g+wrx %s" % password_file)
-    subprocess.check_call(['chown', rabbit.SSH_USER+':'+rabbit.RABBIT_USER,
-                          password_file])
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
