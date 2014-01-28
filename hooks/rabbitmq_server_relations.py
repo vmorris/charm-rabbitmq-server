@@ -341,8 +341,9 @@ def update_nrpe_checks():
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
 
     # create unique user and vhost for each unit
-    user = 'nagios-%s' % hookenv.local_unit()
-    vhost = 'nagios-%s' % hookenv.local_unit()
+    current_unit = hookenv.local_unit().replace('/', '-')
+    user = 'nagios-%s' % current_unit
+    vhost = 'nagios-%s' % current_unit
     password_file = os.path.join(RABBIT_DIR, '%s.passwd' % user)
     if os.path.exists(password_file):
         password = open(password_file).read().strip()
