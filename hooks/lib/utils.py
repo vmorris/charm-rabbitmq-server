@@ -363,8 +363,7 @@ def chown(path, owner='root', group='root', recursive=False):
 def chmod(path, perms, recursive=False):
     """Changes perms of given path, recursively if needed"""
     if os.path.exists(path):
-        juju_log('INFO', 'Changing perms of path %s to %s' % 
-                 (path, perms))
+        juju_log('INFO', 'Changing perms of path %s ' % path, perms)
 
         if recursive:
             for root, dirs, files in os.walk(path):  

@@ -35,7 +35,7 @@ def ensure_unison_rabbit_permissions():
     utils.chown(rabbit.LIB_PATH, "root", rabbit.RABBIT_USER)
     sync_paths = glob.glob('%s*.passwd' % rabbit.LIB_PATH)
     for path in sync_paths:
-        utils.chown(rabbit.LIB_PATH, "root", rabbit.RABBIT_USER)
+        utils.chown(path, "root", rabbit.RABBIT_USER)
         utils.chmod(path, 0770)
 
 
@@ -55,7 +55,6 @@ def install():
     # ensure user + permissions for peer relations that
     # may be syncing data there via SSH_USER.
     ensure_unison_user()
-    ensure_unison_rabbit_permissions()
 
 
 def configure_amqp(username, vhost):
