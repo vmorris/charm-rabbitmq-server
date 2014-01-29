@@ -32,10 +32,10 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 def ensure_unison_rabbit_permissions():
     utils.chmod(rabbit.LIB_PATH, 0775)
-    utils.chown(rabbit.LIB_PATH, "root", rabbit.RABBIT_USER)
+    utils.chown(rabbit.LIB_PATH, rabbit.SSH_USER, rabbit.RABBIT_USER)
     sync_paths = glob.glob('%s*.passwd' % rabbit.LIB_PATH)
     for path in sync_paths:
-        utils.chown(path, "root", rabbit.RABBIT_USER)
+        utils.chown(path, rabbit.SSH_USER, rabbit.RABBIT_USER)
         utils.chmod(path, 0770)
 
 
@@ -70,7 +70,7 @@ def configure_amqp(username, vhost):
     rabbit.create_vhost(vhost)
     rabbit.create_user(username, password)
     rabbit.grant_permissions(username, vhost)
-    utils.chown(password_file, "root", rabbit.RABBIT_USER)
+    utils.chown(password_file, rabbit.SSH_USER, rabbit.RABBIT_USER)
     utils.chmod(password_file, 0770)
 
     return password
@@ -356,7 +356,7 @@ def update_nrpe_checks():
             out.write(password)
 
     utils.chmod(password_file, 0770)
-    utils.chown(password_file, "root", rabbit.RABBIT_USER)
+    utils.chown(password_file, rabbit.SSH_USER, rabbit.RABBIT_USER)
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
     rabbit.grant_permissions(user, vhost)
