@@ -10,6 +10,7 @@
 #
 
 import json
+import grp
 import os
 import pwd
 import subprocess
@@ -340,10 +341,10 @@ def is_newer():
 
 
 def chown(path, owner='root', group='root', recursive=False):
-    ""Changes owner of given path, recursively if needed"""
+    """Changes owner of given path, recursively if needed"""
     if os.path.exists(path):
-        utils.juju_log('INFO', 'Changing ownership of path %s to %s:%s" % 
-                       (path, owner, group))
+        juju_log('INFO', 'Changing ownership of path %s to %s:%s' % 
+                 (path, owner, group))
         uid = pwd.getpwnam(owner).pw_uid
         gid = grp.getgrnam(group).gr_gid
 
@@ -356,14 +357,14 @@ def chown(path, owner='root', group='root', recursive=False):
         else:
             os.chown(path, uid, gid)
     else:
-        utils.juju_log('ERROR', '%s path does not exist' % path)
+        juju_log('ERROR', '%s path does not exist' % path)
 
 
 def chmod(path, perms, recursive=False):
-    ""Changes perms of given path, recursively if needed"""
+    """Changes perms of given path, recursively if needed"""
     if os.path.exists(path):
-        utils.juju_log('INFO', 'Changing perms of path %s to %s" % 
-                       (path, perms))
+        juju_log('INFO', 'Changing perms of path %s to %s' % 
+                 (path, perms))
 
         if recursive:
             for root, dirs, files in os.walk(path):  
@@ -374,4 +375,4 @@ def chmod(path, perms, recursive=False):
         else:
             os.chmod(path, perms)
     else:
-        utils.juju_log('ERROR', '%s path does not exist' % path)
+        juju_log('ERROR', '%s path does not exist' % path)

@@ -17,7 +17,7 @@ import _pythonpath
 _ = _pythonpath
 
 from charmhelpers.core import hookenv
-from charmhelpers.core.host import rsync
+from charmhelpers.core.host import rsync, mkdir
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
 from charmhelpers.contrib.unison import (
     ensure_user,
@@ -41,7 +41,7 @@ def ensure_unison_user():
     ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
     homedir = utils.get_homedir(rabbit.SSH_USER)
     if not os.path.isdir(homedir):
-        hookenv.mkdir(homedir, rabbit.SSH_USER, rabbit.RABBIT_USER)
+        mkdir(homedir, rabbit.SSH_USER, rabbit.RABBIT_USER)
 
 
 def install():
@@ -69,7 +69,7 @@ def configure_amqp(username, vhost):
     rabbit.create_vhost(vhost)
     rabbit.create_user(username, password)
     rabbit.grant_permissions(username, vhost)
-    utils.chown(password_file, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
+    utils.chown(password_file, "root", rabbit.RABBIT_USER)
     utils.chmod(password_file, 0770)
 
     return password
@@ -355,7 +355,7 @@ def update_nrpe_checks():
             out.write(password)
 
     utils.chmod(password_file, 0770)
-    utils.chown(password_file, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
+    utils.chown(password_file, "root", rabbit.RABBIT_USER)
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
     rabbit.grant_permissions(user, vhost)
