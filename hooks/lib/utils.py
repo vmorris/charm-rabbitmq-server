@@ -333,13 +333,45 @@ def get_homedir(user):
         raise Exception
 
 
-def is_relation_greater():
+def is_newer():
     l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
     r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
     return (l_unit_no > r_unit_no)
 
 
-def is_relation_lesser():
-    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
-    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
-    return (l_unit_no < r_unit_no)
+def chown(path, owner='root', group='root', recursive=False):
+    ""Changes owner of given path, recursively if needed"""
+    if os.path.exists(path):
+        utils.juju_log('INFO', 'Changing ownership of path %s to %s:%s" % 
+                       (path, owner, group))
+        uid = pwd.getpwnam(owner).pw_uid
+        gid = grp.getgrnam(group).gr_gid
+
+        if recursive:
+            for root, dirs, files in os.walk(path):  
+                for dir in dirs:  
+                    os.chown(os.path.join(root, dir), uid, gid)
+                for file in files:
+                    os.chown(os.path.join(root, file), uid, gid)
+        else:
+            os.chown(path, uid, gid)
+    else:
+        utils.juju_log('ERROR', '%s path does not exist' % path)
+
+
+def chmod(path, perms, recursive=False):
+    ""Changes perms of given path, recursively if needed"""
+    if os.path.exists(path):
+        utils.juju_log('INFO', 'Changing perms of path %s to %s" % 
+                       (path, perms))
+
+        if recursive:
+            for root, dirs, files in os.walk(path):  
+                for dir in dirs:  
+                    os.chmod(os.path.join(root, dir), perms)
+                for file in files:
+                    os.chmod(os.path.join(root, file), perms)
+        else:
+            os.chmod(path, perms)
+    else:
+        utils.juju_log('ERROR', '%s path does not exist' % path)

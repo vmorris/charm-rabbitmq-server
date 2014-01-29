@@ -1,6 +1,4 @@
 import os
-import pwd
-import grp
 import re
 import sys
 import subprocess
@@ -241,16 +239,14 @@ ssl_cert_file = "/etc/rabbitmq/rabbit-server-cert.pem"
 
 
 def enable_ssl(ssl_key, ssl_cert, ssl_port):
-    uid = pwd.getpwnam("root").pw_uid
-    gid = grp.getgrnam("rabbitmq").gr_gid
     with open(ssl_key_file, 'w') as key_file:
         key_file.write(ssl_key)
-    os.chmod(ssl_key_file, 0640)
-    os.chown(ssl_key_file, uid, gid)
+    utils.chmod(ssl_key_file, 0640)
+    utils.chown(ssl_key_file, "root", "rabbitmq")
     with open(ssl_cert_file, 'w') as cert_file:
         cert_file.write(ssl_cert)
-    os.chmod(ssl_cert_file, 0640)
-    os.chown(ssl_cert_file, uid, gid)
+    utils.chmod(ssl_cert_file, 0640)
+    utils.chown(ssl_cert_file, "root", "rabbitmq")
     with open(RABBITMQ_CONF, 'w') as rmq_conf:
         rmq_conf.write(utils.render_template(os.path.basename(RABBITMQ_CONF),
                                              {"ssl_port": ssl_port,

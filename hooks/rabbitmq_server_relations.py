@@ -31,18 +31,17 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 
 def ensure_unison_rabbit_permissions():
-    rabbit.execute("chmod g+wrx %s" % rabbit.LIB_PATH)
-    rabbit.execute("chmod g+wrx %s*.passwd" % rabbit.LIB_PATH)
+    utils.chmod(rabbit.LIB_PATH, 0770)
+    sync_paths = glob.glob('%s*.passwd' % rabbit.LIB_PATH)
+    for path in sync_paths:
+        utils.chmod(path, 0770)
 
 
 def ensure_unison_user():
     ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
     homedir = utils.get_homedir(rabbit.SSH_USER)
     if not os.path.isdir(homedir):
-        os.mkdir(homedir)
-        subprocess.check_call(['chown', '-R',
-                              rabbit.SSH_USER+':'+rabbit.RABBIT_USER,
-                              homedir])
+        hookenv.mkdir(homedir, rabbit.SSH_USER, rabbit.RABBIT_USER)
 
 
 def install():
@@ -70,6 +69,8 @@ def configure_amqp(username, vhost):
     rabbit.create_vhost(vhost)
     rabbit.create_user(username, password)
     rabbit.grant_permissions(username, vhost)
+    utils.chown(password_file, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
+    utils.chmod(password_file, 0770)
 
     return password
 
@@ -140,7 +141,7 @@ def cluster_joined():
                        'rabbitmq cluster config.')
         return
 
-    if utils.is_relation_greater():
+    if utils.is_newer():
         # exit but set the host
         utils.relation_set(slave_host=utils.unit_get('private-address'))
         utils.juju_log('INFO', 'cluster_joined: Relation greater.')
@@ -169,7 +170,7 @@ def cluster_changed():
                          peer_interface='cluster',
                          ensure_local_user=True)
 
-    if utils.is_relation_lesser():
+    if not utils.is_newer():
         slave_address = utils.relation_get('slave_host')
         if slave_address is not None:
             rabbit.synchronize_service_credentials(slave_address)
@@ -205,7 +206,7 @@ def cluster_departed():
                        'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
         return
-    if utils.is_relation_lesser():
+    if not utils.is_newer():
         utils.juju_log('INFO', 'cluster_joined: Relation lesser.')
         return
     rabbit.break_cluster()
@@ -353,6 +354,8 @@ def update_nrpe_checks():
         with open(password_file, 'wb') as out:
             out.write(password)
 
+    utils.chmod(password_file, 0770)
+    utils.chown(password_file, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
     rabbit.grant_permissions(user, vhost)
