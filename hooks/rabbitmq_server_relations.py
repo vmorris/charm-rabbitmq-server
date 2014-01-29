@@ -31,7 +31,7 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 
 def ensure_unison_rabbit_permissions():
-    utils.chmod(rabbit.LIB_PATH, 0770)
+    utils.chmod(rabbit.LIB_PATH, 0775)
     sync_paths = glob.glob('%s*.passwd' % rabbit.LIB_PATH)
     for path in sync_paths:
         utils.chmod(path, 0770)
