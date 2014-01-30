@@ -16,6 +16,7 @@ import lib.openstack_common as openstack
 import _pythonpath
 _ = _pythonpath
 
+from charmhelpers.fetch import configure_sources
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import rsync, mkdir
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
@@ -48,6 +49,7 @@ def ensure_unison_user():
 
 def install():
     pre_install_hooks()
+    configure_sources(update=True)
     utils.install(*rabbit.PACKAGES)
     utils.install(*rabbit.EXTRA_PACKAGES)
     utils.expose(5672)
@@ -136,7 +138,8 @@ def cluster_joined():
                          group='rabbitmq',
                          peer_interface='cluster',
                          ensure_local_user=True)
-    if utils.is_relation_made('ha'):
+    if utils.is_relation_made('ha') and \
+            utils.config_get('ha-vip-only') is False:
         utils.juju_log('INFO',
                        'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
@@ -160,7 +163,8 @@ def cluster_joined():
 
 
 def cluster_changed():
-    if utils.is_relation_made('ha'):
+    if utils.is_relation_made('ha') and \
+            utils.config_get('ha-vip-only') is False:
         utils.juju_log('INFO',
                        'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
@@ -202,7 +206,8 @@ def cluster_changed():
 
 
 def cluster_departed():
-    if utils.is_relation_made('ha'):
+    if utils.is_relation_made('ha') and \
+            utils.config_get('ha-vip-only') is False:
         utils.juju_log('INFO',
                        'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
@@ -220,20 +225,26 @@ def ha_joined():
     vip_iface = utils.config_get('vip_iface')
     vip_cidr = utils.config_get('vip_cidr')
     rbd_name = utils.config_get('rbd-name')
+    vip_only = utils.config_get('ha-vip-only')
 
     if None in [corosync_bindiface, corosync_mcastport, vip, vip_iface,
-                vip_cidr, rbd_name]:
+                vip_cidr, rbd_name] and vip_only is False:
         utils.juju_log('ERROR', 'Insufficient configuration data to '
                        'configure hacluster.')
         sys.exit(1)
+    elif None in [corosync_bindiface, corosync_mcastport, vip, vip_iface,
+                  vip_cidr] and vip_only is True:
+        utils.juju_log('ERROR', 'Insufficient configuration data to '
+                       'configure VIP-only hacluster.')
+        sys.exit(1)
 
-    if not utils.is_relation_made('ceph', 'auth'):
+    if not utils.is_relation_made('ceph', 'auth') and vip_only is False:
         utils.juju_log('INFO',
                        'ha_joined: No ceph relation yet, deferring.')
         return
 
     name = '%s@localhost' % SERVICE_NAME
-    if rabbit.get_node_name() != name:
+    if rabbit.get_node_name() != name and vip_only is False:
         utils.juju_log('INFO', 'Stopping rabbitmq-server.')
         utils.stop('rabbitmq-server')
         rabbit.set_node_name('%s@localhost' % SERVICE_NAME)
@@ -244,31 +255,44 @@ def ha_joined():
     relation_settings['corosync_bindiface'] = corosync_bindiface
     relation_settings['corosync_mcastport'] = corosync_mcastport
 
-    relation_settings['resources'] = {
-        'res_rabbitmq_rbd': 'ocf:ceph:rbd',
-        'res_rabbitmq_fs': 'ocf:heartbeat:Filesystem',
-        'res_rabbitmq_vip': 'ocf:heartbeat:IPaddr2',
-        'res_rabbitmq-server': 'lsb:rabbitmq-server',
-    }
+    if vip_only is True:
+        relation_settings['resources'] = {
+            'res_rabbitmq_vip': 'ocf:heartbeat:IPaddr2',
+        }
+        relation_settings['resource_params'] = {
+            'res_rabbitmq_vip': 'params ip="%s" cidr_netmask="%s" nic="%s"' %
+                                (vip, vip_cidr, vip_iface),
+        }
+        relation_settings['groups'] = {
+            'grp_rabbitmq': 'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '
+                            'res_rabbitmq-server',
+        }
+    else:
+        relation_settings['resources'] = {
+            'res_rabbitmq_rbd': 'ocf:ceph:rbd',
+            'res_rabbitmq_fs': 'ocf:heartbeat:Filesystem',
+            'res_rabbitmq_vip': 'ocf:heartbeat:IPaddr2',
+            'res_rabbitmq-server': 'lsb:rabbitmq-server',
+        }
 
-    relation_settings['resource_params'] = {
-        'res_rabbitmq_rbd': 'params name="%s" pool="%s" user="%s" '
-                            'secret="%s"' %
-                            (rbd_name, POOL_NAME,
-                             SERVICE_NAME, ceph.keyfile_path(SERVICE_NAME)),
-        'res_rabbitmq_fs': 'params device="/dev/rbd/%s/%s" directory="%s" '
-                           'fstype="ext4" op start start-delay="10s"' %
-                           (POOL_NAME, rbd_name, RABBIT_DIR),
-        'res_rabbitmq_vip': 'params ip="%s" cidr_netmask="%s" nic="%s"' %
-                            (vip, vip_cidr, vip_iface),
-        'res_rabbitmq-server': 'op start start-delay="5s" '
-                               'op monitor interval="5s"',
-    }
+        relation_settings['resource_params'] = {
+            'res_rabbitmq_rbd': 'params name="%s" pool="%s" user="%s" '
+                                'secret="%s"' %
+                                (rbd_name, POOL_NAME,
+                                 SERVICE_NAME, ceph.keyfile_path(SERVICE_NAME)),
+            'res_rabbitmq_fs': 'params device="/dev/rbd/%s/%s" directory="%s" '
+                               'fstype="ext4" op start start-delay="10s"' %
+                               (POOL_NAME, rbd_name, RABBIT_DIR),
+            'res_rabbitmq_vip': 'params ip="%s" cidr_netmask="%s" nic="%s"' %
+                                (vip, vip_cidr, vip_iface),
+            'res_rabbitmq-server': 'op start start-delay="5s" '
+                                   'op monitor interval="5s"',
+        }
 
-    relation_settings['groups'] = {
-        'grp_rabbitmq': 'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '
-                        'res_rabbitmq-server',
-    }
+        relation_settings['groups'] = {
+            'grp_rabbitmq': 'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '
+                            'res_rabbitmq-server',
+        }
 
     for rel_id in utils.relation_ids('ha'):
         utils.relation_set(rid=rel_id, **relation_settings)
@@ -373,6 +397,7 @@ def update_nrpe_checks():
 
 def upgrade_charm():
     pre_install_hooks()
+    configure_sources(update=True)
     utils.install(*rabbit.EXTRA_PACKAGES)
     # Ensure older passwd files in /var/lib/juju are moved to
     # /var/lib/rabbitmq which will end up replicated if clustered.
@@ -426,7 +451,8 @@ def config_changed():
             os.remove(rabbit.RABBITMQ_CONF)
         utils.close_port(utils.config_get('ssl_port'))
 
-    if cluster.eligible_leader('res_rabbitmq_vip'):
+    if cluster.eligible_leader('res_rabbitmq_vip') or \
+       utils.config_get('ha-vip-only') is True:
         utils.restart('rabbitmq-server')
 
     update_nrpe_checks()

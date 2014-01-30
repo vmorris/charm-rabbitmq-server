@@ -54,6 +54,16 @@ options:
       description: |
         Default multicast port number that will be used to communicate between
         HA Cluster nodes.
+  ha-vip-only:
+      type: boolean
+      default: False
+      descriptions: |
+        By default, without pairing with hacluster charm, rabbitmq will deploy
+        in active/active/active... HA. When pairied with hacluster charm, it
+        will deploy as active/passive. By enabling this option, pairing with
+        hacluster charm will keep rabbit in active/active setup, but in addition
+        it will deploy a VIP that can be used by services that cannot work
+        with mutiple AMQPs (like Glance in pre-Icehouse).
   rbd-size:
       type: string
       default: 5G
@@ -74,3 +84,23 @@ options:
         Number of tries to cluster with other units before giving up.
         If errors clustering happening in more than these units, charm will
         end with an error
+  install_sources:
+      type: string
+      description: |
+        Repository from which to install.  May be one of the following:
+        distro (default), ppa:somecustom/ppa, a deb url sources entry,
+        or a supported Cloud Archive release pocket.
+
+        Supported Cloud Archive sources include: cloud:precise-folsom,
+        cloud:precise-folsom/updates, cloud:precise-folsom/staging,
+        cloud:precise-folsom/proposed. Also, a list is supported:
+        # install_sources:
+        #   - "ppa:foo"
+        #   - "http://example.com/repo precise main"
+        # install_keys:
+        #   - null
+        #   - "a1b2c3d4"
+  install_keys:
+      type: string
+      description: |
+        PGP keys to be installed with install_sources

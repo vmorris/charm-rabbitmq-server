@@ -285,7 +285,7 @@ def execute(cmd, die=False, echo=False):
     rc = p.returncode
 
     if die and rc != 0:
-        error_out("ERROR: command %s return non-zero.\n" % cmd)
+        utils.juju_log('INFO', "ERROR: command %s return non-zero.\n" % cmd)
     return (stdout, stderr, rc)
 
 
