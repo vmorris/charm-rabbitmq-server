@@ -101,7 +101,7 @@ def cluster_with():
     vers = rabbit_version()
     if vers >= '3.0.1-1':
         cluster_cmd = 'join_cluster'
-        cmd = ['/usr/sbin/rabbitmqctl', 'set_policy', 'HA', '^(?!amq\\.).*', '{"ha-mode": "all"}']
+        cmd = [RABBITMQ_CTL, 'set_policy', 'HA', '^(?!amq\.).*', '{"ha-mode": "all"}']
         subprocess.check_call(cmd)
     else:
         cluster_cmd = 'cluster'
