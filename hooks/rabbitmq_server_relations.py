@@ -41,10 +41,10 @@ def ensure_unison_rabbit_permissions():
 
 
 def ensure_unison_user():
-    ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
-    homedir = utils.get_homedir(rabbit.SSH_USER)
+    ensure_user(user=rabbit.ROOT_USER, group=rabbit.RABBIT_USER)
+    homedir = utils.get_homedir(rabbit.ROOT_USER)
     if not os.path.isdir(homedir):
-        mkdir(homedir, rabbit.SSH_USER, rabbit.RABBIT_USER, 0770)
+        mkdir(homedir, rabbit.ROOT_USER, rabbit.RABBIT_USER, 0770)
 
 
 def install():
@@ -134,8 +134,8 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
 
 def cluster_joined():
-    ssh_authorized_peers(user=rabbit.SSH_USER,
-                         group='rabbitmq',
+    ssh_authorized_peers(user=rabbit.ROOT_USER,
+                         group=rabbit.RABBIT_USER,
                          peer_interface='cluster',
                          ensure_local_user=True)
     if utils.is_relation_made('ha') and \
@@ -170,8 +170,8 @@ def cluster_changed():
                        'rabbitmq cluster config.')
         return
 
-    ssh_authorized_peers(user=rabbit.SSH_USER,
-                         group='rabbitmq',
+    ssh_authorized_peers(user=rabbit.ROOT_USER,
+                         group=rabbit.RABBIT_USER,
                          peer_interface='cluster',
                          ensure_local_user=True)
 
@@ -423,7 +423,7 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 
 def config_changed():
-    ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
+    ensure_user(user=rabbit.ROOT_USER, group=rabbit.RABBIT_USER)
     ensure_unison_rabbit_permissions()
 
     if utils.config_get('management_plugin') is True:

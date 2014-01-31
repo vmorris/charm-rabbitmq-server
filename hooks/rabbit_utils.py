@@ -310,7 +310,7 @@ def synchronize_service_credentials(target=None):
             utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
             try:
                 sync_to_peers(peer_interface='cluster',
-                              paths=sync_paths, user=SSH_USER,
+                              paths=sync_paths, user=ROOT_USER,
                               verbose=True)
             except Exception:
                 # to skip files without perms safely
@@ -320,7 +320,7 @@ def synchronize_service_credentials(target=None):
             utils.juju_log('INFO', 'Synchronizing service passwords to unit %s.' %
                            str(target))
             try:
-                sync_to_peer(target, paths=sync_paths, user=SSH_USER,
+                sync_to_peer(target, paths=sync_paths, user=ROOT_USER,
                              verbose=True)
             except Exception:
                 # to skip files without perms safely
