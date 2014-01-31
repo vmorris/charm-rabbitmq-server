@@ -25,6 +25,7 @@ ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
 RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
 SSH_USER = 'juju_rabbit'
 RABBIT_USER = 'rabbitmq'
+ROOT_USER = 'root'
 LIB_PATH = '/var/lib/rabbitmq/'
 
 

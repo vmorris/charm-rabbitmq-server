@@ -33,10 +33,10 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 def ensure_unison_rabbit_permissions():
     utils.chmod(rabbit.LIB_PATH, 0775)
-    utils.chown(rabbit.LIB_PATH, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
+    utils.chown(rabbit.LIB_PATH, rabbit.ROOT_USER, rabbit.RABBIT_USER)
     sync_paths = glob.glob('%s*.passwd' % rabbit.LIB_PATH)
     for path in sync_paths:
-        utils.chown(path, "root", rabbit.RABBIT_USER)
+        utils.chown(path, rabbit.ROOT_USER, rabbit.RABBIT_USER)
         utils.chmod(path, 0660)
 
 
@@ -68,7 +68,7 @@ def configure_amqp(username, vhost):
     else:
         cmd = ['pwgen', '64', '1']
         password = subprocess.check_output(cmd).strip()
-        write_file(password_file, password, "root", rabbit.RABBIT_USER, 0660)
+        write_file(password_file, password, rabbit.ROOT_USER, rabbit.RABBIT_USER, 0660)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(username, password)
@@ -373,14 +373,13 @@ def update_nrpe_checks():
     password_file = os.path.join(RABBIT_DIR, '%s.passwd' % user)
     if os.path.exists(password_file):
         password = open(password_file).read().strip()
+        utils.chmod(password_file, 0660)
+        utils.chown(password_file, rabbit.ROOT_USER, rabbit.RABBIT_USER)
     else:
         cmd = ['pwgen', '64', '1']
         password = subprocess.check_output(cmd).strip()
-        with open(password_file, 'wb') as out:
-            out.write(password)
+        write_file(password_file, password, rabbit.ROOT_USER, rabbit.RABBIT_USER, 0660)
 
-    utils.chmod(password_file, 0770)
-    utils.chown(password_file, rabbit.SSH_USER, rabbit.RABBIT_USER)
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
     rabbit.grant_permissions(user, vhost)
