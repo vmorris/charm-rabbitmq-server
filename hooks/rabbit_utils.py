@@ -101,7 +101,7 @@ def cluster_with():
     vers = rabbit_version()
     if vers >= '3.0.1-1':
         cluster_cmd = 'join_cluster'
-        cmd = ['/usr/sbin/rabbitmqctl', 'set_policy', 'HA', '^(?!amq\\.).*', '{"ha-mode": "all"}']
+        cmd = [RABBITMQ_CTL, 'set_policy', 'HA', '^(?!amq\.).*', '{"ha-mode": "all"}']
         subprocess.check_call(cmd)
     else:
         cluster_cmd = 'cluster'
@@ -285,7 +285,7 @@ def execute(cmd, die=False, echo=False):
     rc = p.returncode
 
     if die and rc != 0:
-        error_out("ERROR: command %s return non-zero.\n" % cmd)
+        utils.juju_log('INFO', "ERROR: command %s return non-zero.\n" % cmd)
     return (stdout, stderr, rc)
 
 

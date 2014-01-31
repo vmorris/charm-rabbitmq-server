@@ -61,8 +61,7 @@ from charmhelpers.core.hookenv import (
 )
 
 BASE_CMD = ['unison', '-auto', '-batch=true', '-confirmbigdel=false',
-            '-fastcheck=true', '-group=false', '-owner=false',
-            '-prefer=newer', '-times=true']
+            '-fastcheck=true', '-prefer=newer', '-times=true']
 
 
 def get_homedir(user):
@@ -227,10 +226,16 @@ def collect_authed_hosts(peer_interface):
     return hosts
 
 
-def sync_path_to_host(path, host, user, verbose=False):
+def sync_path_to_host(path, host, user, enforce_perms=True, verbose=False):
     cmd = copy(BASE_CMD)
     if not verbose:
         cmd.append('-silent')
+    if enforce_perms:
+        cmd.append('-owner=True')
+        cmd.append('-group=True')
+    else:
+        cmd.append('-owner=False')
+        cmd.append('-group=False')
 
     # removing trailing slash from directory paths, unison
     # doesn't like these.
@@ -246,12 +251,12 @@ def sync_path_to_host(path, host, user, verbose=False):
         log('Error syncing remote files')
 
 
-def sync_to_peer(host, user, paths=[], verbose=False):
+def sync_to_peer(host, user, paths=[], enforce_perms=True, verbose=False):
     '''Sync paths to an specific host'''
-    [sync_path_to_host(p, host, user, verbose) for p in paths]
+    [sync_path_to_host(p, host, user, enforce_perms, verbose) for p in paths]
 
 
-def sync_to_peers(peer_interface, user, paths=[], verbose=False):
+def sync_to_peers(peer_interface, user, paths=[], enforce_perms=True, verbose=False):
     '''Sync all hosts to an specific path'''
     for host in collect_authed_hosts():
-        sync_to_peer(host, user, paths, verbose)
+        sync_to_peer(host, user, paths, enforce_perms, verbose)
