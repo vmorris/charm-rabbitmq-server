@@ -231,11 +231,11 @@ def sync_path_to_host(path, host, user, enforce_perms=True, verbose=False):
     if not verbose:
         cmd.append('-silent')
     if enforce_perms:
-        cmd.append('-owner=True')
-        cmd.append('-group=True')
+        cmd.append('-owner=true')
+        cmd.append('-group=true')
     else:
-        cmd.append('-owner=False')
-        cmd.append('-group=False')
+        cmd.append('-owner=false')
+        cmd.append('-group=false')
 
     # removing trailing slash from directory paths, unison
     # doesn't like these.
