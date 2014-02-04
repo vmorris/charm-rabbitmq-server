@@ -49,7 +49,8 @@ def ensure_unison_user():
 
 def install():
     pre_install_hooks()
-    configure_sources(update=True)
+    if hookenv.config('install_sources'):
+        configure_sources(update=True)
     utils.install(*rabbit.PACKAGES)
     utils.install(*rabbit.EXTRA_PACKAGES)
     utils.expose(5672)
@@ -396,7 +397,8 @@ def update_nrpe_checks():
 
 def upgrade_charm():
     pre_install_hooks()
-    configure_sources(update=True)
+    if hookenv.config('install_sources'):
+        configure_sources(update=True)
     utils.install(*rabbit.EXTRA_PACKAGES)
     # Ensure older passwd files in /var/lib/juju are moved to
     # /var/lib/rabbitmq which will end up replicated if clustered.
