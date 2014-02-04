@@ -86,6 +86,7 @@ options:
         end with an error
   install_sources:
       type: string
+      default: ""
       description: |
         Repository from which to install.  May be one of the following:
         distro (default), ppa:somecustom/ppa, a deb url sources entry,
