@@ -71,7 +71,10 @@ CLOUD_ARCHIVE_POCKETS = {
     'folsom/proposed': 'precise-proposed/folsom',
     'grizzly': 'precise-updates/grizzly',
     'grizzly/updates': 'precise-updates/grizzly',
-    'grizzly/proposed': 'precise-proposed/grizzly'
+    'grizzly/proposed': 'precise-proposed/grizzly',
+    'havana': 'precise-updates/havana',
+    'havana/updates': 'precise-updates/havana',
+    'havana/proposed': 'precise-proposed/havana',
     }
 
 
@@ -86,8 +89,11 @@ def configure_source():
             ]
         subprocess.check_call(cmd)
     if source.startswith('cloud:'):
+        # CA values should be formatted as cloud:ubuntu-openstack/pocket, eg:
+        #   cloud:precise-folsom/updates or cloud:precise-folsom/proposed
         install('ubuntu-cloud-keyring')
         pocket = source.split(':')[1]
+        pocket = pocket.split('-')[1]
         with open('/etc/apt/sources.list.d/cloud-archive.list', 'w') as apt:
             apt.write(CLOUD_ARCHIVE.format(CLOUD_ARCHIVE_POCKETS[pocket]))
     if source.startswith('deb'):
@@ -131,8 +137,7 @@ def open_port(port, protocol='TCP'):
 def close_port(port, protocol='TCP'):
     cmd = [
         'close-port',
-        '{}/{}'.format(port, protocol)
-        ]
+        '{}/{}'.format(port, protocol)]
     subprocess.check_call(cmd)
 
 
@@ -145,6 +150,23 @@ def juju_log(severity, message):
     subprocess.check_call(cmd)
 
 
+cache = {}
+
+
+def cached(func):
+    def wrapper(*args, **kwargs):
+        global cache
+        key = str((func, args, kwargs))
+        try:
+            return cache[key]
+        except KeyError:
+            res = func(*args, **kwargs)
+            cache[key] = res
+            return res
+    return wrapper
+
+
+@cached
 def relation_ids(relation):
     cmd = [
         'relation-ids',
@@ -157,6 +179,7 @@ def relation_ids(relation):
         return result
 
 
+@cached
 def relation_list(rid):
     cmd = [
         'relation-list',
@@ -169,6 +192,7 @@ def relation_list(rid):
         return result
 
 
+@cached
 def relation_get(attribute, unit=None, rid=None):
     cmd = [
         'relation-get',
@@ -184,6 +208,27 @@ def relation_get(attribute, unit=None, rid=None):
         return None
     else:
         return value
+
+
+@cached
+def relation_get_dict(relation_id=None, remote_unit=None):
+    """Obtain all relation data as dict by way of JSON"""
+    cmd = [
+        'relation-get', '--format=json'
+        ]
+    if relation_id:
+        cmd.append('-r')
+        cmd.append(relation_id)
+    if remote_unit:
+        cmd.append('-')
+        cmd.append(remote_unit)
+    j = subprocess.check_output(cmd)
+    d = json.loads(j)
+    settings = {}
+    # convert unicode to strings
+    for k, v in d.iteritems():
+        settings[str(k)] = str(v)
+    return settings
 
 
 def relation_set(**kwargs):
@@ -202,6 +247,7 @@ def relation_set(**kwargs):
     subprocess.check_call(cmd)
 
 
+@cached
 def unit_get(attribute):
     cmd = [
         'unit-get',
@@ -214,6 +260,7 @@ def unit_get(attribute):
         return value
 
 
+@cached
 def config_get(attribute):
     cmd = [
         'config-get',
@@ -229,10 +276,12 @@ def config_get(attribute):
         return None
 
 
+@cached
 def get_unit_hostname():
     return socket.gethostname()
 
 
+@cached
 def get_host_ip(hostname=unit_get('private-address')):
     try:
         # Test to see if already an IPv4 address
