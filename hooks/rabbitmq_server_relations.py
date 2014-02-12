@@ -16,7 +16,9 @@ import lib.openstack_common as openstack
 import _pythonpath
 _ = _pythonpath
 
-from charmhelpers.fetch import configure_sources
+from charmhelpers.fetch import (
+    add_source,
+    apt_update)
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import rsync, mkdir, write_file
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
@@ -49,8 +51,8 @@ def ensure_unison_user():
 
 def install():
     pre_install_hooks()
-    if hookenv.config('install_sources'):
-        configure_sources(update=True)
+    add_source(config('source'), config('key'))
+    apt_update(fatal=True)
     utils.install(*rabbit.PACKAGES)
     utils.install(*rabbit.EXTRA_PACKAGES)
     utils.expose(5672)
@@ -397,8 +399,8 @@ def update_nrpe_checks():
 
 def upgrade_charm():
     pre_install_hooks()
-    if hookenv.config('install_sources'):
-        configure_sources(update=True)
+    add_source(config('source'), config('key'))
+    apt_update(fatal=True)
     utils.install(*rabbit.EXTRA_PACKAGES)
     # Ensure older passwd files in /var/lib/juju are moved to
     # /var/lib/rabbitmq which will end up replicated if clustered.
