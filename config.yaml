@@ -88,6 +88,7 @@ options:
         effect (although it can be changed in ceph by manually configuring
         your ceph cluster).
   max-cluster-tries:
+      type: int
       default: 3
       description: |
         Number of tries to cluster with other units before giving up.
