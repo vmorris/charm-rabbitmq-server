@@ -341,11 +341,13 @@ def ceph_changed():
         rbd_size = utils.config_get('rbd-size')
         sizemb = int(rbd_size.split('G')[0]) * 1024
         blk_device = '/dev/rbd/%s/%s' % (POOL_NAME, rbd_img)
+        rbd_pool_rep_count = utils.config_get('ceph-osd-replication-count')
         ceph.ensure_ceph_storage(service=SERVICE_NAME, pool=POOL_NAME,
                                  rbd_img=rbd_img, sizemb=sizemb,
                                  fstype='ext4', mount_point=RABBIT_DIR,
                                  blk_device=blk_device,
-                                 system_services=['rabbitmq-server'])
+                                 system_services=['rabbitmq-server'],
+                                 rbd_pool_replicas=rbd_pool_rep_count)
     else:
         utils.juju_log('INFO',
                        'This is not the peer leader. Not configuring RBD.')
