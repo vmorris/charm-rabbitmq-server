@@ -16,7 +16,9 @@ import lib.openstack_common as openstack
 import _pythonpath
 _ = _pythonpath
 
-from charmhelpers.fetch import configure_sources
+from charmhelpers.fetch import (
+    add_source,
+    apt_update)
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import rsync, mkdir, write_file
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
@@ -49,8 +51,8 @@ def ensure_unison_user():
 
 def install():
     pre_install_hooks()
-    if hookenv.config('install_sources'):
-        configure_sources(update=True)
+    add_source(utils.config_get('source'), utils.config_get('key'))
+    apt_update(fatal=True)
     utils.install(*rabbit.PACKAGES)
     utils.install(*rabbit.EXTRA_PACKAGES)
     utils.expose(5672)
@@ -339,11 +341,13 @@ def ceph_changed():
         rbd_size = utils.config_get('rbd-size')
         sizemb = int(rbd_size.split('G')[0]) * 1024
         blk_device = '/dev/rbd/%s/%s' % (POOL_NAME, rbd_img)
+        rbd_pool_rep_count = utils.config_get('ceph-osd-replication-count')
         ceph.ensure_ceph_storage(service=SERVICE_NAME, pool=POOL_NAME,
                                  rbd_img=rbd_img, sizemb=sizemb,
                                  fstype='ext4', mount_point=RABBIT_DIR,
                                  blk_device=blk_device,
-                                 system_services=['rabbitmq-server'])
+                                 system_services=['rabbitmq-server'],
+                                 rbd_pool_replicas=rbd_pool_rep_count)
     else:
         utils.juju_log('INFO',
                        'This is not the peer leader. Not configuring RBD.')
@@ -397,8 +401,8 @@ def update_nrpe_checks():
 
 def upgrade_charm():
     pre_install_hooks()
-    if hookenv.config('install_sources'):
-        configure_sources(update=True)
+    add_source(utils.config_get('source'), utils.config_get('key'))
+    apt_update(fatal=True)
     utils.install(*rabbit.EXTRA_PACKAGES)
     # Ensure older passwd files in /var/lib/juju are moved to
     # /var/lib/rabbitmq which will end up replicated if clustered.
