@@ -279,11 +279,13 @@ def ceph_changed():
     utils.juju_log('INFO', 'Start Ceph Relation Changed')
     auth = utils.relation_get('auth')
     key = utils.relation_get('key')
+    use_syslog = utils.relation_get('use_syslog')
     if None in [auth, key]:
         utils.juju_log('INFO', 'Missing key or auth in relation')
         sys.exit(0)
 
-    ceph.configure(service=SERVICE_NAME, key=key, auth=auth)
+    ceph.configure(service=SERVICE_NAME, key=key, auth=auth,
+                   use_syslog=use_syslog)
 
     if cluster.eligible_leader('res_rabbitmq_vip'):
         rbd_img = utils.config_get('rbd-name')
