@@ -128,8 +128,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
     # set if need HA queues or not
     vers = rabbit.rabbit_version()
-    relation_settings['ha_queues'] = (vers >= '3.0.1-1')
-
+    relation_settings['ha_queues'] = (compare_version('3.0.1-1'))
     utils.relation_set(**relation_settings)
 
     # sync new creds to all peers
