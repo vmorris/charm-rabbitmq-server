@@ -279,7 +279,7 @@ def ceph_changed():
     utils.juju_log('INFO', 'Start Ceph Relation Changed')
     auth = utils.relation_get('auth')
     key = utils.relation_get('key')
-    use_syslog = utils.relation_get('use_syslog')
+    use_syslog = str(utils.config_get('use-syslog')).lower()
     if None in [auth, key]:
         utils.juju_log('INFO', 'Missing key or auth in relation')
         sys.exit(0)
