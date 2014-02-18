@@ -88,19 +88,17 @@ def service(action):
     subprocess.check_call(cmd)
 
 
-def rabbit_version():
+def compare_version(base_version):
     apt.init()
     cache = apt.Cache()
     pkg = cache['rabbitmq-server']
     if pkg.current_ver:
-        return apt.upstream_version(pkg.current_ver.ver_str)
+        return (apt.version_compare(pkg.current_ver.ver_str, base_version) >= 0)
     else:
-        return None
-
+        return False
 
 def cluster_with():
-    vers = rabbit_version()
-    if vers >= '3.0.1-1':
+    if compare_version('3.0.1-1'):
         cluster_cmd = 'join_cluster'
         cmd = [RABBITMQ_CTL, 'set_policy', 'HA', '^(?!amq\.).*', '{"ha-mode": "all"}']
         subprocess.check_call(cmd)
