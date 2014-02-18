@@ -96,7 +96,6 @@ options:
         end with an error
   source:
       type: string
-      default: ""
       description: |
         Optional configuration to support use of additional sources such as:
         .

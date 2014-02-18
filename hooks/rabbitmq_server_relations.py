@@ -34,19 +34,19 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 
 def ensure_unison_rabbit_permissions():
-    utils.chmod(rabbit.LIB_PATH, 0775)
+    utils.chmod(rabbit.LIB_PATH, 0770)
     utils.chown(rabbit.LIB_PATH, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     sync_paths = glob.glob('%s*.passwd' % rabbit.LIB_PATH)
     for path in sync_paths:
-        utils.chown(path, rabbit.ROOT_USER, rabbit.RABBIT_USER)
+        utils.chown(path, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
         utils.chmod(path, 0660)
 
 
 def ensure_unison_user():
-    ensure_user(user=rabbit.ROOT_USER, group=rabbit.RABBIT_USER)
-    homedir = utils.get_homedir(rabbit.ROOT_USER)
+    ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
+    homedir = utils.get_homedir(rabbit.SSH_USER)
     if not os.path.isdir(homedir):
-        mkdir(homedir, rabbit.ROOT_USER, rabbit.RABBIT_USER, 0770)
+        mkdir(homedir, rabbit.SSH_USER, rabbit.RABBIT_USER, 0770)
 
 
 def install():
@@ -57,7 +57,7 @@ def install():
     utils.install(*rabbit.EXTRA_PACKAGES)
     utils.expose(5672)
     utils.chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
-    utils.chmod(RABBIT_DIR, 0775)
+    utils.chmod(RABBIT_DIR, 0770)
 
     # ensure user + permissions for peer relations that
     # may be syncing data there via SSH_USER.
@@ -71,7 +71,7 @@ def configure_amqp(username, vhost):
     else:
         cmd = ['pwgen', '64', '1']
         password = subprocess.check_output(cmd).strip()
-        write_file(password_file, password, rabbit.ROOT_USER, rabbit.RABBIT_USER, 0660)
+        write_file(password_file, password, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(username, password)
@@ -137,7 +137,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
 
 def cluster_joined():
-    ssh_authorized_peers(user=rabbit.ROOT_USER,
+    ssh_authorized_peers(user=rabbit.RABBIT_USER,
                          group=rabbit.RABBIT_USER,
                          peer_interface='cluster',
                          ensure_local_user=True)
@@ -173,7 +173,7 @@ def cluster_changed():
                        'rabbitmq cluster config.')
         return
 
-    ssh_authorized_peers(user=rabbit.ROOT_USER,
+    ssh_authorized_peers(user=rabbit.RABBIT_USER,
                          group=rabbit.RABBIT_USER,
                          peer_interface='cluster',
                          ensure_local_user=True)
@@ -379,11 +379,11 @@ def update_nrpe_checks():
     if os.path.exists(password_file):
         password = open(password_file).read().strip()
         utils.chmod(password_file, 0660)
-        utils.chown(password_file, rabbit.ROOT_USER, rabbit.RABBIT_USER)
+        utils.chown(password_file, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     else:
         cmd = ['pwgen', '64', '1']
         password = subprocess.check_output(cmd).strip()
-        write_file(password_file, password, rabbit.ROOT_USER, rabbit.RABBIT_USER, 0660)
+        write_file(password_file, password, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
@@ -429,7 +429,7 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 
 def config_changed():
-    ensure_user(user=rabbit.ROOT_USER, group=rabbit.RABBIT_USER)
+    ensure_user(user=rabbit.RABBIT_USER, group=rabbit.RABBIT_USER)
     ensure_unison_rabbit_permissions()
 
     if utils.config_get('management_plugin') is True:
