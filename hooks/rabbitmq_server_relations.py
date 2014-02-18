@@ -34,7 +34,7 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 
 def ensure_unison_rabbit_permissions():
-    utils.chmod(rabbit.LIB_PATH, 0770)
+    utils.chmod(rabbit.LIB_PATH, 0775)
     utils.chown(rabbit.LIB_PATH, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     sync_paths = glob.glob('%s*.passwd' % rabbit.LIB_PATH)
     for path in sync_paths:
@@ -46,7 +46,7 @@ def ensure_unison_user():
     ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
     homedir = utils.get_homedir(rabbit.SSH_USER)
     if not os.path.isdir(homedir):
-        mkdir(homedir, rabbit.SSH_USER, rabbit.RABBIT_USER, 0770)
+        mkdir(homedir, rabbit.SSH_USER, rabbit.RABBIT_USER, 0775)
 
 
 def install():
@@ -57,7 +57,7 @@ def install():
     utils.install(*rabbit.EXTRA_PACKAGES)
     utils.expose(5672)
     utils.chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
-    utils.chmod(RABBIT_DIR, 0770)
+    utils.chmod(RABBIT_DIR, 0775)
 
     # ensure user + permissions for peer relations that
     # may be syncing data there via SSH_USER.
