@@ -196,6 +196,7 @@ def _run_as_user(user):
 
     def _inner():
         os.setgid(gid)
+        os.setgroups([gid])
         os.setuid(uid)
     return _inner
 
