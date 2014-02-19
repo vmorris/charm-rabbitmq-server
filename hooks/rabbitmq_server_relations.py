@@ -392,6 +392,7 @@ def config_changed():
     if cluster.eligible_leader('res_rabbitmq_vip'):
         utils.restart('rabbitmq-server')
 
+    utils.configure_source()
     update_nrpe_checks()
 
 
