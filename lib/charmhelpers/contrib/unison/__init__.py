@@ -242,9 +242,10 @@ def sync_path_to_host(path, host, user, verbose=False):
 
     try:
         log('Syncing local path %s to %s@%s:%s' % (path, user, host, path))
-        run_as_user(user, cmd)
-    except:
-        log('Error syncing remote files')
+        output = run_as_user(user, cmd)
+        log('Result of sync: %s' % str(output))
+    except Exception as e:
+        log('Error syncing remote files: %s - %s' % (str(e), str(output)))
 
 
 def sync_to_peer(host, user, paths=[], verbose=False):
