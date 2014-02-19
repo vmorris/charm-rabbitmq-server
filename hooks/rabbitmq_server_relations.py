@@ -362,6 +362,8 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 
 def config_changed():
+    utils.configure_source()
+
     unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
     ensure_unison_rabbit_permissions()
 
@@ -392,7 +394,6 @@ def config_changed():
     if cluster.eligible_leader('res_rabbitmq_vip'):
         utils.restart('rabbitmq-server')
 
-    utils.configure_source()
     update_nrpe_checks()
 
 

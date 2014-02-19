@@ -74,7 +74,7 @@ CLOUD_ARCHIVE_POCKETS = {
     'grizzly/proposed': 'precise-proposed/grizzly',
     'havana': 'precise-updates/havana',
     'havana/updates': 'precise-updates/havana',
-    'havana/proposed': 'precise-proposed/havana',
+    'havana/proposed': 'precise-proposed/havana'
     }
 
 
