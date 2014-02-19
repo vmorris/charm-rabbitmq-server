@@ -240,6 +240,7 @@ def sync_path_to_host(path, host, user, verbose=False):
     cmd = cmd + [path, 'ssh://%s@%s/%s' % (user, host, path)]
     log('Unison command: %s' % str(cmd))
 
+    output = ''
     try:
         log('Syncing local path %s to %s@%s:%s' % (path, user, host, path))
         output = run_as_user(user, cmd)
