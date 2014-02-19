@@ -46,7 +46,7 @@ def ensure_unison_user():
     ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
     homedir = utils.get_homedir(rabbit.SSH_USER)
     if not os.path.isdir(homedir):
-        mkdir(homedir, rabbit.SSH_USER, rabbit.RABBIT_USER, 0775)
+        mkdir(homedir, rabbit.SSH_USER, rabbit.RABBIT_USER, 0770)
 
 
 def install():
