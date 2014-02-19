@@ -306,22 +306,14 @@ def synchronize_service_credentials(target=None):
     if sync_paths is not None:
         if target is None:
             utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
-            try:
-                sync_to_peers(peer_interface='cluster',
-                              paths=sync_paths, user=SSH_USER,
-                              verbose=True)
-            except Exception:
-                # to skip files without perms safely
-                pass
+            sync_to_peers(peer_interface='cluster',
+                          paths=sync_paths, user=SSH_USER,
+                          verbose=True)
         else:
             # sync only to remote unit
             utils.juju_log('INFO', 'Synchronizing service passwords to unit %s.' %
                            str(target))
-            try:
-                sync_to_peer(target, paths=sync_paths, user=SSH_USER,
-                             verbose=True)
-            except Exception:
-                # to skip files without perms safely
-                pass
+            sync_to_peer(target, paths=sync_paths, user=SSH_USER,
+                         verbose=True)
     else:
         utils.juju_log('INFO', 'No passwords available, skipping sync')
