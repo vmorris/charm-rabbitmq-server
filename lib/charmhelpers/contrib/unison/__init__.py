@@ -186,15 +186,15 @@ def ssh_authorized_peers(peer_interface, user, group=None,
 
 
 def _run_as_user(user):
-    try:
-        user = pwd.getpwnam(user)
-    except KeyError:
-        log('Invalid user: %s' % user)
-        raise Exception
-    uid, gid = user.pw_uid, user.pw_gid
-    os.environ['HOME'] = user.pw_dir
-
     def _inner():
+        try:
+            user = pwd.getpwnam(user)
+            log('in unison run as user, run as %s' % str(user))
+        except KeyError:
+            log('Invalid user: %s' % user)
+            raise Exception
+        uid, gid = user.pw_uid, user.pw_gid
+        os.environ['HOME'] = user.pw_dir
         os.setgid(gid)
         os.setgroups([gid])
         os.setuid(uid)
