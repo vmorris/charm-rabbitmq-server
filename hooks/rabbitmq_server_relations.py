@@ -20,6 +20,10 @@ _ = _pythonpath
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import rsync
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
+from charmhelpers.fetch import (
+    apt_update,
+    add_source
+)
 
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
@@ -34,6 +38,10 @@ def ensure_unison_rabbit_permissions():
 
 
 def install():
+    # Add archive source if provided
+    add_source(utils.config_get('source'), utils.config_get('key'))
+    apt_update()
+
     pre_install_hooks()
     utils.install(*rabbit.PACKAGES)
     utils.expose(5672)
@@ -362,7 +370,9 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 
 def config_changed():
-    utils.configure_source()
+    # Add archive source if provided
+    add_source(utils.config_get('source'), utils.config_get('key'))
+    apt_update()
 
     unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
     ensure_unison_rabbit_permissions()
