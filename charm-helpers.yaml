@@ -1,6 +1,7 @@
 destination: lib/charmhelpers
-branch: lp:charm-helpers
+branch: lp:~hazmat/charm-helpers/ssl-everywhere
 include:
     - core
     - contrib.charmsupport
     - contrib.openstack
+    - contrib.ssl
