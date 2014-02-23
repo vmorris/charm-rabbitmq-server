@@ -387,7 +387,7 @@ def _get_ssl_mode():
         ssl_mode = 'on'
     ssl_key = utils.config_get('ssl_key')
     ssl_cert = utils.config_get('ssl_cert')
-    if all(ssl_key, ssl_cert):
+    if all((ssl_key, ssl_cert)):
         external_ca = True
     return ssl_mode, external_ca
 
@@ -413,8 +413,8 @@ def configure_rabbit_ssl():
     ssl_port = utils.config_get('ssl_port')
 
     # If external managed certs then we need all the fields.
-    if (ssl_mode in ('on', 'only') and any(ssl_key, ssl_cert) and
-            not all(ssl_key, ssl_cert)):
+    if (ssl_mode in ('on', 'only') and any((ssl_key, ssl_cert)) and
+            not all((ssl_key, ssl_cert))):
         utils.juju_log(
             'ERROR',
             'If ssl_key or ssl_cert are specified both are required.')
