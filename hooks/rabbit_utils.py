@@ -221,7 +221,8 @@ ssl_cert_file = "/etc/rabbitmq/rabbit-server-cert.pem"
 ssl_ca_file = "/etc/rabbitmq/rabbit-server-ca.pem"
 
 
-def enable_ssl(ssl_key, ssl_cert, ssl_port, ssl_ca=None, ssl_only=False):
+def enable_ssl(ssl_key, ssl_cert, ssl_port,
+               ssl_ca=None, ssl_only=False, ssl_client=None):
     uid = pwd.getpwnam("root").pw_uid
     gid = grp.getgrnam("rabbitmq").gr_gid
 
@@ -236,14 +237,20 @@ def enable_ssl(ssl_key, ssl_cert, ssl_port, ssl_ca=None, ssl_only=False):
         os.chmod(path, 0640)
         os.chown(path, uid, gid)
 
+    data = {
+        "ssl_port": ssl_port,
+        "ssl_cert_file": ssl_cert_file,
+        "ssl_key_file": ssl_key_file,
+        "ssl_client": ssl_client,
+        "ssl_ca_file": "",
+        "ssl_only": ssl_only}
+
+    if ssl_ca:
+        data["ssl_ca_file"] = ssl_ca_file
+
     with open(RABBITMQ_CONF, 'w') as rmq_conf:
         rmq_conf.write(utils.render_template(
-            os.path.basename(RABBITMQ_CONF),
-            {"ssl_port": ssl_port,
-             "ssl_ca": ssl_ca,
-             "ssl_cert_file": ssl_cert_file,
-             "ssl_key_file": ssl_key_file,
-             "ssl_only": ssl_only}))
+            os.path.basename(RABBITMQ_CONF), data))
 
 
 def execute(cmd, die=False, echo=False):
