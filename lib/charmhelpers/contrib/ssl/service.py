@@ -42,6 +42,7 @@ class ServiceCA(object):
         ca = cls.get_ca()
         crt, key = ca.get_or_create_cert(service_name)
         return crt, key, ca.get_ca_bundle()
+
     ###############
 
     def init(self):
