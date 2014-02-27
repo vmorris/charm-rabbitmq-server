@@ -66,7 +66,7 @@ def configure_amqp(username, vhost):
             else:
                 services_password = {}
             services_password[username] = password
-            hookenv.relation_set(rid=r_id, services_password=base64.b64encode(json_dumps(services_password)), unit=unit)
+            hookenv.relation_set(rid=r_id, services_password=base64.b64encode(json.dumps(services_password)), unit=unit)
 
     return password
 
@@ -123,13 +123,12 @@ def amqp_changed(relation_id=None, remote_unit=None):
             utils.relation_set(**relation_settings)
         else:
             # resync passwords in all slaves
-            services_password = hookenv.relation_get('services_password')
-            if services_password is not None:
-                services_password = json.loads(base64.b64decode(services_password))
-            else:
-                services_password = {}
-            for key, value in services_password.items():
-                write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
+            for r_id in (utils.relation_ids('cluster') or []):
+                services_password = hookenv.relation_get('services_password', rid=r_id)
+                if services_password is not None:
+                    services_password = json.loads(base64.b64decode(services_password))
+                    for key, value in services_password.items():
+                        write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
 
 
 def cluster_joined():
@@ -189,9 +188,11 @@ def cluster_changed():
         return
 
     # write passwords to slave unit
-    services_password = json.loads(base64.b64decode(hookenv.relation_get('services_password')))
-    for key, value in services_password.items():
-        write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
+    services_password = hookenv.relation_get('services_password')
+    if services_password is not None:
+        services_password = json.loads(base64.b64decode(services_password))
+        for key, value in services_password.items():
+            write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
 
     if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
         utils.juju_log('INFO', 'Cookie already synchronized with peer.')
