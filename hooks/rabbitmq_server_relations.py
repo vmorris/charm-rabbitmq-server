@@ -57,12 +57,12 @@ def configure_amqp(username, vhost):
     # populate password if needed
     for r_id in (utils.relation_ids('cluster') or []):
         try:
-            relation_pass = hookenv.relation_get('password', rid=r_id)
+            relation_pass = hookenv.relation_get('services_password', rid=r_id)
         except:
             relation_pass = None
         if relation_pass is None:
             relation_pass = {}
-        relation_pass[vhost] = password
+        relation_pass[user] = password
         utils.relation_set(rid=r_id, password=relation_pass)
 
     return password
