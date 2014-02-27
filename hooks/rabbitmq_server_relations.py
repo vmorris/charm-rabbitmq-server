@@ -56,61 +56,74 @@ def configure_amqp(username, vhost):
     rabbit.create_user(username, password)
     rabbit.grant_permissions(username, vhost)
 
+    # check if we have cluster relationships, and update it
+    for r_id in (utils.relation_ids('cluster') or []):
+        for unit in utils.relation_list(r_id):
+            # get current passwords
+            services_password = json.loads(base64.b64decode(hookenv.relation_get('services_password', rid=r_id, unit=unit)
+            if services_password is None:
+                services_password = {}
+            services_password[username] = password
+            hookenv.relation_set(rid=r_id, services_password=base64.b64encode(json_dumps(services_password)), unit=unit)
+
     return password
 
 
 def amqp_changed(relation_id=None, remote_unit=None):
-    if not cluster.eligible_leader('res_rabbitmq_vip'):
-        msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
-        utils.juju_log('INFO', msg)
-        return
-
-    relation_settings = {}
-    settings = hookenv.relation_get(rid=relation_id, unit=remote_unit)
-
-    singleset = set([
-        'username',
-        'vhost'])
-
-    if singleset.issubset(settings):
-        if None in [settings['username'], settings['vhost']]:
-            utils.juju_log('INFO', 'amqp_changed(): Relation not ready.')
-            return
-
-        relation_settings['password'] = configure_amqp(username=settings['username'],
-                                                       vhost=settings['vhost'])
-    else:
-        queues = {}
-        for k, v in settings.iteritems():
-            amqp = k.split('_')[0]
-            x = '_'.join(k.split('_')[1:])
-            if amqp not in queues:
-                queues[amqp] = {}
-            queues[amqp][x] = v
-        relation_settings = {}
-        for amqp in queues:
-            if singleset.issubset(queues[amqp]):
-                relation_settings['_'.join([amqp, 'password'])] = configure_amqp(queues[amqp]['username'],
-                                                                                 queues[amqp]['vhost'])
-
-    relation_settings['hostname'] = utils.unit_get('private-address')
-
     if cluster.is_clustered():
-        relation_settings['clustered'] = 'true'
-        if utils.is_relation_made('ha'):
-            # active/passive settings
-            relation_settings['vip'] = utils.config_get('vip')
-            relation_settings['ha-vip-only'] = utils.config_get('ha-vip-only')
+        if not cluster.is_leader('res_rabbitmq_vip'):
+            msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
+            utils.juju_log('INFO', msg)
+            return
+    else:
+        if cluster.eligible_leader('res_rabbitmq_vip'):
+            relation_settings = {}
+            settings = hookenv.relation_get(rid=relation_id, unit=remote_unit)
 
-    if relation_id:
-        relation_settings['rid'] = relation_id
+            singleset = set([
+                'username',
+                'vhost'])
 
-    # set if need HA queues or not
-    relation_settings['ha_queues'] = (rabbit.compare_version('3.0.1-1'))
-    utils.relation_set(**relation_settings)
+            if singleset.issubset(settings):
+                if None in [settings['username'], settings['vhost']]:
+                    utils.juju_log('INFO', 'amqp_changed(): Relation not ready.')
+                    return
 
-    # sync new creds to all peers
-    rabbit.synchronize_service_credentials()
+                relation_settings['password'] = configure_amqp(username=settings['username'],
+                                                               vhost=settings['vhost'])
+            else:
+                queues = {}
+                for k, v in settings.iteritems():
+                    amqp = k.split('_')[0]
+                    x = '_'.join(k.split('_')[1:])
+                    if amqp not in queues:
+                        queues[amqp] = {}
+                    queues[amqp][x] = v
+                relation_settings = {}
+                for amqp in queues:
+                    if singleset.issubset(queues[amqp]):
+                        relation_settings['_'.join([amqp, 'password'])] = configure_amqp(queues[amqp]['username'],
+                                                                                         queues[amqp]['vhost'])
+            
+            relation_settings['hostname'] = utils.unit_get('private-address')
+            if cluster.is_clustered():
+                relation_settings['clustered'] = 'true'
+            if utils.is_relation_made('ha'):
+                # active/passive settings
+                relation_settings['vip'] = utils.config_get('vip')
+                relation_settings['ha-vip-only'] = utils.config_get('ha-vip-only')
+
+            if relation_id:
+                relation_settings['rid'] = relation_id
+
+            # set if need HA queues or not
+            relation_settings['ha_queues'] = (rabbit.compare_version('3.0.1-1'))
+            utils.relation_set(**relation_settings)
+        else:
+            # resync passwords in all slaves
+            services_password = json.loads(base64.b64decode(hookenv.relation_get('services_password')))
+            for key, value in services_password.items():
+                write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
 
 
 def cluster_joined():

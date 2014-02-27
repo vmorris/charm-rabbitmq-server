@@ -281,29 +281,3 @@ def execute(cmd, die=False, echo=False):
     if die and rc != 0:
         utils.juju_log('INFO', "ERROR: command %s return non-zero.\n" % cmd)
     return (stdout, stderr, rc)
-
-
-def synchronize_service_credentials(target=None):
-    '''
-    Broadcast service credentials to peers or consume those that have been
-    broadcasted by peer, depending on hook context.
-    '''
-    if not os.path.isdir(LIB_PATH):
-        return
-    peers = cluster.peer_units()
-    if peers and not cluster.oldest_peer(peers):
-        utils.juju_log('INFO', 'Deferring action to oldest service unit.')
-        return
-
-    # generate paths to sync: only the .passwd files, skip nagios
-    sync_paths = glob.glob('%s*.passwd' % LIB_PATH)
-    sync_paths = [f for f in sync_paths if 'nagios' not in f]
-    if sync_paths is not None:
-        if target is None:
-            utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
-        else:
-            # sync only to remote unit
-            utils.juju_log('INFO', 'Synchronizing service passwords to unit %s.' %
-                           str(target))
-    else:
-        utils.juju_log('INFO', 'No passwords available, skipping sync')
