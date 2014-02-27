@@ -125,10 +125,12 @@ def amqp_changed(relation_id=None, remote_unit=None):
             # resync passwords in all slaves
             services_password = None
             for r_id in (utils.relation_ids('cluster') or []):
-                services_password = hookenv.relation_get('services_password', rid=r_id)
-                if services_password is not None:
-                    services_password = json.loads(base64.b64decode(services_password))
-                    break
+                for unit in utils.relation_list(r_id):
+                    services_password = hookenv.relation_get('services_password', rid=r_id, unit=unit)
+                    if services_password is not None:
+                        services_password = json.loads(base64.b64decode(services_password))
+                        break
+            utils.juju_log('INFO', 'Services are: '+str(services_password))
             if services_password is not None:
                 for key, value in services_password.items():
                     write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
