@@ -54,17 +54,6 @@ def configure_amqp(username, vhost):
     rabbit.create_user(username, password)
     rabbit.grant_permissions(username, vhost)
 
-    # populate password if needed
-    for r_id in (utils.relation_ids('cluster') or []):
-        try:
-            relation_pass = hookenv.relation_get('services_password', rid=r_id)
-        except:
-            relation_pass = None
-        if relation_pass is None:
-            relation_pass = {}
-        relation_pass[username] = password
-        utils.relation_set(rid=r_id, services_password=relation_pass)
-
     return password
 
 
@@ -145,6 +134,20 @@ def cluster_joined():
     # add parent host to the relation
     local_hostname = subprocess.check_output(['hostname']).strip()
     utils.relation_set(cookie=cookie, host=local_hostname)
+
+    # add current password services
+    services_password = {}
+    sync_paths = glob.glob('%s*.passwd' % rabbit.LIB_PATH)
+    sync_paths = [f for f in sync_paths if 'nagios' not in f]
+    if sync_paths is not None:
+        for path in sync_paths:
+            with open(path, 'r') as f:
+                content = f.read()
+                services_password[os.path.basename(path)] = content
+
+    for r_id in (utils.relation_ids('cluster') or []):
+        for unit in utils.relation_list(rid):
+            utils.relation_set(rid=r_id, services_password=services_password, unit=unit)
 
 
 def cluster_changed():
