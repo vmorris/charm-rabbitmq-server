@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import json
 import os
 import shutil
 import sys
@@ -147,7 +148,7 @@ def cluster_joined():
 
     for r_id in (utils.relation_ids('cluster') or []):
         for unit in utils.relation_list(r_id):
-            hookenv.relation_set(rid=r_id, services_password=services_password, unit=unit)
+            hookenv.relation_set(rid=r_id, services_password=json.dumps(services_password), unit=unit)
 
 
 def cluster_changed():
@@ -169,7 +170,7 @@ def cluster_changed():
         return
 
     # write passwords to slave unit
-    services_password = hookenv.relation_get('services_password')
+    services_password = json.loads(hookenv.relation_get('services_password'))
     for key, value in services_password.items():
         write_file(key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
 	
