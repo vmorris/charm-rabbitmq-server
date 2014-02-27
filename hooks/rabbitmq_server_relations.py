@@ -22,31 +22,12 @@ from charmhelpers.fetch import (
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import rsync, mkdir, write_file
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
-from charmhelpers.contrib.unison import (
-    ensure_user,
-    ssh_authorized_peers)
 
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
 POOL_NAME = SERVICE_NAME
 RABBIT_DIR = '/var/lib/rabbitmq'
 NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
-
-
-def ensure_unison_rabbit_permissions():
-    utils.chmod(rabbit.LIB_PATH, 0775)
-    utils.chown(rabbit.LIB_PATH, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
-    sync_paths = glob.glob('%s*.passwd' % rabbit.LIB_PATH)
-    for path in sync_paths:
-        utils.chown(path, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
-        utils.chmod(path, 0660)
-
-
-def ensure_unison_user():
-    ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
-    homedir = utils.get_homedir(rabbit.SSH_USER)
-    if not os.path.isdir(homedir):
-        mkdir(homedir, rabbit.SSH_USER, rabbit.RABBIT_USER, 0775)
 
 
 def install():
@@ -58,10 +39,6 @@ def install():
     utils.expose(5672)
     utils.chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     utils.chmod(RABBIT_DIR, 0775)
-
-    # ensure user + permissions for peer relations that
-    # may be syncing data there via SSH_USER.
-    ensure_unison_user()
 
 
 def configure_amqp(username, vhost):
@@ -76,6 +53,14 @@ def configure_amqp(username, vhost):
     rabbit.create_vhost(vhost)
     rabbit.create_user(username, password)
     rabbit.grant_permissions(username, vhost)
+
+    # populate password if needed
+    for r_id in (utils.relation_ids('cluster') or []):
+        relation_pass = hookenv.relation_get('password', rid=r_id)
+        if relation_pass is None:
+            relation_pass = {}
+        relation_pass[vhost] = password
+        utils.relation_set(rid=r_id, password=relation_pass)
 
     return password
 
@@ -135,10 +120,6 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
 
 def cluster_joined():
-    ssh_authorized_peers(user=rabbit.SSH_USER,
-                         group=rabbit.RABBIT_USER,
-                         peer_interface='cluster',
-                         ensure_local_user=True)
     if utils.is_relation_made('ha') and \
             utils.config_get('ha-vip-only') is False:
         utils.juju_log('INFO',
@@ -170,11 +151,6 @@ def cluster_changed():
                        'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
         return
-
-    ssh_authorized_peers(user=rabbit.SSH_USER,
-                         group=rabbit.RABBIT_USER,
-                         peer_interface='cluster',
-                         ensure_local_user=True)
 
     if not utils.is_newer():
         slave_address = utils.relation_get('slave_host')
@@ -420,17 +396,11 @@ def upgrade_charm():
         new = os.path.join('var/lib/rabbitmq', 'nagios.passwd')
         shutil.move(old, new)
 
-    # ensure unison homedir and permissions
-    ensure_unison_user()
-    ensure_unison_rabbit_permissions()
 
 MAN_PLUGIN = 'rabbitmq_management'
 
 
 def config_changed():
-    ensure_user(user=rabbit.RABBIT_USER, group=rabbit.RABBIT_USER)
-    ensure_unison_rabbit_permissions()
-
     if utils.config_get('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
         utils.open_port(55672)

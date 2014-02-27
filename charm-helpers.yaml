@@ -6,4 +6,3 @@ include:
     - contrib.charmsupport
     - contrib.openstack
     - contrib.storage
-    - contrib.unison

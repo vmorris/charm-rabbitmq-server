@@ -23,9 +23,7 @@ RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
 ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
 RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
-SSH_USER = 'juju_rabbit'
 RABBIT_USER = 'rabbitmq'
-ROOT_USER = 'root'
 LIB_PATH = '/var/lib/rabbitmq/'
 
 
@@ -306,14 +304,9 @@ def synchronize_service_credentials(target=None):
     if sync_paths is not None:
         if target is None:
             utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
-            sync_to_peers(peer_interface='cluster',
-                          paths=sync_paths, user=SSH_USER,
-                          verbose=True)
         else:
             # sync only to remote unit
             utils.juju_log('INFO', 'Synchronizing service passwords to unit %s.' %
                            str(target))
-            sync_to_peer(target, paths=sync_paths, user=SSH_USER,
-                         verbose=True)
     else:
         utils.juju_log('INFO', 'No passwords available, skipping sync')
