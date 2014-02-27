@@ -67,7 +67,7 @@ def configure_amqp(username, vhost):
                 services_password = {}
             services_password[username] = password
             hookenv.relation_set(rid=r_id, services_password=base64.b64encode(json.dumps(services_password)), unit=unit)
-
+    
     return password
 
 
@@ -125,9 +125,12 @@ def amqp_changed(relation_id=None, remote_unit=None):
             # resync passwords in all slaves
             services_password = {}
             for r_id in (utils.relation_ids('cluster') or []):
-                services_password = hookenv.relation_get('services_password', rid=r_id, unit=remote_unit)
-                if services_password is not None:
-                    services_password = json.loads(base64.b64decode(services_password))
+                for unit in utils.relation_list(r_id):
+                    services_password = hookenv.relation_get('services_password', rid=r_id, unit=remote_unit)
+                    if services_password is not None:
+                        services_password = json.loads(base64.b64decode(services_password))
+                        if len(services_password.keys())>0:
+                            break
 
             if len(services_password.keys())>0:
                 for key, value in services_password.items():
