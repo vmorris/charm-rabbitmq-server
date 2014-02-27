@@ -62,8 +62,8 @@ def configure_amqp(username, vhost):
             relation_pass = None
         if relation_pass is None:
             relation_pass = {}
-        relation_pass[user] = password
-        utils.relation_set(rid=r_id, password=relation_pass)
+        relation_pass[username] = password
+        utils.relation_set(rid=r_id, services_password=relation_pass)
 
     return password
 
