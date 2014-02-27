@@ -122,22 +122,14 @@ def amqp_changed(relation_id=None, remote_unit=None):
             relation_settings['ha_queues'] = (rabbit.compare_version('3.0.1-1'))
             utils.relation_set(**relation_settings)
         else:
-            # resync passwords in all slaves
-            services_password = {}
-            for r_id in (utils.relation_ids('cluster') or []):
-                for unit in utils.relation_list(r_id):
-                    services_password = hookenv.relation_get('services_password', rid=r_id, unit=remote_unit)
-                    if services_password is not None:
-                        services_password = json.loads(base64.b64decode(services_password))
-                        if len(services_password.keys())>0:
-                            break
-
-            if len(services_password.keys())>0:
-                for key, value in services_password.items():
-                    write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
+            # resync pass on slave
+            settings = hookenv.relation_get(rid=relation_id, unit=remote_unit)
+            if 'password' in settings:
+                write_file(rabbit.LIB_PATH+settings['username']+'.passwd', settings['password'],
+                           rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
             else:
                 # still not set, wait
-                utils.juju_log('INFO', 'Services password still not set. Relation not ready')
+                utils.juju_log('INFO', 'Service password still not set. Relation not ready')
                 return
 
 
