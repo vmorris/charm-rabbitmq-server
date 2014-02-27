@@ -12,9 +12,6 @@ _ = _pythonpath
 
 from charmhelpers.contrib.openstack.utils import get_hostname
 from charmhelpers.core.hookenv import config
-from charmhelpers.contrib.unison import (
-    sync_to_peers,
-    sync_to_peer)
 
 PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib']
 EXTRA_PACKAGES = ['unison', ]

@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import base64
 import json
 import os
 import shutil
@@ -148,7 +149,7 @@ def cluster_joined():
 
     for r_id in (utils.relation_ids('cluster') or []):
         for unit in utils.relation_list(r_id):
-            hookenv.relation_set(rid=r_id, services_password=json.dumps(services_password), unit=unit)
+            hookenv.relation_set(rid=r_id, services_password=base64.b64encode(json.dumps(services_password)), unit=unit)
 
 
 def cluster_changed():
@@ -162,7 +163,6 @@ def cluster_changed():
     # skip if is parent unit
     if not utils.is_newer():
         return
-    
     cookie = utils.relation_get('cookie')
     if cookie is None:
         utils.juju_log('INFO',
@@ -170,10 +170,10 @@ def cluster_changed():
         return
 
     # write passwords to slave unit
-    services_password = json.loads(hookenv.relation_get('services_password'))
+    services_password = json.loads(base64.b64decode(hookenv.relation_get('services_password')))
     for key, value in services_password.items():
-        write_file(key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
-	
+        write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
+
     if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
         utils.juju_log('INFO', 'Cookie already synchronized with peer.')
     else:
