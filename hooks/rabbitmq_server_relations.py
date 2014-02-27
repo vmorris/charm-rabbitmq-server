@@ -71,16 +71,16 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
     singleset = set([
         'username',
-        'vhost'
-        ])
+        'vhost'])
 
     if singleset.issubset(settings):
         if None in [settings['username'], settings['vhost']]:
             utils.juju_log('INFO', 'amqp_changed(): Relation not ready.')
             return
 
-        relation_settings['password'] = configure_amqp(username=settings['username'],
-                                                       vhost=settings['vhost'])
+        relation_settings['password'] = \
+            configure_amqp(username=settings['username'],
+                           vhost=settings['vhost'])
     else:
         queues = {}
         for k, v in settings.iteritems():
@@ -92,8 +92,9 @@ def amqp_changed(relation_id=None, remote_unit=None):
         relation_settings = {}
         for amqp in queues:
             if singleset.issubset(queues[amqp]):
-                relation_settings['_'.join([amqp, 'password'])] = configure_amqp(queues[amqp]['username'],
-                                                                                 queues[amqp]['vhost'])
+                relation_settings['_'.join([amqp, 'password'])] = \
+                    configure_amqp(queues[amqp]['username'],
+                                   queues[amqp]['vhost'])
 
     relation_settings['hostname'] = utils.unit_get('private-address')
 

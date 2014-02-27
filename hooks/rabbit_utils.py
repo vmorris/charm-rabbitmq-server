@@ -13,7 +13,10 @@ import apt_pkg as apt
 import _pythonpath
 _ = _pythonpath
 
-from charmhelpers.contrib.openstack.utils import get_hostname
+from charmhelpers.contrib.openstack.utils import (
+    get_hostname,
+    error_out
+)
 
 PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib', 'unison']
 
