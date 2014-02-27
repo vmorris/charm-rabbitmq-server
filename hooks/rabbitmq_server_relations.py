@@ -146,8 +146,8 @@ def cluster_joined():
                 services_password[os.path.basename(path)] = content
 
     for r_id in (utils.relation_ids('cluster') or []):
-        for unit in utils.relation_list(rid):
-            utils.relation_set(rid=r_id, services_password=services_password, unit=unit)
+        for unit in utils.relation_list(r_id):
+            hookenv.relation_set(rid=r_id, services_password=services_password, unit=unit)
 
 
 def cluster_changed():
