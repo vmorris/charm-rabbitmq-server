@@ -158,23 +158,21 @@ def cluster_changed():
                        'rabbitmq cluster config.')
         return
 
+    # skip if is parent unit
     if not utils.is_newer():
-        slave_address = utils.relation_get('slave_host')
-        if slave_address is not None:
-            rabbit.synchronize_service_credentials(slave_address)
-        else:
-            utils.juju_log('ERROR',
-                           'Slave address not found, skipping password sync')
-            return
-        utils.juju_log('INFO', 'cluster_changed: Relation lesser.')
         return
-
+    
     cookie = utils.relation_get('cookie')
     if cookie is None:
         utils.juju_log('INFO',
                        'cluster_joined: cookie not yet set.')
         return
 
+    # write passwords to slave unit
+    services_password = hookenv.relation_get('services_password')
+    for key, value in services_password.items():
+        write_file(key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
+	
     if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
         utils.juju_log('INFO', 'Cookie already synchronized with peer.')
     else:
