@@ -130,7 +130,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
             else:
                 # still not set, wait
                 utils.juju_log('INFO', 'Service password still not set. Relation not ready')
-                return
+                sys.exit(0)
 
 
 def cluster_joined():
