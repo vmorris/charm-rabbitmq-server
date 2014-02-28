@@ -53,12 +53,15 @@ def configure_amqp(username, vhost):
         password = hookenv.relation_get(attribute='%s.passwd' % username,
                                         rid=cluster_rid,
                                         unit=hookenv.local_unit())
+        utils.juju_log('INFO', 'password is: %s' % str(password))
     new_passwd = False
     if not password:
+        utils.juju_log('INFO', 'pass not exists')
         new_passwd = True
         password = pwgen(length=64)
         if len(cluster_rels)>0:
             # update password in cluster
+            utils.juju_log('INFO', 'set new password %s' % str(password))
             hookenv.relation_set(rid=cluster_rid,
                                  relation_settings={'%s.passwd' % username: password})
 
