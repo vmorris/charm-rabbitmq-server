@@ -46,9 +46,10 @@ def configure_amqp(username, vhost):
     # get and update service password
     password = None
     cluster_rels = hookenv.relation_ids('cluster')
-    utils.juju_log('INFO', 'in configure amqp: %s' % str(cluster_rels))
+    utils.juju_log('INFO', 'in configure amqp: %s , length %s' % (str(cluster_rels), str(len(cluster_rels))))
     if len(cluster_rels)>0:
         cluster_rid = cluster_rels[0]
+        utils.juju_log('INFO', 'cluster rid is: %s' % str(cluster_rid))
         password = hookenv.relation_get(attribute='%s.passwd' % username,
                                         rid=cluster_rid,
                                         unit=hookenv.local_unit())
