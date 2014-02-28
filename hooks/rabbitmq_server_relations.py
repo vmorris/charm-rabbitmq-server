@@ -72,7 +72,7 @@ def configure_amqp(username, vhost):
 
 
 def amqp_changed(relation_id=None, remote_unit=None):
-    if cluster.is_clustered():
+    if cluster.is_clustered() and utils.config_get('ha-vip-only') is False:
         if not cluster.is_leader('res_rabbitmq_vip'):
             msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
             utils.juju_log('INFO', msg)
