@@ -132,9 +132,9 @@ def amqp_changed(relation_id=None, remote_unit=None):
                         services_password = json.loads(base64.b64decode(services_password))
                         if len(services_password.keys())>0:
                             break
-             # iterate over all services and copy passwords
-             for key, value in services_password.items():
-                 write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
+            # iterate over all services and copy passwords
+            for key, value in services_password.items():
+                write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
 
 
 def cluster_joined():
