@@ -37,7 +37,6 @@ def install():
     add_source(utils.config_get('source'), utils.config_get('key'))
     apt_update(fatal=True)
     utils.install(*rabbit.PACKAGES)
-    utils.install(*rabbit.EXTRA_PACKAGES)
     utils.expose(5672)
     utils.chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     utils.chmod(RABBIT_DIR, 0775)
@@ -47,6 +46,7 @@ def configure_amqp(username, vhost):
     # get and update service password
     password = None
     cluster_rels = hookenv.relation_ids('cluster')
+    utils.juju_log('INFO', 'in configure amqp: %s' % str(cluster_rels))
     if len(cluster_rels)>0:
         cluster_rid = cluster_rels[0]
         password = hookenv.relation_get(attribute='%s.passwd' % username,
@@ -68,10 +68,14 @@ def configure_amqp(username, vhost):
     if new_passwd:
         try:
             rabbit.create_vhost(vhost)
+        except:
+            utils.juju_log('INFO', 'Error creating vhost. It was already created?')
+
+        try:
             rabbit.create_user(username, password)
             rabbit.grant_permissions(username, vhost)
         except:
-            utils.juju_log('INFO', 'Error creating vhost. It was already created?')
+            utils.juju_log('INFO', 'Error creating rabbit user. It was already created?')
         
     return password
 
@@ -151,20 +155,6 @@ def cluster_joined():
     local_hostname = subprocess.check_output(['hostname']).strip()
     utils.relation_set(cookie=cookie, host=local_hostname)
 
-    # add current password services
-    services_password = {}
-    sync_paths = glob.glob('%s*.passwd' % rabbit.LIB_PATH)
-    sync_paths = [f for f in sync_paths if 'nagios' not in f]
-    if sync_paths is not None:
-        for path in sync_paths:
-            with open(path, 'r') as f:
-                content = f.read()
-                services_password[os.path.basename(path)] = content
-
-    for r_id in (utils.relation_ids('cluster') or []):
-        for unit in utils.relation_list(r_id):
-            hookenv.relation_set(rid=r_id, services_password=base64.b64encode(json.dumps(services_password)), unit=unit)
-
 
 def cluster_changed():
     if utils.is_relation_made('ha') and \
@@ -194,6 +184,7 @@ def cluster_changed():
         for key, value in echo_data.items():
             write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
 
+    # sync cookie
     if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
         utils.juju_log('INFO', 'Cookie already synchronized with peer.')
     else:

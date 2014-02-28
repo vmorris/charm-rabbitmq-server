@@ -14,7 +14,6 @@ from charmhelpers.contrib.openstack.utils import get_hostname
 from charmhelpers.core.hookenv import config
 
 PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib']
-EXTRA_PACKAGES = ['unison', ]
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
