@@ -51,8 +51,10 @@ def configure_amqp(username, vhost):
         cluster_rid = cluster_rels[0]
         password = hookenv.relation_get(attribute='%s.passwd' % username,
                                         rid=cluster_rid,
-                                        unit hookenv.local_unit())
+                                        unit=hookenv.local_unit())
+    new_passwd = False
     if not password:
+        new_passwd = True
         password = pwgen(length=64)
         if len(cluster_rels)>0:
             # update password in cluster
@@ -63,9 +65,13 @@ def configure_amqp(username, vhost):
     password_file = os.path.join(RABBIT_DIR, '%s.passwd' % username)
     write_file(password_file, password, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
 
-    rabbit.create_vhost(vhost)
-    rabbit.create_user(username, password)
-    rabbit.grant_permissions(username, vhost)
+    if new_passwd:
+        try:
+            rabbit.create_vhost(vhost)
+            rabbit.create_user(username, password)
+            rabbit.grant_permissions(username, vhost)
+        except:
+            utils.juju_log('INFO', 'Error creating vhost. It was already created?')
         
     return password
 
