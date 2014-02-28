@@ -179,7 +179,7 @@ def cluster_changed():
         if '.passwd' in attribute:
             echo_data[attribute] = value
     if len(echo_data) > 0:
-        hookenv.relation_set(relation_data=echo_data)
+        hookenv.relation_set(relation_settings=echo_data)
         for key, value in echo_data.items():
             write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
 

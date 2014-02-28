@@ -198,8 +198,6 @@ def relation_set(relation_id=None, relation_settings={}, **kwargs):
             relation_cmd_line.append('{}='.format(k))
         else:
             relation_cmd_line.append('{}={}'.format(k, v))
-    log('in relation set')
-    log(relation_cmd_line)
     subprocess.check_call(relation_cmd_line)
     # Flush cache of any relation-gets for local unit
     flush(local_unit())
