@@ -395,6 +395,17 @@ def _get_ssl_mode():
     return ssl_mode, external_ca
 
 
+def _convert_from_base64(v):
+    # Rabbit originally supported pem encoded key/cert in config, play nice
+    # on upgrades as we now expect base64 encoded key/cert/ca.
+    if not v:
+        return v
+    try:
+        return base64.b64decode(v)
+    except TypeError:
+        return v
+
+
 def reconfigure_client_ssl(ssl_enabled=False):
     ssl_config_keys = set(('ssl_key', 'ssl_cert', 'ssl_ca'))
     for rid in hookenv.relation_ids('amqp'):
@@ -424,10 +435,9 @@ def configure_rabbit_ssl():
         utils.close_port(utils.config_get('ssl_port'))
         reconfigure_client_ssl()
         return
-
-    ssl_key = utils.config_get('ssl_key')
-    ssl_cert = utils.config_get('ssl_cert')
-    ssl_ca = utils.config_get('ssl_ca')
+    ssl_key = _convert_from_base64(utils.config_get('ssl_key'))
+    ssl_cert = _convert_from_base64(utils.config_get('ssl_cert'))
+    ssl_ca = _convert_from_base64(utils.config_get('ssl_ca'))
     ssl_port = utils.config_get('ssl_port')
 
     # If external managed certs then we need all the fields.
