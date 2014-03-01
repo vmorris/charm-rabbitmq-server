@@ -396,9 +396,11 @@ def _get_ssl_mode():
 
 
 def _convert_from_base64(v):
-    # Rabbit originally supported pem encoded key/cert in config, play nice
-    # on upgrades as we now expect base64 encoded key/cert/ca.
+    # Rabbit originally supported pem encoded key/cert in config, play
+    # nice on upgrades as we now expect base64 encoded key/cert/ca.
     if not v:
+        return v
+    if v.startswith('-----BEGIN'):
         return v
     try:
         return base64.b64decode(v)
