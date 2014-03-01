@@ -24,17 +24,17 @@ options:
     description: SSL port
   ssl_key:
     type: string
-    description: private unencrypted key in PEM format (starts "-----BEGIN RSA PRIVATE KEY-----")
+    description: private unencrypted key in base64 PEM format (starts "-----BEGIN RSA PRIVATE KEY-----")
     default: ""
   ssl_cert:
     type: string
-    description: X.509 certificate in PEM format (starts "-----BEGIN CERTIFICATE-----")
+    description: X.509 certificate in base64 PEM format (starts "-----BEGIN CERTIFICATE-----")
     default: ""
   ssl_ca:
     type: string
     description: |
-      Certificate authority cert that signed pem. Optional if the ssl_cert is signed by a ca
-      recognized by the os.
+      Certificate authority cert that the cert. Optional if the ssl_cert is signed by a ca
+      recognized by the os. Format is base64 PEM (concatenated certs if needed).
     default: ""
 
   nagios_context:

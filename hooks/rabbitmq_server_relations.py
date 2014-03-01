@@ -395,6 +395,20 @@ def _get_ssl_mode():
     return ssl_mode, external_ca
 
 
+def reconfigure_client_ssl(ssl_enabled=False):
+    ssl_config_keys = set(('ssl_key', 'ssl_cert', 'ssl_ca'))
+    for rid in hookenv.relation_ids('amqp'):
+        rdata = hookenv.relation_get(
+            rid=rid, unit=os.environ['JUJU_UNIT_NAME'])
+        if not ssl_enabled and ssl_config_keys.intersection(rdata):
+            # No clean way to remove entirely, but blank them.
+            utils.relation_set(
+                rid=rid, ssl_key='', ssl_cert='', ssl_ca='')
+        elif ssl_enabled and not ssl_config_keys.intersection(rdata):
+            configure_client_ssl(rdata)
+            utils.relation_set(rid=rid, **rdata)
+
+
 def configure_rabbit_ssl():
     """
     The legacy config support adds some additional complications.
@@ -408,6 +422,7 @@ def configure_rabbit_ssl():
         if os.path.exists(rabbit.RABBITMQ_CONF):
             os.remove(rabbit.RABBITMQ_CONF)
         utils.close_port(utils.config_get('ssl_port'))
+        reconfigure_client_ssl()
         return
 
     ssl_key = utils.config_get('ssl_key')
@@ -429,6 +444,7 @@ def configure_rabbit_ssl():
     rabbit.enable_ssl(
         ssl_key, ssl_cert, ssl_port, ssl_ca,
         ssl_only=(ssl_mode == "only"), ssl_client=False)
+    reconfigure_client_ssl(True)
     utils.open_port(ssl_port)
 
 
