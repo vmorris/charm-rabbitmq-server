@@ -75,6 +75,9 @@ CLOUD_ARCHIVE_POCKETS = {
     'havana': 'precise-updates/havana',
     'havana/updates': 'precise-updates/havana',
     'havana/proposed': 'precise-proposed/havana',
+    'icehouse': 'precise-updates/icehouse',
+    'icehouse/updates': 'precise-updates/icehouse',
+    'icehouse/proposed': 'precise-proposed/icehouse',
     }
 
 
