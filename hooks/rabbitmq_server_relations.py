@@ -123,7 +123,7 @@ def cluster_joined():
                        rabbit.COOKIE_PATH)
         return
     cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
-    utils.relation_set(cookie=cookie), host=local_hostname)
+    utils.relation_set(cookie=cookie)
 
 
 def cluster_changed():
