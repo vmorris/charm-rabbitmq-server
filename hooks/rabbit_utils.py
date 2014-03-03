@@ -123,8 +123,6 @@ def cluster_with():
                     node = get_hostname(address, fqdn=False)
                     if current_host != node:
                         available_nodes.append(node)
-                else:
-                    # node is down, add to max tries
                     num_tries += 1
 
         # iterate over all the nodes, join to the first available

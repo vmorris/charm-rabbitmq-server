@@ -89,7 +89,6 @@ def amqp_changed(relation_id=None, remote_unit=None):
                 relation_settings['_'.join([amqp, 'password'])] = configure_amqp(queues[amqp]['username'],
                                                                                  queues[amqp]['vhost'])
 
-    relation_settings['hostname'] = utils.unit_get('private-address')
     if cluster.is_clustered():
         relation_settings['clustered'] = 'true'
         if utils.is_relation_made('ha'):
