@@ -417,8 +417,8 @@ def upgrade_charm():
                 password = hookenv.relation_get(attribute=username, rid=cluster_rid,
                                                 unit=hookenv.local_unit())
                 if password is None:
-                    with open(s, 'r') as f:
-                        stored_password = f.read()
+                    with open(s, 'r') as h:
+                        stored_password = h.read()
                         if stored_password:
                             hookenv.relation_set(relation_id=cluster_rid,
                                                  relation_settings={username: stored_password})
