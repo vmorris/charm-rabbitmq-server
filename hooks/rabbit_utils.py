@@ -91,6 +91,7 @@ def compare_version(base_version):
         return False
 
 def cluster_with():
+    utils.juju_log('INFO', 'Clustering with new node')
     if compare_version('3.0.1-1'):
         cluster_cmd = 'join_cluster'
         cmd = [RABBITMQ_CTL, 'set_policy', 'HA', '^(?!amq\.).*', '{"ha-mode": "all"}']
@@ -125,6 +126,7 @@ def cluster_with():
                     num_tries += 1
 
         # iterate over all the nodes, join to the first available
+        utils.juju_log('INFO', 'Available nodes to cluster: %s' % str(available_nodes))
         max_tries = config('max-cluster-tries')
         for node in available_nodes:
             utils.juju_log('INFO',
