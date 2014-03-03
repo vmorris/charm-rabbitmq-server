@@ -283,11 +283,15 @@ def execute(cmd, die=False, echo=False):
 
 def get_clustered_attribute(attribute_name):
     cluster_rels = relation_ids('cluster')
-    cluster_rid = cluster_rels[0]
-    password = relation_get(attribute=attribute_name, rid=cluster_rid, unit=local_unit())
-    return password
+    if len(cluster_rels) > 0:
+        cluster_rid = cluster_rels[0]
+        password = relation_get(attribute=attribute_name, rid=cluster_rid, unit=local_unit())
+        return password
+    else:
+        return None
 
 def set_clustered_attribute(attribute_name, value):
     cluster_rels = relation_ids('cluster')
-    cluster_rid = cluster_rels[0]
-    relation_set(relation_id=cluster_rid, relation_settings={attribute_name: value})
+    if len(cluster_rels) > 0:
+        cluster_rid = cluster_rels[0]
+        relation_set(relation_id=cluster_rid, relation_settings={attribute_name: value})
