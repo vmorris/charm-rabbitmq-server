@@ -406,10 +406,6 @@ def upgrade_charm():
         if f.endswith('.passwd'):
             s = os.path.join('/var/lib/juju', f)
             d = os.path.join('/var/lib/rabbitmq', f)
-            utils.juju_log('INFO',
-                           'upgrade_charm: Migrating stored passwd'
-                           ' from %s to %s.' % (s, d))
-            shutil.move(s, d)
 
             # propagate to cluster if needed
             if cluster_rid:
@@ -419,9 +415,14 @@ def upgrade_charm():
                 if password is None:
                     with open(s, 'r') as h:
                         stored_password = h.read()
-                        if stored_password:
-                            hookenv.relation_set(relation_id=cluster_rid,
-                                                 relation_settings={username: stored_password})
+                    if stored_password:
+                        hookenv.relation_set(relation_id=cluster_rid,
+                                             relation_settings={username: stored_password})
+
+            utils.juju_log('INFO',
+                           'upgrade_charm: Migrating stored passwd'
+                           ' from %s to %s.' % (s, d))
+            shutil.move(s, d)
 
     # explicitly update buggy file name naigos.passwd
     old = os.path.join('var/lib/rabbitmq', 'naigos.passwd')
