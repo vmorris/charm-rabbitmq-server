@@ -1,7 +1,5 @@
 #!/usr/bin/python
 
-import base64
-import json
 import os
 import shutil
 import sys
@@ -22,7 +20,7 @@ from charmhelpers.fetch import (
     add_source,
     apt_update)
 from charmhelpers.core import hookenv
-from charmhelpers.core.host import rsync, mkdir, write_file, pwgen
+from charmhelpers.core.host import rsync, mkdir, pwgen
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
 
 
@@ -44,47 +42,24 @@ def install():
 
 def configure_amqp(username, vhost):
     # get and update service password
-    password = None
-    cluster_rels = hookenv.relation_ids('cluster')
-    if len(cluster_rels)>0:
-        cluster_rid = cluster_rels[0]
-        password = hookenv.relation_get(attribute='%s.passwd' % username,
-                                        rid=cluster_rid,
-                                        unit=hookenv.local_unit())
-    new_passwd = False
+    password = rabbit.get_clustered_attribute('%s.passwd' % username)
     if not password:
-        new_passwd = True
+        # update password in cluster
         password = pwgen(length=64)
-        if len(cluster_rels)>0:
-            # update password in cluster
-            hookenv.relation_set(relation_id=cluster_rid,
-                                 relation_settings={'%s.passwd' % username: password})
+        rabbit.set_clustered_attribute('%s.passwd' % username, password)
 
-    # refresh password in file
-    password_file = os.path.join(RABBIT_DIR, '%s.passwd' % username)
-    write_file(password_file, password, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
+        # update vhost
+        rabbit.create_vhost(vhost)
+        rabbit.create_user(username, password)
+        rabbit.grant_permissions(username, vhost)
 
-    if new_passwd:
-        try:
-            rabbit.create_vhost(vhost)
-        except:
-            utils.juju_log('INFO', 'Error creating vhost. It was already created?')
-
-        try:
-            rabbit.create_user(username, password)
-            rabbit.grant_permissions(username, vhost)
-        except:
-            utils.juju_log('INFO', 'Error creating rabbit user. It was already created?')
-        
     return password
 
-
 def amqp_changed(relation_id=None, remote_unit=None):
-    if cluster.is_clustered() and utils.config_get('ha-vip-only') is False:
-        if not cluster.is_leader('res_rabbitmq_vip'):
-            msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
-            utils.juju_log('INFO', msg)
-            return
+    if not cluster.eligible_leader('res_rabbitmq_vip'):
+        msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
+        utils.juju_log('INFO', msg)
+        return
 
     relation_settings = {}
     settings = hookenv.relation_get(rid=relation_id, unit=remote_unit)
@@ -113,14 +88,14 @@ def amqp_changed(relation_id=None, remote_unit=None):
             if singleset.issubset(queues[amqp]):
                 relation_settings['_'.join([amqp, 'password'])] = configure_amqp(queues[amqp]['username'],
                                                                                  queues[amqp]['vhost'])
-            
+
     relation_settings['hostname'] = utils.unit_get('private-address')
     if cluster.is_clustered():
         relation_settings['clustered'] = 'true'
-    if utils.is_relation_made('ha'):
-        # active/passive settings
-        relation_settings['vip'] = utils.config_get('vip')
-        relation_settings['ha-vip-only'] = utils.config_get('ha-vip-only')
+        if utils.is_relation_made('ha'):
+            # active/passive settings
+            relation_settings['vip'] = utils.config_get('vip')
+            relation_settings['ha-vip-only'] = utils.config_get('ha-vip-only')
 
     if relation_id:
         relation_settings['rid'] = relation_id
@@ -139,10 +114,9 @@ def cluster_joined():
         return
 
     if utils.is_newer():
-        # exit but set the host
-        utils.relation_set(slave_host=utils.unit_get('private-address'))
         utils.juju_log('INFO', 'cluster_joined: Relation greater.')
         return
+
     rabbit.COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
     if not os.path.isfile(rabbit.COOKIE_PATH):
         utils.juju_log('ERROR', 'erlang cookie missing from %s' %
@@ -156,23 +130,7 @@ def cluster_joined():
 
 
 def cluster_changed():
-    if utils.is_relation_made('ha') and \
-            utils.config_get('ha-vip-only') is False:
-        utils.juju_log('INFO',
-                       'hacluster relation is present, skipping native '
-                       'rabbitmq cluster config.')
-        return
-
-    # skip if is parent unit
-    if not utils.is_newer():
-        return
-    cookie = utils.relation_get('cookie')
-    if cookie is None:
-        utils.juju_log('INFO',
-                       'cluster_joined: cookie not yet set.')
-        return
-
-    # write passwords to slave unit
+    # sync passwords
     rdata = hookenv.relation_get()
     echo_data = {}
     for attribute, value in rdata.iteritems():
@@ -180,8 +138,12 @@ def cluster_changed():
             echo_data[attribute] = value
     if len(echo_data) > 0:
         hookenv.relation_set(relation_settings=echo_data)
-        for key, value in echo_data.items():
-            write_file(rabbit.LIB_PATH+key, value, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
+
+    cookie = utils.relation_get('cookie')
+    if cookie is None:
+        utils.juju_log('INFO',
+                       'cluster_joined: cookie not yet set.')
+        return
 
     # sync cookie
     if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
@@ -193,8 +155,16 @@ def cluster_changed():
             out.write(cookie)
         rabbit.service('start')
 
-    # cluster with other nodes
-    rabbit.cluster_with()
+    if utils.is_relation_made('ha') and \
+            utils.config_get('ha-vip-only') is False:
+        utils.juju_log('INFO',
+                       'hacluster relation is present, skipping native '
+                       'rabbitmq cluster config.')
+        return
+
+    # cluster with node
+    if utils.is_newer():
+        rabbit.cluster_with()
 
 
 def cluster_departed():
@@ -365,15 +335,11 @@ def update_nrpe_checks():
     current_unit = hookenv.local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
-    password_file = os.path.join(RABBIT_DIR, '%s.passwd' % user)
-    if os.path.exists(password_file):
-        password = open(password_file).read().strip()
-        utils.chmod(password_file, 0660)
-        utils.chown(password_file, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
-    else:
+    password = rabbit.get_clustered_attribute('%s.passwd' % user)
+    if not password:
         cmd = ['pwgen', '64', '1']
         password = subprocess.check_output(cmd).strip()
-        write_file(password_file, password, rabbit.RABBIT_USER, rabbit.RABBIT_USER, 0660)
+        rabbit.set_clustered_attribute('%s.passwd' % user, password)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
@@ -394,11 +360,6 @@ def upgrade_charm():
     add_source(utils.config_get('source'), utils.config_get('key'))
     apt_update(fatal=True)
 
-    cluster_rid = None
-    cluster_rels = hookenv.relation_ids('cluster')
-    if len(cluster_rels)>0:
-        cluster_rid = cluster_rels[0]
-
     # Ensure older passwd files in /var/lib/juju are moved to
     # /var/lib/rabbitmq which will end up replicated if clustered.
     for f in [f for f in os.listdir('/var/lib/juju')
@@ -408,16 +369,13 @@ def upgrade_charm():
             d = os.path.join('/var/lib/rabbitmq', f)
 
             # propagate to cluster if needed
-            if cluster_rid:
-                username = os.path.basename(s)
-                password = hookenv.relation_get(attribute=username, rid=cluster_rid,
-                                                unit=hookenv.local_unit())
-                if password is None:
-                    with open(s, 'r') as h:
-                        stored_password = h.read()
-                    if stored_password:
-                        hookenv.relation_set(relation_id=cluster_rid,
-                                             relation_settings={username: stored_password})
+            username = os.path.basename(s)
+            password = rabbit.get_clustered_attribute(username)
+            if password is None:
+                with open(s, 'r') as h:
+                    stored_password = h.read()
+                if stored_password:
+                    rabbit.set_clustered_attribute(username, stored_password)
 
             utils.juju_log('INFO',
                            'upgrade_charm: Migrating stored passwd'

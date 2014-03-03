@@ -4,14 +4,13 @@ import sys
 import subprocess
 import glob
 import lib.utils as utils
-import lib.cluster_utils as cluster
 import apt_pkg as apt
 
 import _pythonpath
 _ = _pythonpath
 
 from charmhelpers.contrib.openstack.utils import get_hostname
-from charmhelpers.core.hookenv import config
+from charmhelpers.core.hookenv import config, relation_ids, relation_get, relation_set, local_unit
 
 PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib']
 
@@ -280,3 +279,15 @@ def execute(cmd, die=False, echo=False):
     if die and rc != 0:
         utils.juju_log('INFO', "ERROR: command %s return non-zero.\n" % cmd)
     return (stdout, stderr, rc)
+
+
+def get_clustered_attribute(attribute_name):
+    cluster_rels = relation_ids('cluster')
+    cluster_rid = cluster_rels[0]
+    password = relation_get(attribute=attribute_name, rid=cluster_rid, unit=local_unit())
+    return password
+
+def set_clustered_attribute(attribute_name, value):
+    cluster_rels = relation_ids('cluster')
+    cluster_rid = cluster_rels[0]
+    relation_set(relation_id=cluster_rid, relation_settings={attribute_name: value})
