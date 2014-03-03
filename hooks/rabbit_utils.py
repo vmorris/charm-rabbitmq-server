@@ -116,7 +116,7 @@ def cluster_with():
         for r_id in (utils.relation_ids('cluster') or []):
             utils.juju_log('INFO', 'Units are: %s' % str(utils.relation_list(r_id)))
             for unit in (utils.relation_list(r_id) or []):
-                address = utils.relation_get('private_address',
+                address = utils.relation_get('private-address',
                                              rid=r_id, unit=unit)
                 utils.juju_log('INFO', 'private is: %s' % str(address))
                 if address is not None:
