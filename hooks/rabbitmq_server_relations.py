@@ -166,6 +166,9 @@ def cluster_changed():
     if utils.is_newer():
         rabbit.cluster_with()
 
+    # resync nrpe user after clustering
+    update_nrpe_checks()
+
 
 def cluster_departed():
     if utils.is_relation_made('ha') and \
@@ -337,8 +340,8 @@ def update_nrpe_checks():
     vhost = 'nagios-%s' % current_unit
     password = rabbit.get_clustered_attribute('%s.passwd' % user)
     if not password:
-        cmd = ['pwgen', '64', '1']
-        password = subprocess.check_output(cmd).strip()
+        utils.juju_log('INFO', 'Setting password for nagios unit: %s' % user)
+        password = pwgen(length=64)
         rabbit.set_clustered_attribute('%s.passwd' % user, password)
 
     rabbit.create_vhost(vhost)
