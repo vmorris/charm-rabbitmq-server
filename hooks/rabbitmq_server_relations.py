@@ -393,7 +393,12 @@ def upgrade_charm():
     pre_install_hooks()
     add_source(utils.config_get('source'), utils.config_get('key'))
     apt_update(fatal=True)
-    utils.install(*rabbit.EXTRA_PACKAGES)
+
+    cluster_rid = None
+    cluster_rels = hookenv.relation_ids('cluster')
+    if len(cluster_rels)>0:
+        cluster_rid = cluster_rels[0]
+
     # Ensure older passwd files in /var/lib/juju are moved to
     # /var/lib/rabbitmq which will end up replicated if clustered.
     for f in [f for f in os.listdir('/var/lib/juju')
@@ -405,6 +410,19 @@ def upgrade_charm():
                            'upgrade_charm: Migrating stored passwd'
                            ' from %s to %s.' % (s, d))
             shutil.move(s, d)
+
+            # propagate to cluster if needed
+            if cluster_rid:
+                username = os.path.basename(s)
+                password = hookenv.relation_get(attribute=username, rid=cluster_rid,
+                                                unit=hookenv.local_unit())
+                if password is None:
+                    with open(s, 'r') as f:
+                        stored_password = f.read()
+                        if stored_password:
+                            hookenv.relation_set(relation_id=cluster_rid,
+                                                 relation_settings={username: stored_password})
+
     # explicitly update buggy file name naigos.passwd
     old = os.path.join('var/lib/rabbitmq', 'naigos.passwd')
     if os.path.isfile(old):
