@@ -126,7 +126,10 @@ def cluster_with():
                     num_tries += 1
 
         # iterate over all the nodes, join to the first available
-        utils.juju_log('INFO', 'Available nodes to cluster: %s' % str(available_nodes))
+        if len(available_nodes) == 0:
+            utils.juju_log('INFO', 'Master node still not ready, retrying')
+            return
+
         max_tries = config('max-cluster-tries')
         for node in available_nodes:
             utils.juju_log('INFO',
