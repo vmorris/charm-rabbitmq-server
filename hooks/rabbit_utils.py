@@ -152,7 +152,7 @@ def cluster_with():
                     cmd = [RABBITMQ_CTL, 'start_app']
                     subprocess.check_call(cmd)
                     utils.juju_log('INFO', 'Host clustered with %s.' % node)
-                    return False
+                    return True
                 except:
                     pass
             # continue to the next node
@@ -163,7 +163,7 @@ def cluster_with():
         if num_tries > max_tries:
             utils.juju_log('ERROR', 'Max tries number exhausted, exiting')
             sys.exit(1)
-    return True
+    return False
 
 
 def break_cluster():
