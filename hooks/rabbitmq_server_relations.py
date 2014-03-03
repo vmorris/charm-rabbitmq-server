@@ -123,10 +123,7 @@ def cluster_joined():
                        rabbit.COOKIE_PATH)
         return
     cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
-
-    # add parent host to the relation
-    local_hostname = subprocess.check_output(['hostname']).strip()
-    utils.relation_set(cookie=cookie, host=local_hostname)
+    utils.relation_set(cookie=cookie), host=local_hostname)
 
 
 def cluster_changed():

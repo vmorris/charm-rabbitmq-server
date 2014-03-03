@@ -111,9 +111,6 @@ def cluster_with():
     else:
         # check all peers and try to cluster with them
         available_nodes = []
-        first_hostname = utils.relation_get('host')
-        available_nodes.append(first_hostname)
-
         num_tries = 0
         for r_id in (utils.relation_ids('cluster') or []):
             for unit in (utils.relation_list(r_id) or []):
