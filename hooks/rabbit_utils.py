@@ -23,13 +23,17 @@ LIB_PATH = '/var/lib/rabbitmq/'
 
 
 def vhost_exists(vhost):
-    cmd = [RABBITMQ_CTL, 'list_vhosts']
-    out = subprocess.check_output(cmd)
-    for line in out.split('\n')[1:]:
-        if line == vhost:
-            utils.juju_log('INFO', 'vhost (%s) already exists.' % vhost)
-            return True
-    return False
+    try:
+        cmd = [RABBITMQ_CTL, 'list_vhosts']
+        out = subprocess.check_output(cmd)
+        for line in out.split('\n')[1:]:
+            if line == vhost:
+                utils.juju_log('INFO', 'vhost (%s) already exists.' % vhost)
+                return True
+        return False
+    except:
+        # if no vhosts, just raises an exception
+        return False
 
 
 def create_vhost(vhost):
