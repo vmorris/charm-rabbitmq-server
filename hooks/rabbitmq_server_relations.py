@@ -160,10 +160,9 @@ def cluster_changed():
 
     # cluster with node
     if utils.is_newer():
-        rabbit.cluster_with()
-
-    # resync nrpe user after clustering
-    update_nrpe_checks()
+        if rabbit.cluster_with():
+            # resync nrpe user after clustering
+            update_nrpe_checks()
 
 
 def cluster_departed():

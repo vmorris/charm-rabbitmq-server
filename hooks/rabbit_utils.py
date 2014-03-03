@@ -132,7 +132,7 @@ def cluster_with():
         # iterate over all the nodes, join to the first available
         if len(available_nodes) == 0:
             utils.juju_log('INFO', 'Master node still not ready, retrying')
-            return
+            return False
 
         max_tries = config('max-cluster-tries')
         for node in available_nodes:
@@ -142,7 +142,7 @@ def cluster_with():
                 if re.search(node, line):
                     utils.juju_log('INFO',
                                    'Host already clustered with %s.' % node)
-                    return
+                    return False
 
                 try:
                     cmd = [RABBITMQ_CTL, 'stop_app']
@@ -152,7 +152,7 @@ def cluster_with():
                     cmd = [RABBITMQ_CTL, 'start_app']
                     subprocess.check_call(cmd)
                     utils.juju_log('INFO', 'Host clustered with %s.' % node)
-                    return
+                    return False
                 except:
                     pass
             # continue to the next node
@@ -163,6 +163,7 @@ def cluster_with():
         if num_tries > max_tries:
             utils.juju_log('ERROR', 'Max tries number exhausted, exiting')
             sys.exit(1)
+    return True
 
 
 def break_cluster():
