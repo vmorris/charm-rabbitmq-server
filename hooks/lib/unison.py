@@ -73,15 +73,15 @@ def get_keypair(user):
 
     pub_key = '%s.pub' % priv_key
     if not os.path.isfile(pub_key):
-        utils.juju_log('INFO', 'Generatring missing ssh public key @ %s.' % \
+        utils.juju_log('INFO', 'Generatring missing ssh public key @ %s.' %
                        pub_key)
         cmd = ['ssh-keygen', '-y', '-f', priv_key]
         p = subprocess.check_output(cmd).strip()
         with open(pub_key, 'wb') as out:
             out.write(p)
     subprocess.check_call(['chown', '-R', user, ssh_dir])
-    return open(priv_key, 'r').read().strip(), \
-           open(pub_key, 'r').read().strip()
+    return (open(priv_key, 'r').read().strip(),
+            open(pub_key, 'r').read().strip())
 
 
 def write_authorized_keys(user, keys):
@@ -125,7 +125,8 @@ def ensure_user(user, group=None):
         subprocess.check_call(cmd)
 
 
-def ssh_authorized_peers(peer_interface, user, group=None, ensure_local_user=False):
+def ssh_authorized_peers(peer_interface, user, group=None,
+                         ensure_local_user=False):
     """
     Main setup function, should be called from both peer -changed and -joined
     hooks with the same parameters.
@@ -149,7 +150,7 @@ def ssh_authorized_peers(peer_interface, user, group=None, ensure_local_user=Fal
                     hosts.append(settings['private-address'])
                 else:
                     utils.juju_log('INFO',
-                                   'ssh_authorized_peers(): ssh_pub_key '\
+                                   'ssh_authorized_peers(): ssh_pub_key '
                                    'missing for unit %s, skipping.' % unit)
         write_authorized_keys(user, keys)
         write_known_hosts(user, hosts)
@@ -203,9 +204,9 @@ def sync_to_peers(peer_interface, user, paths=[], verbose=False):
             if add_host:
                 hosts.append(settings['private-address'])
             else:
-                print 'unison sync_to_peers: peer (%s) has not authorized '\
-                      '*this* host yet, skipping.' %\
-                       settings['private-address']
+                print ('unison sync_to_peers: peer (%s) has not authorized '
+                       '*this* host yet, skipping.' %
+                       settings['private-address'])
 
     for path in paths:
         # removing trailing slash from directory paths, unison
