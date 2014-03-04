@@ -122,7 +122,7 @@ def cluster_joined():
                        rabbit.COOKIE_PATH)
         return
     cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
-    utils.relation_set(cookie=cookie)
+    rabbit.set_clustered_attribute('cookie', cookie)
 
 
 def cluster_changed():
@@ -135,7 +135,7 @@ def cluster_changed():
     if len(echo_data) > 0:
         hookenv.relation_set(relation_settings=echo_data)
 
-    cookie = utils.relation_get('cookie')
+    rabbit.get_clustered_attribute('cookie')
     if cookie is None:
         utils.juju_log('INFO',
                        'cluster_joined: cookie not yet set.')
