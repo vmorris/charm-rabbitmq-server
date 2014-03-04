@@ -103,6 +103,7 @@ def cluster_with():
     else:
         cluster_cmd = 'cluster'
     out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
+    utils.juju_log('INFO', 'cluster status is %s' % str(out))
     current_host = subprocess.check_output(['hostname']).strip()
 
     # check if node is already clustered
@@ -118,11 +119,9 @@ def cluster_with():
         available_nodes = []
         num_tries = 0
         for r_id in (utils.relation_ids('cluster') or []):
-            utils.juju_log('INFO', 'Units are: %s' % str(utils.relation_list(r_id)))
             for unit in (utils.relation_list(r_id) or []):
                 address = utils.relation_get('private-address',
                                              rid=r_id, unit=unit)
-                utils.juju_log('INFO', 'private is: %s' % str(address))
                 if address is not None:
                     node = get_hostname(address, fqdn=False)
                     if current_host != node:
