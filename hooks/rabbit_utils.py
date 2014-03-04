@@ -108,9 +108,12 @@ def cluster_with():
 
     # check if node is already clustered
     total_nodes = 1
+    running_nodes = []
     m = re.search("\{running_nodes,\[(.*)\]\}", out.strip())
     if m is not None:
-        total_nodes = len(m.group(1).split(','))
+        running_nodes = m.group(1).split(',')
+        running_nodes = [x.replace("'", '') for x in running_nodes]
+        total_nodes = len(running_nodes)
 
     if total_nodes > 1:
         utils.juju_log('INFO', 'Node is already clustered, skipping')
@@ -137,23 +140,22 @@ def cluster_with():
         for node in available_nodes:
             utils.juju_log('INFO',
                            'Clustering with remote rabbit host (%s).' % node)
-            for line in out.split('\n'):
-                if re.search(node, line):
-                    utils.juju_log('INFO',
-                                   'Host already clustered with %s.' % node)
-                    return False
+            if node in running_nodes:
+                utils.juju_log('INFO',
+                               'Host already clustered with %s.' % node)
+                return False
 
-                try:
-                    cmd = [RABBITMQ_CTL, 'stop_app']
-                    subprocess.check_call(cmd)
-                    cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
-                    subprocess.check_call(cmd)
-                    cmd = [RABBITMQ_CTL, 'start_app']
-                    subprocess.check_call(cmd)
-                    utils.juju_log('INFO', 'Host clustered with %s.' % node)
-                    return True
-                except:
-                    pass
+            try:
+                cmd = [RABBITMQ_CTL, 'stop_app']
+                subprocess.check_call(cmd)
+                cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
+                subprocess.check_call(cmd)
+                cmd = [RABBITMQ_CTL, 'start_app']
+                subprocess.check_call(cmd)
+                utils.juju_log('INFO', 'Host clustered with %s.' % node)
+                return True
+            except:
+                pass
             # continue to the next node
             num_tries += 1
 
