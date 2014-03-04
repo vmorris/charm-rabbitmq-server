@@ -130,18 +130,18 @@ def cluster_changed():
     rdata = hookenv.relation_get()
     echo_data = {}
     for attribute, value in rdata.iteritems():
-        if '.passwd' in attribute:
+        if '.passwd' in attribute or attribute == 'cookie':
             echo_data[attribute] = value
     if len(echo_data) > 0:
         hookenv.relation_set(relation_settings=echo_data)
 
-    rabbit.get_clustered_attribute('cookie')
-    if cookie is None:
+    if 'cookie' not in echo_data:
         utils.juju_log('INFO',
                        'cluster_joined: cookie not yet set.')
         return
 
     # sync cookie
+    cookie = echo_data['cookie']
     if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
         utils.juju_log('INFO', 'Cookie already synchronized with peer.')
     else:
