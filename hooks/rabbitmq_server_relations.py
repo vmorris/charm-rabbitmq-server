@@ -48,17 +48,18 @@ def configure_amqp(username, vhost):
         password = pwgen(length=64)
         rabbit.set_clustered_attribute('%s.passwd' % username, password)
 
-        # update vhost
-        rabbit.create_vhost(vhost)
-        rabbit.create_user(username, password)
-        rabbit.grant_permissions(username, vhost)
+    # update vhost
+    rabbit.create_vhost(vhost)
+    rabbit.create_user(username, password)
+    rabbit.grant_permissions(username, vhost)
 
     return password
 
 def amqp_changed(relation_id=None, remote_unit=None):
     if not cluster.eligible_leader('res_rabbitmq_vip'):
-        msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
-        utils.juju_log('INFO', msg)
+        utils.juju_log('INFO',
+                       'amqp_changed(): Deferring amqp_changed'
+                       ' to eligible_leader.')
         return
 
     relation_settings = {}
@@ -102,7 +103,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
         relation_settings['rid'] = relation_id
 
     # set if need HA queues or not
-    relation_settings['ha_queues'] = (rabbit.compare_version('3.0.1-1'))
+    relation_settings['ha_queues'] = (rabbit.compare_version('3.0.1') >= 0)
     utils.relation_set(**relation_settings)
 
 

@@ -94,15 +94,19 @@ def compare_version(base_version):
     cache = apt.Cache()
     pkg = cache['rabbitmq-server']
     if pkg.current_ver:
-        return (apt.version_compare(pkg.current_ver.ver_str, base_version) >= 0)
+        return apt.version_compare(
+            apt.upstream_version(pkg.current_ver.ver_str),
+            base_version)
     else:
         return False
 
+
 def cluster_with():
     utils.juju_log('INFO', 'Clustering with new node')
-    if compare_version('3.0.1-1'):
+    if compare_version('3.0.1') >= 0:
         cluster_cmd = 'join_cluster'
-        cmd = [RABBITMQ_CTL, 'set_policy', 'HA', '^(?!amq\.).*', '{"ha-mode": "all"}']
+        cmd = [RABBITMQ_CTL, 'set_policy', 'HA',
+               '^(?!amq\.).*', '{"ha-mode": "all"}']
         subprocess.check_call(cmd)
     else:
         cluster_cmd = 'cluster'
@@ -180,7 +184,6 @@ def break_cluster():
         cmd = [RABBITMQ_CTL, 'start_app']
         subprocess.check_call(cmd)
         utils.juju_log('INFO', 'Cluster successfully broken.')
-        return
     except:
         # error, no nodes available for clustering
         utils.juju_log('ERROR', 'Error breaking rabbit cluster')
