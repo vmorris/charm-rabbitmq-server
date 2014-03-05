@@ -438,11 +438,10 @@ def configure_client_ssl(relation_data):
 
 
 def _get_ssl_mode():
-    config = config()
-    ssl_mode = config.get('ssl')
+    ssl_mode = config('ssl')
     external_ca = False
     # Legacy config boolean option
-    ssl_on = config.get('ssl_enabled')
+    ssl_on = config('ssl_enabled')
     if ssl_mode == 'off' and ssl_on is False:
         ssl_mode = 'off'
     elif ssl_mode == 'off' and ssl_on:
