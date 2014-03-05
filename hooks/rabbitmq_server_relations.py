@@ -1,5 +1,5 @@
 #!/usr/bin/python
-
+import base64
 import os
 import shutil
 import sys
@@ -22,6 +22,7 @@ from charmhelpers.fetch import (
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import rsync, mkdir, pwgen
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
+from charmhelpers.contrib.ssl.service import ServiceCA
 
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
@@ -65,18 +66,16 @@ def amqp_changed(relation_id=None, remote_unit=None):
     relation_settings = {}
     settings = hookenv.relation_get(rid=relation_id, unit=remote_unit)
 
-    singleset = set([
-        'username',
-        'vhost'])
+    singleset = set(['username', 'vhost'])
 
     if singleset.issubset(settings):
         if None in [settings['username'], settings['vhost']]:
             utils.juju_log('INFO', 'amqp_changed(): Relation not ready.')
             return
 
-        relation_settings['password'] = \
-            configure_amqp(username=settings['username'],
-                           vhost=settings['vhost'])
+        relation_settings['password'] = configure_amqp(
+            username=settings['username'],
+            vhost=settings['vhost'])
     else:
         queues = {}
         for k, v in settings.iteritems():
@@ -85,12 +84,15 @@ def amqp_changed(relation_id=None, remote_unit=None):
             if amqp not in queues:
                 queues[amqp] = {}
             queues[amqp][x] = v
-        relation_settings = {}
         for amqp in queues:
             if singleset.issubset(queues[amqp]):
-                relation_settings['_'.join([amqp, 'password'])] = \
-                    configure_amqp(queues[amqp]['username'],
-                                   queues[amqp]['vhost'])
+                relation_settings[
+                    '_'.join([amqp, 'password'])] = configure_amqp(
+                        queues[amqp]['username'],
+                        queues[amqp]['vhost'])
+
+    relation_settings['hostname'] = utils.unit_get('private-address')
+    configure_client_ssl(relation_settings)
 
     if cluster.is_clustered():
         relation_settings['clustered'] = 'true'
@@ -278,6 +280,7 @@ def ha_changed():
 
 def ceph_joined():
     utils.juju_log('INFO', 'Start Ceph Relation Joined')
+    utils.configure_source()
     ceph.install()
     utils.juju_log('INFO', 'Finish Ceph Relation Joined')
 
@@ -390,6 +393,104 @@ def upgrade_charm():
 MAN_PLUGIN = 'rabbitmq_management'
 
 
+def configure_client_ssl(relation_data):
+    """Configure client with ssl
+    """
+    ssl_mode, external_ca = _get_ssl_mode()
+    if ssl_mode == 'off':
+        return
+    relation_data['ssl_port'] = utils.config_get('ssl_port')
+    if external_ca:
+        if utils.config_get('ssl_ca'):
+            relation_data['ssl_ca'] = base64.b64encode(
+                utils.config_get('ssl_ca'))
+        return
+    ca = ServiceCA.get_ca()
+    relation_data['ssl_ca'] = base64.b64encode(ca.get_ca_bundle())
+
+
+def _get_ssl_mode():
+    config = utils.config_get()
+    ssl_mode = config.get('ssl')
+    external_ca = False
+    # Legacy config boolean option
+    ssl_on = config.get('ssl_enabled')
+    if ssl_mode == 'off' and ssl_on is False:
+        ssl_mode = 'off'
+    elif ssl_mode == 'off' and ssl_on:
+        ssl_mode = 'on'
+    ssl_key = utils.config_get('ssl_key')
+    ssl_cert = utils.config_get('ssl_cert')
+    if all((ssl_key, ssl_cert)):
+        external_ca = True
+    return ssl_mode, external_ca
+
+
+def _convert_from_base64(v):
+    # Rabbit originally supported pem encoded key/cert in config, play
+    # nice on upgrades as we now expect base64 encoded key/cert/ca.
+    if not v:
+        return v
+    if v.startswith('-----BEGIN'):
+        return v
+    try:
+        return base64.b64decode(v)
+    except TypeError:
+        return v
+
+
+def reconfigure_client_ssl(ssl_enabled=False):
+    ssl_config_keys = set(('ssl_key', 'ssl_cert', 'ssl_ca'))
+    for rid in hookenv.relation_ids('amqp'):
+        rdata = hookenv.relation_get(
+            rid=rid, unit=os.environ['JUJU_UNIT_NAME'])
+        if not ssl_enabled and ssl_config_keys.intersection(rdata):
+            # No clean way to remove entirely, but blank them.
+            utils.relation_set(
+                rid=rid, ssl_key='', ssl_cert='', ssl_ca='')
+        elif ssl_enabled and not ssl_config_keys.intersection(rdata):
+            configure_client_ssl(rdata)
+            utils.relation_set(rid=rid, **rdata)
+
+
+def configure_rabbit_ssl():
+    """
+    The legacy config support adds some additional complications.
+
+    ssl_enabled = True, ssl = off -> ssl enabled
+    ssl_enabled = False, ssl = on -> ssl enabled
+    """
+    ssl_mode, external_ca = _get_ssl_mode()
+
+    if ssl_mode == 'off':
+        if os.path.exists(rabbit.RABBITMQ_CONF):
+            os.remove(rabbit.RABBITMQ_CONF)
+        utils.close_port(utils.config_get('ssl_port'))
+        reconfigure_client_ssl()
+        return
+    ssl_key = _convert_from_base64(utils.config_get('ssl_key'))
+    ssl_cert = _convert_from_base64(utils.config_get('ssl_cert'))
+    ssl_ca = _convert_from_base64(utils.config_get('ssl_ca'))
+    ssl_port = utils.config_get('ssl_port')
+
+    # If external managed certs then we need all the fields.
+    if (ssl_mode in ('on', 'only') and any((ssl_key, ssl_cert)) and
+            not all((ssl_key, ssl_cert))):
+        utils.juju_log(
+            'ERROR',
+            'If ssl_key or ssl_cert are specified both are required.')
+        sys.exit(1)
+
+    if not external_ca:
+        ssl_cert, ssl_key, ssl_ca = ServiceCA.get_service_cert()
+
+    rabbit.enable_ssl(
+        ssl_key, ssl_cert, ssl_port, ssl_ca,
+        ssl_only=(ssl_mode == "only"), ssl_client=False)
+    reconfigure_client_ssl(True)
+    utils.open_port(ssl_port)
+
+
 def config_changed():
     if utils.config_get('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
@@ -398,22 +499,7 @@ def config_changed():
         rabbit.disable_plugin(MAN_PLUGIN)
         utils.close_port(55672)
 
-    if utils.config_get('ssl_enabled') is True:
-        ssl_key = utils.config_get('ssl_key')
-        ssl_cert = utils.config_get('ssl_cert')
-        ssl_port = utils.config_get('ssl_port')
-        if None in [ssl_key, ssl_cert, ssl_port]:
-            utils.juju_log('ERROR',
-                           'Please provide ssl_key, ssl_cert and ssl_port'
-                           ' config when enabling SSL support')
-            sys.exit(1)
-        else:
-            rabbit.enable_ssl(ssl_key, ssl_cert, ssl_port)
-            utils.open_port(ssl_port)
-    else:
-        if os.path.exists(rabbit.RABBITMQ_CONF):
-            os.remove(rabbit.RABBITMQ_CONF)
-        utils.close_port(utils.config_get('ssl_port'))
+    configure_rabbit_ssl()
 
     if cluster.eligible_leader('res_rabbitmq_vip') or \
        utils.config_get('ha-vip-only') is True:

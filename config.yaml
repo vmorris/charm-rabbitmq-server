@@ -1,24 +1,42 @@
 options:
-  ssl_enabled:
-    type: boolean
-    default: False
-    description: enable SSL
   management_plugin:
     type: boolean
     default: False
     description: enable the management plugin
+
+  # SSL Configuration options
+  ssl:
+    type: string
+    default: "off"
+    description: |
+      Enable SSL connections on rabbitmq, valid values are 'off', 'on', 'only'. If ssl_key, 
+      ssl_cert, ssl_ca are provided then then those values will be used. Otherwise
+      the service will act as its own certificate authority and pass its ca cert to clients.
+      For HA or clustered rabbits ssl key/cert must be provided.
+  ssl_enabled:
+    type: boolean
+    default: False
+    description: |
+      (DEPRECATED see 'ssl' config option.) enable SSL
   ssl_port:
     type: int
     default: 5671
     description: SSL port
   ssl_key:
     type: string
-    description: private unencrypted key in PEM format (starts "-----BEGIN RSA PRIVATE KEY-----")
+    description: private unencrypted key in base64 PEM format (starts "-----BEGIN RSA PRIVATE KEY-----")
     default: ""
   ssl_cert:
     type: string
-    description: X.509 certificate in PEM format (starts "-----BEGIN CERTIFICATE-----")
+    description: X.509 certificate in base64 PEM format (starts "-----BEGIN CERTIFICATE-----")
     default: ""
+  ssl_ca:
+    type: string
+    description: |
+      Certificate authority cert that the cert. Optional if the ssl_cert is signed by a ca
+      recognized by the os. Format is base64 PEM (concatenated certs if needed).
+    default: ""
+
   nagios_context:
     default: "juju"
     type: string
@@ -87,6 +105,7 @@ options:
         rbd pool has been created, changing this value will not have any
         effect (although it can be changed in ceph by manually configuring
         your ceph cluster).
+<<<<<<< TREE
   use-syslog:
     type: boolean
     default: False

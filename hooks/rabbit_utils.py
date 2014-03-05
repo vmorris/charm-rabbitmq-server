@@ -241,22 +241,39 @@ def disable_plugin(plugin):
 
 ssl_key_file = "/etc/rabbitmq/rabbit-server-privkey.pem"
 ssl_cert_file = "/etc/rabbitmq/rabbit-server-cert.pem"
+ssl_ca_file = "/etc/rabbitmq/rabbit-server-ca.pem"
 
 
-def enable_ssl(ssl_key, ssl_cert, ssl_port):
-    with open(ssl_key_file, 'w') as key_file:
-        key_file.write(ssl_key)
-    utils.chmod(ssl_key_file, 0640)
-    utils.chown(ssl_key_file, "root", RABBIT_USER)
-    with open(ssl_cert_file, 'w') as cert_file:
-        cert_file.write(ssl_cert)
-    utils.chmod(ssl_cert_file, 0640)
-    utils.chown(ssl_cert_file, "root", RABBIT_USER)
+def enable_ssl(ssl_key, ssl_cert, ssl_port,
+               ssl_ca=None, ssl_only=False, ssl_client=None):
+    uid = pwd.getpwnam("root").pw_uid
+    gid = grp.getgrnam("rabbitmq").gr_gid
+
+    for contents, path in (
+            (ssl_key, ssl_key_file),
+            (ssl_cert, ssl_cert_file),
+            (ssl_ca, ssl_ca_file)):
+        if not contents:
+            continue
+        with open(path, 'w') as fh:
+            fh.write(contents)
+        os.chmod(path, 0640)
+        os.chown(path, uid, gid)
+
+    data = {
+        "ssl_port": ssl_port,
+        "ssl_cert_file": ssl_cert_file,
+        "ssl_key_file": ssl_key_file,
+        "ssl_client": ssl_client,
+        "ssl_ca_file": "",
+        "ssl_only": ssl_only}
+
+    if ssl_ca:
+        data["ssl_ca_file"] = ssl_ca_file
+
     with open(RABBITMQ_CONF, 'w') as rmq_conf:
-        rmq_conf.write(utils.render_template(os.path.basename(RABBITMQ_CONF),
-                                             {"ssl_port": ssl_port,
-                                              "ssl_cert_file": ssl_cert_file,
-                                              "ssl_key_file": ssl_key_file}))
+        rmq_conf.write(utils.render_template(
+            os.path.basename(RABBITMQ_CONF), data))
 
 
 def execute(cmd, die=False, echo=False):

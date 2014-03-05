@@ -74,7 +74,11 @@ CLOUD_ARCHIVE_POCKETS = {
     'grizzly/proposed': 'precise-proposed/grizzly',
     'havana': 'precise-updates/havana',
     'havana/updates': 'precise-updates/havana',
-    'havana/proposed': 'precise-proposed/havana'}
+    'havana/proposed': 'precise-proposed/havana',
+    'icehouse': 'precise-updates/icehouse',
+    'icehouse/updates': 'precise-updates/icehouse',
+    'icehouse/proposed': 'precise-proposed/icehouse',
+    }
 
 
 def configure_source():
@@ -249,17 +253,15 @@ def unit_get(attribute):
 
 
 @cached
-def config_get(attribute):
-    cmd = [
-        'config-get',
-        '--format',
-        'json']
-    out = subprocess.check_output(cmd).strip()  # IGNORE:E1103
-    cfg = json.loads(out)
-
+def config_get(scope=None):
+    """Juju charm configuration"""
+    config_cmd_line = ['config-get']
+    if scope is not None:
+        config_cmd_line.append(scope)
+    config_cmd_line.append('--format=json')
     try:
-        return cfg[attribute]
-    except KeyError:
+        return json.loads(subprocess.check_output(config_cmd_line))
+    except ValueError:
         return None
 
 
