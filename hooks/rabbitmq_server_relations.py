@@ -270,11 +270,10 @@ def ha_changed():
     utils.juju_log('INFO', 'ha_changed(): We are now HA clustered. '
                    'Advertising our VIP (%s) to all AMQP clients.' %
                    vip)
-    if utils.config_get('ha-vip-only') is False:
-        # need to re-authenticate all clients since node-name changed.
-        for rid in utils.relation_ids('amqp'):
-            for unit in utils.relation_list(rid):
-                amqp_changed(relation_id=rid, remote_unit=unit)
+    # need to re-authenticate all clients since node-name changed.
+    for rid in utils.relation_ids('amqp'):
+        for unit in utils.relation_list(rid):
+            amqp_changed(relation_id=rid, remote_unit=unit)
 
 
 def ceph_joined():

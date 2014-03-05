@@ -97,9 +97,8 @@ options:
       type: int
       default: 3
       description: |
-        Number of tries to cluster with other units before giving up.
-        If errors clustering happening in more than these units, charm will
-        end with an error
+        Number of tries to cluster with other units before giving up and throwing
+        a hook error.
   source:
       type: string
       description: |
