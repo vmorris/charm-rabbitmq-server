@@ -1,4 +1,4 @@
-destination: lib/charmhelpers
+destination: hooks/charmhelpers
 branch: lp:~openstack-charmers/charm-helpers/ssl-everywhere
 include:
     - fetch
@@ -7,3 +7,4 @@ include:
     - contrib.openstack
     - contrib.storage
     - contrib.ssl
+    - contrib.hahelpers.cluster

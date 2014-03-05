@@ -1,22 +1,28 @@
 import os
+import pwd
+import grp
 import re
 import sys
 import subprocess
 import glob
-import lib.utils as utils
+from lib.utils import render_template
 import apt_pkg as apt
-
-import _pythonpath
-_ = _pythonpath
 
 from charmhelpers.contrib.openstack.utils import (
     get_hostname,
-    error_out
 )
 
-from charmhelpers.core.hookenv import config, relation_ids, relation_get, relation_set, local_unit
+from charmhelpers.core.hookenv import (
+    config,
+    relation_ids,
+    relation_get,
+    relation_set,
+    related_units,
+    local_unit,
+    log, ERROR
+)
 
-PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib']
+PACKAGES = ['rabbitmq-server', 'python-amqplib']
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
@@ -32,7 +38,7 @@ def vhost_exists(vhost):
         out = subprocess.check_output(cmd)
         for line in out.split('\n')[1:]:
             if line == vhost:
-                utils.juju_log('INFO', 'vhost (%s) already exists.' % vhost)
+                log('vhost (%s) already exists.' % vhost)
                 return True
         return False
     except:
@@ -45,7 +51,7 @@ def create_vhost(vhost):
         return
     cmd = [RABBITMQ_CTL, 'add_vhost', vhost]
     subprocess.check_call(cmd)
-    utils.juju_log('INFO', 'Created new vhost (%s).' % vhost)
+    log('Created new vhost (%s).' % vhost)
 
 
 def user_exists(user):
@@ -65,17 +71,17 @@ def create_user(user, password, admin=False):
     if not exists:
         cmd = [RABBITMQ_CTL, 'add_user', user, password]
         subprocess.check_call(cmd)
-        utils.juju_log('INFO', 'Created new user (%s).' % user)
+        log('Created new user (%s).' % user)
 
     if admin == is_admin:
         return
 
     if admin:
         cmd = [RABBITMQ_CTL, 'set_user_tags', user, 'administrator']
-        utils.juju_log('INFO', 'Granting user (%s) admin access.')
+        log('Granting user (%s) admin access.')
     else:
         cmd = [RABBITMQ_CTL, 'set_user_tags', user]
-        utils.juju_log('INFO', 'Revoking user (%s) admin access.')
+        log('Revoking user (%s) admin access.')
 
 
 def grant_permissions(user, vhost):
@@ -102,13 +108,13 @@ def compare_version(base_version):
 
 
 def cluster_with():
-    utils.juju_log('INFO', 'Clustering with new node')
+    log('Clustering with new node')
     if compare_version('3.0.1') >= 0:
         cluster_cmd = 'join_cluster'
     else:
         cluster_cmd = 'cluster'
     out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
-    utils.juju_log('INFO', 'cluster status is %s' % str(out))
+    log('cluster status is %s' % str(out))
 
     # check if node is already clustered
     total_nodes = 1
@@ -120,32 +126,29 @@ def cluster_with():
         total_nodes = len(running_nodes)
 
     if total_nodes > 1:
-        utils.juju_log('INFO', 'Node is already clustered, skipping')
+        log('Node is already clustered, skipping')
         return False
 
     # check all peers and try to cluster with them
     available_nodes = []
-    for r_id in (utils.relation_ids('cluster') or []):
-        for unit in (utils.relation_list(r_id) or []):
-            address = utils.relation_get('private-address',
-                                         rid=r_id, unit=unit)
+    for r_id in relation_ids('cluster'):
+        for unit in related_units(r_id):
+            address = relation_get('private-address',
+                                   rid=r_id, unit=unit)
             if address is not None:
                 node = get_hostname(address, fqdn=False)
                 available_nodes.append(node)
 
     if len(available_nodes) == 0:
-        utils.juju_log('INFO', 'No nodes available to cluster with')
+        log('No nodes available to cluster with')
         return False
 
     # iterate over all the nodes, join to the first available
     num_tries = 0
     for node in available_nodes:
-        utils.juju_log('INFO',
-                       'Clustering with remote'
-                       ' rabbit host (%s).' % node)
+        log('Clustering with remote rabbit host (%s).' % node)
         if node in running_nodes:
-            utils.juju_log('INFO',
-                           'Host already clustered with %s.' % node)
+            log('Host already clustered with %s.' % node)
             return False
 
         try:
@@ -155,19 +158,18 @@ def cluster_with():
             subprocess.check_call(cmd)
             cmd = [RABBITMQ_CTL, 'start_app']
             subprocess.check_call(cmd)
-            utils.juju_log('INFO', 'Host clustered with %s.' % node)
+            log('Host clustered with %s.' % node)
             if compare_version('3.0.1') >= 0:
                 cmd = [RABBITMQ_CTL, 'set_policy', 'HA',
                        '^(?!amq\.).*', '{"ha-mode": "all"}']
                 subprocess.check_call(cmd)
             return True
         except:
-            utils.juju_log('INFO', 'Failed to cluster with %s.' % node)
+            log('Failed to cluster with %s.' % node)
         # continue to the next node
         num_tries += 1
         if num_tries > config('max-cluster-tries'):
-            utils.juju_log('ERROR',
-                           'Max tries number exhausted, exiting')
+            log('Max tries number exhausted, exiting', level=ERROR)
             raise
 
     return False
@@ -181,11 +183,11 @@ def break_cluster():
         subprocess.check_call(cmd)
         cmd = [RABBITMQ_CTL, 'start_app']
         subprocess.check_call(cmd)
-        utils.juju_log('INFO', 'Cluster successfully broken.')
+        log('Cluster successfully broken.')
     except:
         # error, no nodes available for clustering
-        utils.juju_log('ERROR', 'Error breaking rabbit cluster')
-        sys.exit(1)
+        log('Error breaking rabbit cluster', level=ERROR)
+        raise
 
 
 def set_node_name(name):
@@ -193,7 +195,7 @@ def set_node_name(name):
     # rabbitmq.conf.d is not present on all releases, so use or create
     # rabbitmq-env.conf instead.
     if not os.path.isfile(ENV_CONF):
-        utils.juju_log('INFO', '%s does not exist, creating.' % ENV_CONF)
+        log('%s does not exist, creating.' % ENV_CONF)
         with open(ENV_CONF, 'wb') as out:
             out.write('RABBITMQ_NODENAME=%s\n' % name)
         return
@@ -207,8 +209,8 @@ def set_node_name(name):
         out.append(line)
     if not f:
         out.append('RABBITMQ_NODENAME=%s\n' % name)
-    utils.juju_log('INFO', 'Updating %s, RABBITMQ_NODENAME=%s' %
-                   (ENV_CONF, name))
+    log('Updating %s, RABBITMQ_NODENAME=%s' %
+        (ENV_CONF, name))
     with open(ENV_CONF, 'wb') as conf:
         conf.write(''.join(out))
 
@@ -257,7 +259,7 @@ def enable_ssl(ssl_key, ssl_cert, ssl_port,
             continue
         with open(path, 'w') as fh:
             fh.write(contents)
-        os.chmod(path, 0640)
+        os.chmod(path, 0o640)
         os.chown(path, uid, gid)
 
     data = {
@@ -272,7 +274,7 @@ def enable_ssl(ssl_key, ssl_cert, ssl_port,
         data["ssl_ca_file"] = ssl_ca_file
 
     with open(RABBITMQ_CONF, 'w') as rmq_conf:
-        rmq_conf.write(utils.render_template(
+        rmq_conf.write(render_template(
             os.path.basename(RABBITMQ_CONF), data))
 
 
@@ -307,7 +309,7 @@ def execute(cmd, die=False, echo=False):
     rc = p.returncode
 
     if die and rc != 0:
-        utils.juju_log('INFO', "ERROR: command %s return non-zero.\n" % cmd)
+        log("command %s return non-zero." % cmd, level=ERROR)
     return (stdout, stderr, rc)
 
 
@@ -315,13 +317,19 @@ def get_clustered_attribute(attribute_name):
     cluster_rels = relation_ids('cluster')
     if len(cluster_rels) > 0:
         cluster_rid = cluster_rels[0]
-        password = relation_get(attribute=attribute_name, rid=cluster_rid, unit=local_unit())
+        password = relation_get(
+            attribute=attribute_name,
+            rid=cluster_rid,
+            unit=local_unit())
         return password
     else:
         return None
+
 
 def set_clustered_attribute(attribute_name, value):
     cluster_rels = relation_ids('cluster')
     if len(cluster_rels) > 0:
         cluster_rid = cluster_rels[0]
-        relation_set(relation_id=cluster_rid, relation_settings={attribute_name: value})
+        relation_set(
+            relation_id=cluster_rid,
+            relation_settings={attribute_name: value})
