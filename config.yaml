@@ -105,7 +105,6 @@ options:
         rbd pool has been created, changing this value will not have any
         effect (although it can be changed in ceph by manually configuring
         your ceph cluster).
-<<<<<<< TREE
   use-syslog:
     type: boolean
     default: False
