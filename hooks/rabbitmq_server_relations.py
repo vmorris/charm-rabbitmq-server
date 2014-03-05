@@ -226,10 +226,6 @@ def ha_joined():
             'res_rabbitmq_vip': 'params ip="%s" cidr_netmask="%s" nic="%s"' %
                                 (vip, vip_cidr, vip_iface),
         }
-        relation_settings['groups'] = {
-            'grp_rabbitmq': 'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '
-                            'res_rabbitmq-server',
-        }
     else:
         relation_settings['resources'] = {
             'res_rabbitmq_rbd': 'ocf:ceph:rbd',
