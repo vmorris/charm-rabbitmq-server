@@ -112,7 +112,6 @@ def cluster_with():
         cluster_cmd = 'cluster'
     out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
     utils.juju_log('INFO', 'cluster status is %s' % str(out))
-    current_host = subprocess.check_output(['hostname']).strip()
 
     # check if node is already clustered
     total_nodes = 1
@@ -125,53 +124,51 @@ def cluster_with():
 
     if total_nodes > 1:
         utils.juju_log('INFO', 'Node is already clustered, skipping')
-    else:
-        # check all peers and try to cluster with them
-        available_nodes = []
-        num_tries = 0
-        for r_id in (utils.relation_ids('cluster') or []):
-            for unit in (utils.relation_list(r_id) or []):
-                address = utils.relation_get('private-address',
-                                             rid=r_id, unit=unit)
-                if address is not None:
-                    node = get_hostname(address, fqdn=False)
-                    if current_host != node:
-                        available_nodes.append(node)
-                    num_tries += 1
+        return False
 
-        # iterate over all the nodes, join to the first available
-        if len(available_nodes) == 0:
-            utils.juju_log('INFO', 'Master node still not ready, retrying')
+    # check all peers and try to cluster with them
+    available_nodes = []
+    for r_id in (utils.relation_ids('cluster') or []):
+        for unit in (utils.relation_list(r_id) or []):
+            address = utils.relation_get('private-address',
+                                         rid=r_id, unit=unit)
+            if address is not None:
+                node = get_hostname(address, fqdn=False)
+                available_nodes.append(node)
+
+    if len(available_nodes) == 0:
+        utils.juju_log('INFO', 'No nodes available to cluster with')
+        return False
+
+    # iterate over all the nodes, join to the first available
+    num_tries = 0
+    for node in available_nodes:
+        utils.juju_log('INFO',
+                       'Clustering with remote'
+                       ' rabbit host (%s).' % node)
+        if node in running_nodes:
+            utils.juju_log('INFO',
+                           'Host already clustered with %s.' % node)
             return False
 
-        max_tries = config('max-cluster-tries')
-        for node in available_nodes:
-            utils.juju_log('INFO',
-                           'Clustering with remote rabbit host (%s).' % node)
-            if node in running_nodes:
-                utils.juju_log('INFO',
-                               'Host already clustered with %s.' % node)
-                return False
+        try:
+            cmd = [RABBITMQ_CTL, 'stop_app']
+            subprocess.check_call(cmd)
+            cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
+            subprocess.check_call(cmd)
+            cmd = [RABBITMQ_CTL, 'start_app']
+            subprocess.check_call(cmd)
+            utils.juju_log('INFO', 'Host clustered with %s.' % node)
+            return True
+        except:
+            utils.juju_log('INFO', 'Failed to cluster with %s.' % node)
+        # continue to the next node
+        num_tries += 1
+        if num_tries > config('max-cluster-tries'):
+            utils.juju_log('ERROR',
+                           'Max tries number exhausted, exiting')
+            raise
 
-            try:
-                cmd = [RABBITMQ_CTL, 'stop_app']
-                subprocess.check_call(cmd)
-                cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
-                subprocess.check_call(cmd)
-                cmd = [RABBITMQ_CTL, 'start_app']
-                subprocess.check_call(cmd)
-                utils.juju_log('INFO', 'Host clustered with %s.' % node)
-                return True
-            except:
-                pass
-            # continue to the next node
-            num_tries += 1
-
-        # error, no nodes available for clustering
-        utils.juju_log('ERROR', 'No nodes available for clustering, retrying')
-        if num_tries > max_tries:
-            utils.juju_log('ERROR', 'Max tries number exhausted, exiting')
-            sys.exit(1)
     return False
 
 
