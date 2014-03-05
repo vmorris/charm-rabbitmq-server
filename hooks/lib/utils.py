@@ -10,7 +10,9 @@
 #
 
 import json
+import grp
 import os
+import pwd
 import subprocess
 import socket
 import sys
@@ -327,3 +329,55 @@ def is_relation_made(relation, key='private-address'):
             if relation_get(key, rid=r_id, unit=unit):
                 return True
     return False
+
+
+def get_homedir(user):
+    try:
+        user = pwd.getpwnam(user)
+        return user.pw_dir
+    except KeyError:
+        log('Could not get homedir for user %s: user exists?', ERROR)
+        raise Exception
+
+
+def is_newer():
+    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
+    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
+    return (l_unit_no > r_unit_no)
+
+
+def chown(path, owner='root', group='root', recursive=False):
+    """Changes owner of given path, recursively if needed"""
+    if os.path.exists(path):
+        juju_log('INFO', 'Changing ownership of path %s to %s:%s' % 
+                 (path, owner, group))
+        uid = pwd.getpwnam(owner).pw_uid
+        gid = grp.getgrnam(group).gr_gid
+
+        if recursive:
+            for root, dirs, files in os.walk(path):  
+                for dir in dirs:  
+                    os.chown(os.path.join(root, dir), uid, gid)
+                for file in files:
+                    os.chown(os.path.join(root, file), uid, gid)
+        else:
+            os.chown(path, uid, gid)
+    else:
+        juju_log('ERROR', '%s path does not exist' % path)
+
+
+def chmod(path, perms, recursive=False):
+    """Changes perms of given path, recursively if needed"""
+    if os.path.exists(path):
+        juju_log('INFO', 'Changing perms of path %s ' % path)
+
+        if recursive:
+            for root, dirs, files in os.walk(path):  
+                for dir in dirs:  
+                    os.chmod(os.path.join(root, dir), perms)
+                for file in files:
+                    os.chmod(os.path.join(root, file), perms)
+        else:
+            os.chmod(path, perms)
+    else:
+        juju_log('ERROR', '%s path does not exist' % path)

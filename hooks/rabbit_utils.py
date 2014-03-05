@@ -1,13 +1,9 @@
 import os
-import pwd
-import grp
 import re
 import sys
 import subprocess
 import glob
 import lib.utils as utils
-import lib.unison as unison
-import lib.cluster_utils as cluster
 import apt_pkg as apt
 
 import _pythonpath
@@ -18,25 +14,30 @@ from charmhelpers.contrib.openstack.utils import (
     error_out
 )
 
-PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib', 'unison']
+from charmhelpers.core.hookenv import config, relation_ids, relation_get, relation_set, local_unit
+
+PACKAGES = ['pwgen', 'rabbitmq-server', 'python-amqplib']
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
 ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
 RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
-SSH_USER = 'juju_rabbit'
 RABBIT_USER = 'rabbitmq'
 LIB_PATH = '/var/lib/rabbitmq/'
 
 
 def vhost_exists(vhost):
-    cmd = [RABBITMQ_CTL, 'list_vhosts']
-    out = subprocess.check_output(cmd)
-    for line in out.split('\n')[1:]:
-        if line == vhost:
-            utils.juju_log('INFO', 'vhost (%s) already exists.' % vhost)
-            return True
-    return False
+    try:
+        cmd = [RABBITMQ_CTL, 'list_vhosts']
+        out = subprocess.check_output(cmd)
+        for line in out.split('\n')[1:]:
+            if line == vhost:
+                utils.juju_log('INFO', 'vhost (%s) already exists.' % vhost)
+                return True
+        return False
+    except:
+        # if no vhosts, just raises an exception
+        return False
 
 
 def create_vhost(vhost):
@@ -88,51 +89,65 @@ def service(action):
     subprocess.check_call(cmd)
 
 
-def rabbit_version():
+def compare_version(base_version):
     apt.init()
     cache = apt.Cache()
     pkg = cache['rabbitmq-server']
     if pkg.current_ver:
-        return apt.upstream_version(pkg.current_ver.ver_str)
+        return (apt.version_compare(pkg.current_ver.ver_str, base_version) >= 0)
     else:
-        return None
-
+        return False
 
 def cluster_with():
-    vers = rabbit_version()
-    if vers >= '3.0.1-1':
+    utils.juju_log('INFO', 'Clustering with new node')
+    if compare_version('3.0.1-1'):
         cluster_cmd = 'join_cluster'
-        cmd = [RABBITMQ_CTL, 'set_policy HA \'^(?!amq\.).*\' '
-               '\'{"ha-mode": "all"}\'']
+        cmd = [RABBITMQ_CTL, 'set_policy', 'HA', '^(?!amq\.).*', '{"ha-mode": "all"}']
         subprocess.check_call(cmd)
     else:
         cluster_cmd = 'cluster'
     out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
+    utils.juju_log('INFO', 'cluster status is %s' % str(out))
     current_host = subprocess.check_output(['hostname']).strip()
 
-    # check all peers and try to cluster with them
-    available_nodes = []
-    first_hostname = utils.relation_get('host')
-    available_nodes.append(first_hostname)
+    # check if node is already clustered
+    total_nodes = 1
+    running_nodes = []
+    m = re.search("\{running_nodes,\[(.*)\]\}", out.strip())
+    if m is not None:
+        running_nodes = m.group(1).split(',')
+        running_nodes = [x.replace("'", '') for x in running_nodes]
+        total_nodes = len(running_nodes)
 
-    for r_id in (utils.relation_ids('cluster') or []):
-        for unit in (utils.relation_list(r_id) or []):
-            address = utils.relation_get('private_address',
-                                         rid=r_id, unit=unit)
-            if address is not None:
-                node = get_hostname(address, fqdn=False)
-                if current_host != node:
-                    available_nodes.append(node)
+    if total_nodes > 1:
+        utils.juju_log('INFO', 'Node is already clustered, skipping')
+    else:
+        # check all peers and try to cluster with them
+        available_nodes = []
+        num_tries = 0
+        for r_id in (utils.relation_ids('cluster') or []):
+            for unit in (utils.relation_list(r_id) or []):
+                address = utils.relation_get('private-address',
+                                             rid=r_id, unit=unit)
+                if address is not None:
+                    node = get_hostname(address, fqdn=False)
+                    if current_host != node:
+                        available_nodes.append(node)
+                    num_tries += 1
 
-    # iterate over all the nodes, join to the first available
-    for node in available_nodes:
-        utils.juju_log('INFO',
-                       'Clustering with remote rabbit host (%s).' % node)
-        for line in out.split('\n'):
-            if re.search(node, line):
+        # iterate over all the nodes, join to the first available
+        if len(available_nodes) == 0:
+            utils.juju_log('INFO', 'Master node still not ready, retrying')
+            return False
+
+        max_tries = config('max-cluster-tries')
+        for node in available_nodes:
+            utils.juju_log('INFO',
+                           'Clustering with remote rabbit host (%s).' % node)
+            if node in running_nodes:
                 utils.juju_log('INFO',
                                'Host already clustered with %s.' % node)
-                return
+                return False
 
             try:
                 cmd = [RABBITMQ_CTL, 'stop_app']
@@ -142,14 +157,18 @@ def cluster_with():
                 cmd = [RABBITMQ_CTL, 'start_app']
                 subprocess.check_call(cmd)
                 utils.juju_log('INFO', 'Host clustered with %s.' % node)
-                return
+                return True
             except:
-                # continue to the next node
                 pass
+            # continue to the next node
+            num_tries += 1
 
-    # error, no nodes available for clustering
-    utils.juju_log('ERROR', 'No nodes available for clustering')
-    sys.exit(1)
+        # error, no nodes available for clustering
+        utils.juju_log('ERROR', 'No nodes available for clustering, retrying')
+        if num_tries > max_tries:
+            utils.juju_log('ERROR', 'Max tries number exhausted, exiting')
+            sys.exit(1)
+    return False
 
 
 def break_cluster():
@@ -224,16 +243,14 @@ ssl_cert_file = "/etc/rabbitmq/rabbit-server-cert.pem"
 
 
 def enable_ssl(ssl_key, ssl_cert, ssl_port):
-    uid = pwd.getpwnam("root").pw_uid
-    gid = grp.getgrnam("rabbitmq").gr_gid
     with open(ssl_key_file, 'w') as key_file:
         key_file.write(ssl_key)
-    os.chmod(ssl_key_file, 0640)
-    os.chown(ssl_key_file, uid, gid)
+    utils.chmod(ssl_key_file, 0640)
+    utils.chown(ssl_key_file, "root", RABBIT_USER)
     with open(ssl_cert_file, 'w') as cert_file:
         cert_file.write(ssl_cert)
-    os.chmod(ssl_cert_file, 0640)
-    os.chown(ssl_cert_file, uid, gid)
+    utils.chmod(ssl_cert_file, 0640)
+    utils.chown(ssl_cert_file, "root", RABBIT_USER)
     with open(RABBITMQ_CONF, 'w') as rmq_conf:
         rmq_conf.write(utils.render_template(os.path.basename(RABBITMQ_CONF),
                                              {"ssl_port": ssl_port,
@@ -272,27 +289,21 @@ def execute(cmd, die=False, echo=False):
     rc = p.returncode
 
     if die and rc != 0:
-        error_out("ERROR: command %s return non-zero.\n" % cmd)
+        utils.juju_log('INFO', "ERROR: command %s return non-zero.\n" % cmd)
     return (stdout, stderr, rc)
 
 
-def synchronize_service_credentials():
-    '''
-    Broadcast service credentials to peers or consume those that have been
-    broadcasted by peer, depending on hook context.
-    '''
-    if not os.path.isdir(LIB_PATH):
-        return
-    peers = cluster.peer_units()
-    if peers and not cluster.oldest_peer(peers):
-        utils.juju_log('INFO', 'Deferring action to oldest service unit.')
-        return
+def get_clustered_attribute(attribute_name):
+    cluster_rels = relation_ids('cluster')
+    if len(cluster_rels) > 0:
+        cluster_rid = cluster_rels[0]
+        password = relation_get(attribute=attribute_name, rid=cluster_rid, unit=local_unit())
+        return password
+    else:
+        return None
 
-    utils.juju_log('INFO', 'Synchronizing service passwords to all peers.')
-    try:
-        unison.sync_to_peers(peer_interface='cluster',
-                             paths=[LIB_PATH], user=SSH_USER,
-                             verbose=True)
-    except Exception:
-        # to skip files without perms safely
-        pass
+def set_clustered_attribute(attribute_name, value):
+    cluster_rels = relation_ids('cluster')
+    if len(cluster_rels) > 0:
+        cluster_rid = cluster_rels[0]
+        relation_set(relation_id=cluster_rid, relation_settings={attribute_name: value})

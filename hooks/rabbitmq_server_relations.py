@@ -12,13 +12,15 @@ import lib.utils as utils
 import lib.cluster_utils as cluster
 import lib.ceph_utils as ceph
 import lib.openstack_common as openstack
-import lib.unison as unison
 
 import _pythonpath
 _ = _pythonpath
 
+from charmhelpers.fetch import (
+    add_source,
+    apt_update)
 from charmhelpers.core import hookenv
-from charmhelpers.core.host import rsync
+from charmhelpers.core.host import rsync, mkdir, pwgen
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
 
 
@@ -28,37 +30,30 @@ RABBIT_DIR = '/var/lib/rabbitmq'
 NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 
-def ensure_unison_rabbit_permissions():
-    rabbit.execute("chmod g+wrx %s" % rabbit.LIB_PATH)
-    rabbit.execute("chmod g+wrx %s*.passwd" % rabbit.LIB_PATH)
-
-
 def install():
     pre_install_hooks()
+    add_source(utils.config_get('source'), utils.config_get('key'))
+    apt_update(fatal=True)
     utils.install(*rabbit.PACKAGES)
     utils.expose(5672)
-    # ensure user + permissions for peer relations that
-    # may be syncing data there via SSH_USER.
-    unison.ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
-    ensure_unison_rabbit_permissions()
+    utils.chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
+    utils.chmod(RABBIT_DIR, 0775)
 
 
 def configure_amqp(username, vhost):
-    password_file = os.path.join(RABBIT_DIR, '%s.passwd' % username)
-    if os.path.exists(password_file):
-        password = open(password_file).read().strip()
-    else:
-        cmd = ['pwgen', '64', '1']
-        password = subprocess.check_output(cmd).strip()
-        with open(password_file, 'wb') as out:
-            out.write(password)
+    # get and update service password
+    password = rabbit.get_clustered_attribute('%s.passwd' % username)
+    if not password:
+        # update password in cluster
+        password = pwgen(length=64)
+        rabbit.set_clustered_attribute('%s.passwd' % username, password)
 
-    rabbit.create_vhost(vhost)
-    rabbit.create_user(username, password)
-    rabbit.grant_permissions(username, vhost)
+        # update vhost
+        rabbit.create_vhost(vhost)
+        rabbit.create_user(username, password)
+        rabbit.grant_permissions(username, vhost)
 
     return password
-
 
 def amqp_changed(relation_id=None, remote_unit=None):
     if not cluster.eligible_leader('res_rabbitmq_vip'):
@@ -96,73 +91,59 @@ def amqp_changed(relation_id=None, remote_unit=None):
                     configure_amqp(queues[amqp]['username'],
                                    queues[amqp]['vhost'])
 
-    relation_settings['hostname'] = utils.unit_get('private-address')
-
     if cluster.is_clustered():
         relation_settings['clustered'] = 'true'
         if utils.is_relation_made('ha'):
             # active/passive settings
             relation_settings['vip'] = utils.config_get('vip')
+            relation_settings['ha-vip-only'] = utils.config_get('ha-vip-only')
 
     if relation_id:
         relation_settings['rid'] = relation_id
-    utils.relation_set(**relation_settings)
 
-    # sync new creds to all peers
-    rabbit.synchronize_service_credentials()
+    # set if need HA queues or not
+    relation_settings['ha_queues'] = (rabbit.compare_version('3.0.1-1'))
+    utils.relation_set(**relation_settings)
 
 
 def cluster_joined():
-    unison.ssh_authorized_peers(user=rabbit.SSH_USER,
-                                group='rabbit',
-                                peer_interface='cluster',
-                                ensure_local_user=True)
-    if utils.is_relation_made('ha'):
+    if utils.is_relation_made('ha') and \
+            utils.config_get('ha-vip-only') is False:
         utils.juju_log('INFO',
                        'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
         return
-    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
-    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
-    if l_unit_no > r_unit_no:
+
+    if utils.is_newer():
         utils.juju_log('INFO', 'cluster_joined: Relation greater.')
         return
+
     rabbit.COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
     if not os.path.isfile(rabbit.COOKIE_PATH):
         utils.juju_log('ERROR', 'erlang cookie missing from %s' %
                        rabbit.COOKIE_PATH)
         return
     cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
-
-    # add parent host to the relation
-    local_hostname = subprocess.check_output(['hostname']).strip()
-    utils.relation_set(cookie=cookie, host=local_hostname)
+    rabbit.set_clustered_attribute('cookie', cookie)
 
 
 def cluster_changed():
-    unison.ssh_authorized_peers(user=rabbit.SSH_USER,
-                                group='rabbit',
-                                peer_interface='cluster',
-                                ensure_local_user=True)
-    rabbit.synchronize_service_credentials()
+    # sync passwords
+    rdata = hookenv.relation_get()
+    echo_data = {}
+    for attribute, value in rdata.iteritems():
+        if '.passwd' in attribute or attribute == 'cookie':
+            echo_data[attribute] = value
+    if len(echo_data) > 0:
+        hookenv.relation_set(relation_settings=echo_data)
 
-    if utils.is_relation_made('ha'):
-        utils.juju_log('INFO',
-                       'hacluster relation is present, skipping native '
-                       'rabbitmq cluster config.')
-        return
-    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
-    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
-    if l_unit_no < r_unit_no:
-        utils.juju_log('INFO', 'cluster_joined: Relation lesser.')
-        return
-
-    cookie = utils.relation_get('cookie')
-    if cookie is None:
+    if 'cookie' not in echo_data:
         utils.juju_log('INFO',
                        'cluster_joined: cookie not yet set.')
         return
 
+    # sync cookie
+    cookie = echo_data['cookie']
     if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
         utils.juju_log('INFO', 'Cookie already synchronized with peer.')
     else:
@@ -172,19 +153,28 @@ def cluster_changed():
             out.write(cookie)
         rabbit.service('start')
 
-    # cluster with other nodes
-    rabbit.cluster_with()
-
-
-def cluster_departed():
-    if utils.is_relation_made('ha'):
+    if utils.is_relation_made('ha') and \
+            utils.config_get('ha-vip-only') is False:
         utils.juju_log('INFO',
                        'hacluster relation is present, skipping native '
                        'rabbitmq cluster config.')
         return
-    l_unit_no = os.getenv('JUJU_UNIT_NAME').split('/')[1]
-    r_unit_no = os.getenv('JUJU_REMOTE_UNIT').split('/')[1]
-    if l_unit_no < r_unit_no:
+
+    # cluster with node
+    if utils.is_newer():
+        if rabbit.cluster_with():
+            # resync nrpe user after clustering
+            update_nrpe_checks()
+
+
+def cluster_departed():
+    if utils.is_relation_made('ha') and \
+            utils.config_get('ha-vip-only') is False:
+        utils.juju_log('INFO',
+                       'hacluster relation is present, skipping native '
+                       'rabbitmq cluster config.')
+        return
+    if not utils.is_newer():
         utils.juju_log('INFO', 'cluster_joined: Relation lesser.')
         return
     rabbit.break_cluster()
@@ -197,20 +187,26 @@ def ha_joined():
     vip_iface = utils.config_get('vip_iface')
     vip_cidr = utils.config_get('vip_cidr')
     rbd_name = utils.config_get('rbd-name')
+    vip_only = utils.config_get('ha-vip-only')
 
     if None in [corosync_bindiface, corosync_mcastport, vip, vip_iface,
-                vip_cidr, rbd_name]:
+                vip_cidr, rbd_name] and vip_only is False:
         utils.juju_log('ERROR', 'Insufficient configuration data to '
                        'configure hacluster.')
         sys.exit(1)
+    elif None in [corosync_bindiface, corosync_mcastport, vip, vip_iface,
+                  vip_cidr] and vip_only is True:
+        utils.juju_log('ERROR', 'Insufficient configuration data to '
+                       'configure VIP-only hacluster.')
+        sys.exit(1)
 
-    if not utils.is_relation_made('ceph', 'auth'):
+    if not utils.is_relation_made('ceph', 'auth') and vip_only is False:
         utils.juju_log('INFO',
                        'ha_joined: No ceph relation yet, deferring.')
         return
 
     name = '%s@localhost' % SERVICE_NAME
-    if rabbit.get_node_name() != name:
+    if rabbit.get_node_name() != name and vip_only is False:
         utils.juju_log('INFO', 'Stopping rabbitmq-server.')
         utils.stop('rabbitmq-server')
         rabbit.set_node_name('%s@localhost' % SERVICE_NAME)
@@ -221,31 +217,44 @@ def ha_joined():
     relation_settings['corosync_bindiface'] = corosync_bindiface
     relation_settings['corosync_mcastport'] = corosync_mcastport
 
-    relation_settings['resources'] = {
-        'res_rabbitmq_rbd': 'ocf:ceph:rbd',
-        'res_rabbitmq_fs': 'ocf:heartbeat:Filesystem',
-        'res_rabbitmq_vip': 'ocf:heartbeat:IPaddr2',
-        'res_rabbitmq-server': 'lsb:rabbitmq-server',
-    }
+    if vip_only is True:
+        relation_settings['resources'] = {
+            'res_rabbitmq_vip': 'ocf:heartbeat:IPaddr2',
+        }
+        relation_settings['resource_params'] = {
+            'res_rabbitmq_vip': 'params ip="%s" cidr_netmask="%s" nic="%s"' %
+                                (vip, vip_cidr, vip_iface),
+        }
+        relation_settings['groups'] = {
+            'grp_rabbitmq': 'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '
+                            'res_rabbitmq-server',
+        }
+    else:
+        relation_settings['resources'] = {
+            'res_rabbitmq_rbd': 'ocf:ceph:rbd',
+            'res_rabbitmq_fs': 'ocf:heartbeat:Filesystem',
+            'res_rabbitmq_vip': 'ocf:heartbeat:IPaddr2',
+            'res_rabbitmq-server': 'lsb:rabbitmq-server',
+        }
 
-    relation_settings['resource_params'] = {
-        'res_rabbitmq_rbd': 'params name="%s" pool="%s" user="%s" '
-                            'secret="%s"' %
-                            (rbd_name, POOL_NAME,
-                             SERVICE_NAME, ceph.keyfile_path(SERVICE_NAME)),
-        'res_rabbitmq_fs': 'params device="/dev/rbd/%s/%s" directory="%s" '
-                           'fstype="ext4" op start start-delay="10s"' %
-                           (POOL_NAME, rbd_name, RABBIT_DIR),
-        'res_rabbitmq_vip': 'params ip="%s" cidr_netmask="%s" nic="%s"' %
-                            (vip, vip_cidr, vip_iface),
-        'res_rabbitmq-server': 'op start start-delay="5s" '
-                               'op monitor interval="5s"',
-    }
+        relation_settings['resource_params'] = {
+            'res_rabbitmq_rbd': 'params name="%s" pool="%s" user="%s" '
+                                'secret="%s"' %
+                                (rbd_name, POOL_NAME,
+                                 SERVICE_NAME, ceph.keyfile_path(SERVICE_NAME)),
+            'res_rabbitmq_fs': 'params device="/dev/rbd/%s/%s" directory="%s" '
+                               'fstype="ext4" op start start-delay="10s"' %
+                               (POOL_NAME, rbd_name, RABBIT_DIR),
+            'res_rabbitmq_vip': 'params ip="%s" cidr_netmask="%s" nic="%s"' %
+                                (vip, vip_cidr, vip_iface),
+            'res_rabbitmq-server': 'op start start-delay="5s" '
+                                   'op monitor interval="5s"',
+        }
 
-    relation_settings['groups'] = {
-        'grp_rabbitmq': 'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '
-                        'res_rabbitmq-server',
-    }
+        relation_settings['groups'] = {
+            'grp_rabbitmq': 'res_rabbitmq_rbd res_rabbitmq_fs res_rabbitmq_vip '
+                            'res_rabbitmq-server',
+        }
 
     for rel_id in utils.relation_ids('ha'):
         utils.relation_set(rid=rel_id, **relation_settings)
@@ -264,10 +273,11 @@ def ha_changed():
     utils.juju_log('INFO', 'ha_changed(): We are now HA clustered. '
                    'Advertising our VIP (%s) to all AMQP clients.' %
                    vip)
-    # need to re-authenticate all clients since node-name changed.
-    for rid in utils.relation_ids('amqp'):
-        for unit in utils.relation_list(rid):
-            amqp_changed(relation_id=rid, remote_unit=unit)
+    if utils.config_get('ha-vip-only') is False:
+        # need to re-authenticate all clients since node-name changed.
+        for rid in utils.relation_ids('amqp'):
+            for unit in utils.relation_list(rid):
+                amqp_changed(relation_id=rid, remote_unit=unit)
 
 
 def ceph_joined():
@@ -322,16 +332,16 @@ def update_nrpe_checks():
         rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts',
                            'check_rabbitmq.py'),
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
-    user = 'naigos'
-    vhost = 'nagios'
-    password_file = os.path.join(RABBIT_DIR, '%s.passwd' % user)
-    if os.path.exists(password_file):
-        password = open(password_file).read().strip()
-    else:
-        cmd = ['pwgen', '64', '1']
-        password = subprocess.check_output(cmd).strip()
-        with open(password_file, 'wb') as out:
-            out.write(password)
+
+    # create unique user and vhost for each unit
+    current_unit = hookenv.local_unit().replace('/', '-')
+    user = 'nagios-%s' % current_unit
+    vhost = 'nagios-%s' % current_unit
+    password = rabbit.get_clustered_attribute('%s.passwd' % user)
+    if not password:
+        utils.juju_log('INFO', 'Setting password for nagios unit: %s' % user)
+        password = pwgen(length=64)
+        rabbit.set_clustered_attribute('%s.passwd' % user, password)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
@@ -349,6 +359,9 @@ def update_nrpe_checks():
 
 def upgrade_charm():
     pre_install_hooks()
+    add_source(utils.config_get('source'), utils.config_get('key'))
+    apt_update(fatal=True)
+
     # Ensure older passwd files in /var/lib/juju are moved to
     # /var/lib/rabbitmq which will end up replicated if clustered.
     for f in [f for f in os.listdir('/var/lib/juju')
@@ -356,18 +369,32 @@ def upgrade_charm():
         if f.endswith('.passwd'):
             s = os.path.join('/var/lib/juju', f)
             d = os.path.join('/var/lib/rabbitmq', f)
+
+            # propagate to cluster if needed
+            username = os.path.basename(s)
+            password = rabbit.get_clustered_attribute(username)
+            if password is None:
+                with open(s, 'r') as h:
+                    stored_password = h.read()
+                if stored_password:
+                    rabbit.set_clustered_attribute(username, stored_password)
+
             utils.juju_log('INFO',
                            'upgrade_charm: Migrating stored passwd'
                            ' from %s to %s.' % (s, d))
             shutil.move(s, d)
 
+    # explicitly update buggy file name naigos.passwd
+    old = os.path.join('var/lib/rabbitmq', 'naigos.passwd')
+    if os.path.isfile(old):
+        new = os.path.join('var/lib/rabbitmq', 'nagios.passwd')
+        shutil.move(old, new)
+
+
 MAN_PLUGIN = 'rabbitmq_management'
 
 
 def config_changed():
-    unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
-    ensure_unison_rabbit_permissions()
-
     if utils.config_get('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
         utils.open_port(55672)
@@ -392,7 +419,8 @@ def config_changed():
             os.remove(rabbit.RABBITMQ_CONF)
         utils.close_port(utils.config_get('ssl_port'))
 
-    if cluster.eligible_leader('res_rabbitmq_vip'):
+    if cluster.eligible_leader('res_rabbitmq_vip') or \
+       utils.config_get('ha-vip-only') is True:
         utils.restart('rabbitmq-server')
 
     update_nrpe_checks()

@@ -54,6 +54,16 @@ options:
       description: |
         Default multicast port number that will be used to communicate between
         HA Cluster nodes.
+  ha-vip-only:
+      type: boolean
+      default: False
+      descriptions: |
+        By default, without pairing with hacluster charm, rabbitmq will deploy
+        in active/active/active... HA. When pairied with hacluster charm, it
+        will deploy as active/passive. By enabling this option, pairing with
+        hacluster charm will keep rabbit in active/active setup, but in addition
+        it will deploy a VIP that can be used by services that cannot work
+        with mutiple AMQPs (like Glance in pre-Icehouse).
   rbd-size:
       type: string
       default: 5G
@@ -83,3 +93,26 @@ options:
     description: |
       If True, services that support it will log to syslog instead of their normal
       log location.
+  max-cluster-tries:
+      type: int
+      default: 3
+      description: |
+        Number of tries to cluster with other units before giving up.
+        If errors clustering happening in more than these units, charm will
+        end with an error
+  source:
+      type: string
+      description: |
+        Optional configuration to support use of additional sources such as:
+        .
+          - ppa:myteam/ppa
+          - cloud:precise-proposed/folsom
+          - http://my.archive.com/ubuntu main
+        .
+        The last option should be used in conjunction with the key configuration
+        option.
+  key:
+      type: string
+      description: |
+        Key ID to import to the apt keyring to support use with arbitary source
+        configuration from outside of Launchpad archives or PPA's.
