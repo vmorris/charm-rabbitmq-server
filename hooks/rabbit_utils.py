@@ -105,9 +105,6 @@ def cluster_with():
     utils.juju_log('INFO', 'Clustering with new node')
     if compare_version('3.0.1') >= 0:
         cluster_cmd = 'join_cluster'
-        cmd = [RABBITMQ_CTL, 'set_policy', 'HA',
-               '^(?!amq\.).*', '{"ha-mode": "all"}']
-        subprocess.check_call(cmd)
     else:
         cluster_cmd = 'cluster'
     out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
@@ -159,6 +156,10 @@ def cluster_with():
             cmd = [RABBITMQ_CTL, 'start_app']
             subprocess.check_call(cmd)
             utils.juju_log('INFO', 'Host clustered with %s.' % node)
+            if compare_version('3.0.1') >= 0:
+                cmd = [RABBITMQ_CTL, 'set_policy', 'HA',
+                       '^(?!amq\.).*', '{"ha-mode": "all"}']
+                subprocess.check_call(cmd)
             return True
         except:
             utils.juju_log('INFO', 'Failed to cluster with %s.' % node)
