@@ -6,5 +6,6 @@ include:
     - contrib.charmsupport
     - contrib.openstack
     - contrib.storage
+    - contrib.peerstorage
     - contrib.ssl
     - contrib.hahelpers.cluster

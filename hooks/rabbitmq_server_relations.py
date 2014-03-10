@@ -44,6 +44,12 @@ from charmhelpers.core.host import (
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
 from charmhelpers.contrib.ssl.service import ServiceCA
 
+from charmhelpers.contrib.peerstorage import (
+    peer_store,
+    peer_retrieve,
+    peer_echo
+)
+
 hooks = Hooks()
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
@@ -65,11 +71,11 @@ def install():
 
 def configure_amqp(username, vhost):
     # get and update service password
-    password = rabbit.get_clustered_attribute('%s.passwd' % username)
+    password = peer_retrieve('%s.passwd' % username)
     if not password:
         # update password in cluster
         password = pwgen(length=64)
-        rabbit.set_clustered_attribute('%s.passwd' % username, password)
+        peer_store('%s.passwd' % username, password)
 
     # update vhost
     rabbit.create_vhost(vhost)
@@ -151,26 +157,24 @@ def cluster_joined():
             level=ERROR)
         return
     cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
-    rabbit.set_clustered_attribute('cookie', cookie)
+    peer_store('cookie', cookie)
 
 
 @hooks.hook('cluster-relation-changed')
 def cluster_changed():
     # sync passwords
-    rdata = relation_get()
-    echo_data = {}
+    include_data = []
     for attribute, value in rdata.iteritems():
         if '.passwd' in attribute or attribute == 'cookie':
-            echo_data[attribute] = value
-    if len(echo_data) > 0:
-        relation_set(relation_settings=echo_data)
+            include_data.append(value)
+    peer_echo(include_data)
 
     if 'cookie' not in echo_data:
         log('cluster_joined: cookie not yet set.')
         return
 
     # sync cookie
-    cookie = echo_data['cookie']
+    cookie = peer_retrieve('cookie')
     if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
         log('Cookie already synchronized with peer.')
     else:
@@ -365,11 +369,11 @@ def update_nrpe_checks():
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
-    password = rabbit.get_clustered_attribute('%s.passwd' % user)
+    password = peer_retrieve('%s.passwd' % user)
     if not password:
         log('Setting password for nagios unit: %s' % user)
         password = pwgen(length=64)
-        rabbit.set_clustered_attribute('%s.passwd' % user, password)
+        peer_store('%s.passwd' % user, password)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
@@ -401,12 +405,12 @@ def upgrade_charm():
 
             # propagate to cluster if needed
             username = os.path.basename(s)
-            password = rabbit.get_clustered_attribute(username)
+            password = peer_retrieve(username)
             if password is None:
                 with open(s, 'r') as h:
                     stored_password = h.read()
                 if stored_password:
-                    rabbit.set_clustered_attribute(username, stored_password)
+                    peer_store(username, stored_password)
 
             log('upgrade_charm: Migrating stored passwd'
                 ' from %s to %s.' % (s, d))
