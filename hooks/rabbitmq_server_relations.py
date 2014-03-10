@@ -31,23 +31,24 @@ from charmhelpers.core.hookenv import (
     relation_set,
     relation_ids,
     related_units,
+    service_name,
     local_unit,
     config,
     unit_get,
     is_relation_made,
-    Hooks, UnregisteredHookError
+    Hooks,
+    UnregisteredHookError
 )
 from charmhelpers.core.host import (
-    rsync, pwgen,
-    service_stop, service_restart
+    rsync, service_stop, service_restart
 )
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
 from charmhelpers.contrib.ssl.service import ServiceCA
 
 from charmhelpers.contrib.peerstorage import (
+    peer_echo,
     peer_store,
-    peer_retrieve,
-    peer_echo
+    peer_retrieve
 )
 
 hooks = Hooks()
@@ -71,11 +72,7 @@ def install():
 
 def configure_amqp(username, vhost):
     # get and update service password
-    password = peer_retrieve('%s.passwd' % username)
-    if not password:
-        # update password in cluster
-        password = pwgen(length=64)
-        peer_store('%s.passwd' % username, password)
+    password = rabbit.get_rabbit_password(username)
 
     # update vhost
     rabbit.create_vhost(vhost)
@@ -162,16 +159,12 @@ def cluster_joined():
 
 @hooks.hook('cluster-relation-changed')
 def cluster_changed():
-    # sync passwords
-    include_data = []
-    for attribute, value in rdata.iteritems():
-        if '.passwd' in attribute or attribute == 'cookie':
-            include_data.append(value)
-    peer_echo(include_data)
-
-    if 'cookie' not in echo_data:
+    rdata = relation_get()
+    if 'cookie' not in rdata:
         log('cluster_joined: cookie not yet set.')
         return
+    # sync passwords
+    peer_echo()
 
     # sync cookie
     cookie = peer_retrieve('cookie')
@@ -300,8 +293,8 @@ def ha_changed():
         return
     vip = config('vip')
     log('ha_changed(): We are now HA clustered. '
-                   'Advertising our VIP (%s) to all AMQP clients.' %
-                   vip)
+        'Advertising our VIP (%s) to all AMQP clients.' %
+        vip)
     # need to re-authenticate all clients since node-name changed.
     for rid in relation_ids('amqp'):
         for unit in related_units(rid):
@@ -369,11 +362,7 @@ def update_nrpe_checks():
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
-    password = peer_retrieve('%s.passwd' % user)
-    if not password:
-        log('Setting password for nagios unit: %s' % user)
-        password = pwgen(length=64)
-        peer_store('%s.passwd' % user, password)
+    password = rabbit.get_rabbit_password(user)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
@@ -396,25 +385,17 @@ def upgrade_charm():
     apt_update(fatal=True)
 
     # Ensure older passwd files in /var/lib/juju are moved to
-    # /var/lib/rabbitmq which will end up replicated if clustered.
+    # /var/lib/rabbitmq which will end up replicated if clustered
     for f in [f for f in os.listdir('/var/lib/juju')
               if os.path.isfile(os.path.join('/var/lib/juju', f))]:
         if f.endswith('.passwd'):
             s = os.path.join('/var/lib/juju', f)
-            d = os.path.join('/var/lib/rabbitmq', f)
-
-            # propagate to cluster if needed
-            username = os.path.basename(s)
-            password = peer_retrieve(username)
-            if password is None:
-                with open(s, 'r') as h:
-                    stored_password = h.read()
-                if stored_password:
-                    peer_store(username, stored_password)
+            d = os.path.join('/var/lib/charm/{}'.format(service_name()), f)
 
             log('upgrade_charm: Migrating stored passwd'
                 ' from %s to %s.' % (s, d))
             shutil.move(s, d)
+    rabbit.migrate_passwords_to_peer_relation()
 
     # explicitly update buggy file name naigos.passwd
     old = os.path.join('var/lib/rabbitmq', 'naigos.passwd')

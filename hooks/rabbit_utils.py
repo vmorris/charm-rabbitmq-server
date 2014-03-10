@@ -16,10 +16,16 @@ from charmhelpers.core.hookenv import (
     config,
     relation_ids,
     relation_get,
-    relation_set,
     related_units,
-    local_unit,
-    log, ERROR
+    log, ERROR,
+    service_name
+)
+
+from charmhelpers.core.host import pwgen, mkdir, write_file
+
+from charmhelpers.contrib.peerstorage import (
+    peer_store,
+    peer_retrieve
 )
 
 PACKAGES = ['rabbitmq-server', 'python-amqplib']
@@ -30,6 +36,8 @@ ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
 RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
 RABBIT_USER = 'rabbitmq'
 LIB_PATH = '/var/lib/rabbitmq/'
+
+_named_passwd = '/var/lib/charm/{}/rabbit-{}.passwd'
 
 
 def vhost_exists(vhost):
@@ -313,23 +321,49 @@ def execute(cmd, die=False, echo=False):
     return (stdout, stderr, rc)
 
 
-def get_clustered_attribute(attribute_name):
-    cluster_rels = relation_ids('cluster')
-    if len(cluster_rels) > 0:
-        cluster_rid = cluster_rels[0]
-        password = relation_get(
-            attribute=attribute_name,
-            rid=cluster_rid,
-            unit=local_unit())
-        return password
+def get_rabbit_password_on_disk(username, password=None):
+    ''' Retrieve, generate or store a rabbit password for
+    the provided username on disk'''
+    _passwd_file = _named_passwd.format(service_name(), username)
+    _password = None
+    if os.path.exists(_passwd_file):
+        with open(_passwd_file, 'r') as passwd:
+            _password = passwd.read().strip()
     else:
-        return None
+        mkdir(os.path.dirname(_passwd_file), owner=RABBIT_USER,
+              group=RABBIT_USER, perms=0o775)
+        os.chmod(os.path.dirname(_passwd_file), 0o775)
+        _password = password or pwgen(length=64)
+        write_file(_passwd_file, _password, owner=RABBIT_USER,
+                   group=RABBIT_USER, perms=0o660)
+    return password
 
 
-def set_clustered_attribute(attribute_name, value):
-    cluster_rels = relation_ids('cluster')
-    if len(cluster_rels) > 0:
-        cluster_rid = cluster_rels[0]
-        relation_set(
-            relation_id=cluster_rid,
-            relation_settings={attribute_name: value})
+def migrate_passwords_to_peer_relation():
+    '''Migrate any passwords storage on disk to cluster peer relation'''
+    for f in glob.glob('/var/lib/charm/{}/*.passwd'.format(service_name())):
+        _key = os.path.basename(f)
+        with open(f, 'r') as passwd:
+            _value = passwd.read().strip()
+        try:
+            peer_store(_key, _value)
+            os.unlink(f)
+        except ValueError:
+            # NOTE cluster relation not yet ready - skip for now
+            pass
+
+
+def get_rabbit_password(username, password=None):
+    ''' Retrieve, generate or store a rabbit password for
+    the provided username using peer relation cluster'''
+    migrate_passwords_to_peer_relation()
+    _key = '{}.passwd'.format(username)
+    try:
+        _password = peer_retrieve(_key)
+        if _password is None:
+            _password = password or pwgen(length=64)
+            peer_store(_key, _password)
+    except ValueError:
+        # cluster relation is not yet started, use on-disk
+        _password = get_rabbit_password_on_disk(username, password)
+    return _password
