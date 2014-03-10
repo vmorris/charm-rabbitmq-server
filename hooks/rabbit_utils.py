@@ -336,7 +336,7 @@ def get_rabbit_password_on_disk(username, password=None):
         _password = password or pwgen(length=64)
         write_file(_passwd_file, _password, owner=RABBIT_USER,
                    group=RABBIT_USER, perms=0o660)
-    return password
+    return _password
 
 
 def migrate_passwords_to_peer_relation():
