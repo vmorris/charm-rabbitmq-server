@@ -432,7 +432,7 @@ def get_hostname(address, fqdn=True):
         if not result:
             return None
     else:
-        return = address
+        result = address
 
     if fqdn:
         # strip trailing .
