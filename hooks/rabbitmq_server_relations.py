@@ -125,7 +125,10 @@ def amqp_changed(relation_id=None, remote_unit=None):
         if is_relation_made('ha'):
             # active/passive settings
             relation_settings['vip'] = config('vip')
-            relation_settings['ha-vip-only'] = config('ha-vip-only')
+            # or ha-vip-only to support active/active, but
+            # accessed via a VIP for older clients.
+            if config('ha-vip-only') is True:
+                relation_settings['ha-vip-only'] = 'true'
 
     if relation_id:
         relation_settings['rid'] = relation_id
