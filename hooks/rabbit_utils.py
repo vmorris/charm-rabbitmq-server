@@ -127,7 +127,7 @@ def cluster_with():
     # check if node is already clustered
     total_nodes = 1
     running_nodes = []
-    m = re.search("\{running_nodes,\[(.*)\]\}", out.strip(), re.DOTALL)
+    m = re.search("\{running_nodes,\[(.*?)\]\}", out.strip(), re.DOTALL)
     if m is not None:
         running_nodes = m.group(1).split(',')
         running_nodes = [x.replace("'", '') for x in running_nodes]
