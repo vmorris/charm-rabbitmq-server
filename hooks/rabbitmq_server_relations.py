@@ -368,7 +368,7 @@ def config_changed():
     add_source(utils.config_get('source'), utils.config_get('key'))
     apt_update(fatal=True)
 
-    # Install packages to ensure and changes to source
+    # Install packages to ensure any changes to source
     # result in an upgrade if applicable.
     utils.install(*rabbit.PACKAGES)
 
