@@ -20,6 +20,10 @@ _ = _pythonpath
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import rsync
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
+from charmhelpers.fetch import (
+    apt_update,
+    add_source
+)
 
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
@@ -35,12 +39,7 @@ def ensure_unison_rabbit_permissions():
 
 def install():
     pre_install_hooks()
-    utils.install(*rabbit.PACKAGES)
-    utils.expose(5672)
-    # ensure user + permissions for peer relations that
-    # may be syncing data there via SSH_USER.
-    unison.ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
-    ensure_unison_rabbit_permissions()
+    # NOTE(jamespage) install actually happens in config_changed hook
 
 
 def configure_amqp(username, vhost):
@@ -365,7 +364,17 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 
 def config_changed():
-    unison.ensure_user(user=rabbit.SSH_USER, group='rabbit')
+    # Add archive source if provided
+    add_source(utils.config_get('source'), utils.config_get('key'))
+    apt_update(fatal=True)
+
+    # Install packages to ensure and changes to source
+    # result in an upgrade if applicable.
+    utils.install(*rabbit.PACKAGES)
+
+    utils.expose(5672)
+
+    unison.ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
     ensure_unison_rabbit_permissions()
 
     if utils.config_get('management_plugin') is True:
