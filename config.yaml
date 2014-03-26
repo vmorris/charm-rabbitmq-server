@@ -75,7 +75,7 @@ options:
   ha-vip-only:
       type: boolean
       default: False
-      descriptions: |
+      description: |
         By default, without pairing with hacluster charm, rabbitmq will deploy
         in active/active/active... HA. When pairied with hacluster charm, it
         will deploy as active/passive. By enabling this option, pairing with

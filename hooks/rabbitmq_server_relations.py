@@ -62,12 +62,7 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 @hooks.hook('install')
 def install():
     pre_install_hooks()
-    add_source(config('source'), config('key'))
-    apt_update(fatal=True)
-    apt_install(rabbit.PACKAGES, fatal=True)
-    open_port(5672)
-    chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
-    chmod(RABBIT_DIR, 0o775)
+    # NOTE(jamespage) install actually happens in config_changed hook
 
 
 def configure_amqp(username, vhost):
@@ -506,6 +501,19 @@ def configure_rabbit_ssl():
 
 @hooks.hook('config-changed')
 def config_changed():
+    # Add archive source if provided
+    add_source(config('source'), config('key'))
+    apt_update(fatal=True)
+
+    # Install packages to ensure any changes to source
+    # result in an upgrade if applicable.
+    apt_install(rabbit.PACKAGES, fatal=True)
+
+    open_port(5672)
+
+    chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
+    chmod(RABBIT_DIR, 0o775)
+
     if config('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
         open_port(55672)
