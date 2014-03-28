@@ -129,7 +129,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
         relation_settings['rid'] = relation_id
 
     # set if need HA queues or not
-    if rabbit.compare_version('3.0.1') >= 0:
+    if rabbit.compare_version('3.0.1') < 0:
         relation_settings['ha_queues'] = True
     relation_set(relation_settings=relation_settings)
 
