@@ -1,7 +1,11 @@
-destination: lib/charmhelpers
+destination: hooks/charmhelpers
 branch: lp:charm-helpers
 include:
+    - fetch
     - core
     - contrib.charmsupport
     - contrib.openstack
-    - fetch
+    - contrib.storage
+    - contrib.peerstorage
+    - contrib.ssl
+    - contrib.hahelpers.cluster

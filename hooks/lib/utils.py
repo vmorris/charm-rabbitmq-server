@@ -9,47 +9,25 @@
 #  Adam Gandelman <adamg@ubuntu.com>
 #
 
-import json
+import grp
 import os
-import subprocess
-import socket
-import sys
+import pwd
 
-
-def do_hooks(hooks):
-    hook = os.path.basename(sys.argv[0])
-
-    try:
-        hook_func = hooks[hook]
-    except KeyError:
-        juju_log('INFO',
-                 "This charm doesn't know how to handle '{}'.".format(hook))
-    else:
-        hook_func()
-
-
-def install(*pkgs):
-    cmd = [
-        'apt-get',
-        '-y',
-        'install']
-    for pkg in pkgs:
-        cmd.append(pkg)
-    subprocess.check_call(cmd)
-
+from charmhelpers.fetch import (
+    apt_install
+)
+from charmhelpers.core.hookenv import (
+    local_unit,
+    remote_unit,
+    log
+)
 TEMPLATES_DIR = 'templates'
 
 try:
     import jinja2
 except ImportError:
-    install('python-jinja2')
+    apt_install('python-jinja2', fatal=True)
     import jinja2
-
-try:
-    import dns.resolver
-except ImportError:
-    install('python-dnspython')
-    import dns.resolver
 
 
 def render_template(template_name, context, template_dir=TEMPLATES_DIR):
@@ -58,219 +36,45 @@ def render_template(template_name, context, template_dir=TEMPLATES_DIR):
     template = templates.get_template(template_name)
     return template.render(context)
 
-# Protocols
-TCP = 'TCP'
-UDP = 'UDP'
+
+def is_newer():
+    l_unit_no = local_unit().split('/')[1]
+    r_unit_no = remote_unit().split('/')[1]
+    return (l_unit_no > r_unit_no)
 
 
-def expose(port, protocol='TCP'):
-    cmd = [
-        'open-port',
-        '{}/{}'.format(port, protocol)]
-    subprocess.check_call(cmd)
+def chown(path, owner='root', group='root', recursive=False):
+    """Changes owner of given path, recursively if needed"""
+    if os.path.exists(path):
+        log('Changing ownership of path %s to %s:%s' %
+            (path, owner, group))
+        uid = pwd.getpwnam(owner).pw_uid
+        gid = grp.getgrnam(group).gr_gid
 
-
-def open_port(port, protocol='TCP'):
-    expose(port, protocol)
-
-
-def close_port(port, protocol='TCP'):
-    cmd = [
-        'close-port',
-        '{}/{}'.format(port, protocol)]
-    subprocess.check_call(cmd)
-
-
-def juju_log(severity, message):
-    cmd = [
-        'juju-log',
-        '--log-level', severity,
-        message]
-    subprocess.check_call(cmd)
-
-
-cache = {}
-
-
-def cached(func):
-    def wrapper(*args, **kwargs):
-        global cache
-        key = str((func, args, kwargs))
-        try:
-            return cache[key]
-        except KeyError:
-            res = func(*args, **kwargs)
-            cache[key] = res
-            return res
-    return wrapper
-
-
-@cached
-def relation_ids(relation):
-    cmd = [
-        'relation-ids',
-        relation]
-    result = str(subprocess.check_output(cmd)).split()
-    if result == "":
-        return None
-    else:
-        return result
-
-
-@cached
-def relation_list(rid):
-    cmd = [
-        'relation-list',
-        '-r', rid]
-    result = str(subprocess.check_output(cmd)).split()
-    if result == "":
-        return None
-    else:
-        return result
-
-
-@cached
-def relation_get(attribute, unit=None, rid=None):
-    cmd = [
-        'relation-get']
-    if rid:
-        cmd.append('-r')
-        cmd.append(rid)
-    cmd.append(attribute)
-    if unit:
-        cmd.append(unit)
-    value = subprocess.check_output(cmd).strip()  # IGNORE:E1103
-    if value == "":
-        return None
-    else:
-        return value
-
-
-@cached
-def relation_get_dict(relation_id=None, remote_unit=None):
-    """Obtain all relation data as dict by way of JSON"""
-    cmd = [
-        'relation-get', '--format=json']
-    if relation_id:
-        cmd.append('-r')
-        cmd.append(relation_id)
-    if remote_unit:
-        cmd.append('-')
-        cmd.append(remote_unit)
-    j = subprocess.check_output(cmd)
-    d = json.loads(j)
-    settings = {}
-    # convert unicode to strings
-    for k, v in d.iteritems():
-        settings[str(k)] = str(v)
-    return settings
-
-
-def relation_set(**kwargs):
-    cmd = [
-        'relation-set']
-    args = []
-    for k, v in kwargs.items():
-        if k == 'rid':
-            if v:
-                cmd.append('-r')
-                cmd.append(v)
+        if recursive:
+            for root, dirs, files in os.walk(path):
+                for d in dirs:
+                    os.chown(os.path.join(root, d), uid, gid)
+                for f in files:
+                    os.chown(os.path.join(root, f), uid, gid)
         else:
-            args.append('{}={}'.format(k, v))
-    cmd += args
-    subprocess.check_call(cmd)
-
-
-@cached
-def unit_get(attribute):
-    cmd = [
-        'unit-get',
-        attribute]
-    value = subprocess.check_output(cmd).strip()  # IGNORE:E1103
-    if value == "":
-        return None
+            os.chown(path, uid, gid)
     else:
-        return value
+        log('%s path does not exist' % path)
 
 
-@cached
-def config_get(attribute):
-    cmd = [
-        'config-get',
-        '--format',
-        'json']
-    out = subprocess.check_output(cmd).strip()  # IGNORE:E1103
-    cfg = json.loads(out)
+def chmod(path, perms, recursive=False):
+    """Changes perms of given path, recursively if needed"""
+    if os.path.exists(path):
+        log('Changing perms of path %s ' % path)
 
-    try:
-        return cfg[attribute]
-    except KeyError:
-        return None
-
-
-@cached
-def get_unit_hostname():
-    return socket.gethostname()
-
-
-@cached
-def get_host_ip(hostname=unit_get('private-address')):
-    try:
-        # Test to see if already an IPv4 address
-        socket.inet_aton(hostname)
-        return hostname
-    except socket.error:
-        answers = dns.resolver.query(hostname, 'A')
-        if answers:
-            return answers[0].address
-    return None
-
-
-def _svc_control(service, action):
-    subprocess.check_call(['service', service, action])
-
-
-def restart(*services):
-    for service in services:
-        _svc_control(service, 'restart')
-
-
-def stop(*services):
-    for service in services:
-        _svc_control(service, 'stop')
-
-
-def start(*services):
-    for service in services:
-        _svc_control(service, 'start')
-
-
-def reload(*services):
-    for service in services:
-        try:
-            _svc_control(service, 'reload')
-        except subprocess.CalledProcessError:
-            # Reload failed - either service does not support reload
-            # or it was not running - restart will fixup most things
-            _svc_control(service, 'restart')
-
-
-def running(service):
-    try:
-        output = subprocess.check_output(['service', service, 'status'])
-    except subprocess.CalledProcessError:
-        return False
-    else:
-        if ("start/running" in output or
-                "is running" in output):
-            return True
+        if recursive:
+            for root, dirs, files in os.walk(path):
+                for d in dirs:
+                    os.chmod(os.path.join(root, d), perms)
+                for f in files:
+                    os.chmod(os.path.join(root, f), perms)
         else:
-            return False
-
-
-def is_relation_made(relation, key='private-address'):
-    for r_id in (relation_ids(relation) or []):
-        for unit in (relation_list(r_id) or []):
-            if relation_get(key, rid=r_id, unit=unit):
-                return True
-    return False
+            os.chmod(path, perms)
+    else:
+        log('ERROR', '%s path does not exist' % path)
