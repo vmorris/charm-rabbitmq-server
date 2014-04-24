@@ -56,6 +56,8 @@ hooks = Hooks()
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
 POOL_NAME = SERVICE_NAME
 RABBIT_DIR = '/var/lib/rabbitmq'
+RABBIT_USER = 'rabbitmq'
+RABBIT_GROUP = 'rabbitmq'
 NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 
@@ -333,6 +335,8 @@ def ceph_changed():
                                  blk_device=blk_device,
                                  system_services=['rabbitmq-server'])#,
                                  #rbd_pool_replicas=rbd_pool_rep_count)
+        subprocess.check_call(['chown', '-R', '%s:%s' %
+            (RABBIT_USER,RABBIT_GROUP), RABBIT_DIR])
     else:
         log('This is not the peer leader. Not configuring RBD.')
         log('Stopping rabbitmq-server.')
