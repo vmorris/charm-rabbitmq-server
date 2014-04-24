@@ -331,8 +331,8 @@ def ceph_changed():
                                  rbd_img=rbd_img, sizemb=sizemb,
                                  fstype='ext4', mount_point=RABBIT_DIR,
                                  blk_device=blk_device,
-                                 system_services=['rabbitmq-server'],
-                                 rbd_pool_replicas=rbd_pool_rep_count)
+                                 system_services=['rabbitmq-server'])#,
+                                 #rbd_pool_replicas=rbd_pool_rep_count)
     else:
         log('This is not the peer leader. Not configuring RBD.')
         log('Stopping rabbitmq-server.')
