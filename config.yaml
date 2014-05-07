@@ -133,3 +133,15 @@ options:
       description: |
         Key ID to import to the apt keyring to support use with arbitary source
         configuration from outside of Launchpad archives or PPA's.
+  stats_cron_schedule:
+      type: string
+      description: |
+        Cron schedule used to generate rabbitmq stats. If unset
+        no stats will be generated
+  queue_thresholds:
+      type: string
+      description: |
+        List of RabbitMQ queue size check thresholds. Interpreted as YAML
+        in format [<vhost>, <queue>, <warn>, <crit>]
+        - ['/', 'queue1', 10, 20]
+        - ['/', 'queue2', 200, 300]
