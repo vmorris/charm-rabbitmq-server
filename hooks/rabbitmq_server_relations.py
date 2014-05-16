@@ -544,7 +544,8 @@ def config_changed():
                 log("hacluster relation is present but this node is not active"
                     " skipping update nrpe checks")
     else:
-        update_nrpe_checks()
+        _restart_rabbit_update_nrpe()
+
 
 def pre_install_hooks():
     for f in glob.glob('exec.d/*/charm-pre-install'):
