@@ -404,7 +404,7 @@ def update_nrpe_checks():
         cmd = ""
         # If value of queue_thresholds is incorrect we want the hook to fail
         for item in yaml.safe_load(config('queue_thresholds')):
-            cmd += ' -c {} {} {} {}'.format(*item)
+            cmd += ' -c "{}" "{}" {} {}'.format(*item)
         nrpe_compat.add_check(
             shortname=rabbit.RABBIT_USER + '_queue',
             description='Check RabbitMQ Queues',
