@@ -37,7 +37,7 @@ RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
 RABBIT_USER = 'rabbitmq'
 LIB_PATH = '/var/lib/rabbitmq/'
 
-_named_passwd = '/var/lib/charm/{}/rabbit-{}.passwd'
+_named_passwd = '/var/lib/charm/{}/{}.passwd'
 
 
 def vhost_exists(vhost):
