@@ -280,8 +280,10 @@ def enable_ssl(ssl_key, ssl_cert, ssl_port,
 
     if ssl_ca:
         data["ssl_ca_file"] = ssl_ca_file
-    
-    return data
+
+    with open(RABBITMQ_CONF, 'w') as rmq_conf:
+        rmq_conf.write(render_template(
+            os.path.basename(RABBITMQ_CONF), data))
 
 
 def execute(cmd, die=False, echo=False):

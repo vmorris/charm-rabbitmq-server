@@ -475,37 +475,32 @@ def configure_rabbit_ssl():
     """
     ssl_mode, external_ca = _get_ssl_mode()
 
-    data = {}
     if ssl_mode == 'off':
         if os.path.exists(rabbit.RABBITMQ_CONF):
             os.remove(rabbit.RABBITMQ_CONF)
         close_port(config('ssl_port'))
         reconfigure_client_ssl()
-    else:
-        ssl_key = _convert_from_base64(config('ssl_key'))
-        ssl_cert = _convert_from_base64(config('ssl_cert'))
-        ssl_ca = _convert_from_base64(config('ssl_ca'))
-        ssl_port = config('ssl_port')
-    
-        # If external managed certs then we need all the fields.
-        if (ssl_mode in ('on', 'only') and any((ssl_key, ssl_cert)) and
-                not all((ssl_key, ssl_cert))):
-            log('If ssl_key or ssl_cert are specified both are required.',
-                level=ERROR)
-            sys.exit(1)
-    
-        if not external_ca:
-            ssl_cert, ssl_key, ssl_ca = ServiceCA.get_service_cert()
-    
-        data.update(rabbit.enable_ssl(ssl_key, ssl_cert, ssl_port, ssl_ca,
-                                      ssl_only=(ssl_mode == "only"),
-                                      ssl_client=False))
-        reconfigure_client_ssl(True)
-        open_port(ssl_port)
+        return
+    ssl_key = _convert_from_base64(config('ssl_key'))
+    ssl_cert = _convert_from_base64(config('ssl_cert'))
+    ssl_ca = _convert_from_base64(config('ssl_ca'))
+    ssl_port = config('ssl_port')
 
-    with open(rabbit.RABBITMQ_CONF, 'w') as rmq_conf:
-        rmq_conf.write(rabbit.render_template(
-            os.path.basename(rabbit.RABBITMQ_CONF), data))
+    # If external managed certs then we need all the fields.
+    if (ssl_mode in ('on', 'only') and any((ssl_key, ssl_cert)) and
+            not all((ssl_key, ssl_cert))):
+        log('If ssl_key or ssl_cert are specified both are required.',
+            level=ERROR)
+        sys.exit(1)
+
+    if not external_ca:
+        ssl_cert, ssl_key, ssl_ca = ServiceCA.get_service_cert()
+
+    rabbit.enable_ssl(
+        ssl_key, ssl_cert, ssl_port, ssl_ca,
+        ssl_only=(ssl_mode == "only"), ssl_client=False)
+    reconfigure_client_ssl(True)
+    open_port(ssl_port)
 
 
 @hooks.hook('config-changed')
