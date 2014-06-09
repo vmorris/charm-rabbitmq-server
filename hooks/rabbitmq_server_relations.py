@@ -503,13 +503,12 @@ def configure_rabbit_ssl():
     open_port(ssl_port)
 
 
+def restart_rabbit_update_nrpe():
+    service_restart('rabbitmq-server')
+    update_nrpe_checks()
+
 @hooks.hook('config-changed')
 def config_changed():
-
-    def _restart_rabbit_update_nrpe():
-        service_restart('rabbitmq-server')
-        update_nrpe_checks()
-
     # Add archive source if provided
     add_source(config('source'), config('key'))
     apt_update(fatal=True)
@@ -536,15 +535,15 @@ def config_changed():
         ha_is_active_active = config("ha-vip-only")
 
         if ha_is_active_active:
-            _restart_rabbit_update_nrpe()
+            restart_rabbit_update_nrpe()
         else:
             if eligible_leader('res_rabbitmq_vip'):
-                _restart_rabbit_update_nrpe()
+                restart_rabbit_update_nrpe()
             else:
                 log("hacluster relation is present but this node is not active"
                     " skipping update nrpe checks")
     else:
-        _restart_rabbit_update_nrpe()
+        restart_rabbit_update_nrpe()
 
 
 def pre_install_hooks():
