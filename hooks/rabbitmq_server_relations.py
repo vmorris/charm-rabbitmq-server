@@ -516,7 +516,8 @@ def config_changed():
     add_source(config('source'), config('key'))
     apt_update(fatal=True)
     # Copy in defaults file for updated ulimits
-    shutil.copyfile('templates/rabbitmq-server', '/etc/default/rabbitmq-server')
+    shutil.copyfile('templates/rabbitmq.limits.conf',
+                    '/etc/security/limits.d/rabbitmq.limits.conf')
     # Install packages to ensure any changes to source
     # result in an upgrade if applicable.
     apt_install(rabbit.PACKAGES, fatal=True)
