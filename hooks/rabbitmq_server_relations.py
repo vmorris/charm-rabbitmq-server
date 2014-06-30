@@ -338,13 +338,13 @@ def ceph_changed():
         rbd_size = config('rbd-size')
         sizemb = int(rbd_size.split('G')[0]) * 1024
         blk_device = '/dev/rbd/%s/%s' % (POOL_NAME, rbd_img)
-        # rbd_pool_rep_count = config('ceph-osd-replication-count')
+        ceph.create_pool(service=SERVICE_NAME, pool=POOL_NAME,
+                         replicas=config('ceph-osd-replication-count'))
         ceph.ensure_ceph_storage(service=SERVICE_NAME, pool=POOL_NAME,
                                  rbd_img=rbd_img, sizemb=sizemb,
                                  fstype='ext4', mount_point=RABBIT_DIR,
                                  blk_device=blk_device,
-                                 system_services=['rabbitmq-server'])  # ,
-        # rbd_pool_replicas=rbd_pool_rep_count)
+                                 system_services=['rabbitmq-server'])
         subprocess.check_call(['chown', '-R', '%s:%s' %
                                (RABBIT_USER, RABBIT_GROUP), RABBIT_DIR])
     else:
