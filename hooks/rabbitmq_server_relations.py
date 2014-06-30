@@ -133,7 +133,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
         if rabbit.compare_version('3.0.1') < 0:
             relation_settings['ha_queues'] = True
         else:
-            relation_settings['ha_queues'] = False
+            relation_settings['ha_queues'] = None
 
     # NOTE(jamespage)
     # override private-address settings if access-network is
