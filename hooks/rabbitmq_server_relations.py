@@ -33,6 +33,7 @@ from charmhelpers.core.hookenv import (
     related_units,
     service_name,
     local_unit,
+    relations_of_type,
     config,
     unit_get,
     is_relation_made,
@@ -304,8 +305,8 @@ def ha_changed():
 @hooks.hook('ceph-relation-joined')
 def ceph_joined():
     log('Start Ceph Relation Joined')
-    #NOTE fixup
-    #utils.configure_source()
+    # NOTE fixup
+    # utils.configure_source()
     ceph.install()
     log('Finish Ceph Relation Joined')
 
@@ -328,15 +329,15 @@ def ceph_changed():
         rbd_size = config('rbd-size')
         sizemb = int(rbd_size.split('G')[0]) * 1024
         blk_device = '/dev/rbd/%s/%s' % (POOL_NAME, rbd_img)
-        rbd_pool_rep_count = config('ceph-osd-replication-count')
+        # rbd_pool_rep_count = config('ceph-osd-replication-count')
         ceph.ensure_ceph_storage(service=SERVICE_NAME, pool=POOL_NAME,
                                  rbd_img=rbd_img, sizemb=sizemb,
                                  fstype='ext4', mount_point=RABBIT_DIR,
                                  blk_device=blk_device,
-                                 system_services=['rabbitmq-server'])#,
-                                 #rbd_pool_replicas=rbd_pool_rep_count)
+                                 system_services=['rabbitmq-server'])  # ,
+        # rbd_pool_replicas=rbd_pool_rep_count)
         subprocess.check_call(['chown', '-R', '%s:%s' %
-            (RABBIT_USER,RABBIT_GROUP), RABBIT_DIR])
+                               (RABBIT_USER, RABBIT_GROUP), RABBIT_DIR])
     else:
         log('This is not the peer leader. Not configuring RBD.')
         log('Stopping rabbitmq-server.')
@@ -360,6 +361,12 @@ def update_nrpe_checks():
                            'check_rabbitmq.py'),
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
 
+    # Find out if nrpe set nagios_hostname
+    hostname = None
+    for rel in relations_of_type('nrpe-external-master'):
+        if 'nagios_hostname' in rel:
+            hostname = rel['nagios_hostname']
+            break
     # create unique user and vhost for each unit
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
@@ -370,7 +377,7 @@ def update_nrpe_checks():
     rabbit.create_user(user, password)
     rabbit.grant_permissions(user, vhost)
 
-    nrpe_compat = NRPE()
+    nrpe_compat = NRPE(hostname=hostname)
     nrpe_compat.add_check(
         shortname=rabbit.RABBIT_USER,
         description='Check RabbitMQ',
@@ -509,8 +516,9 @@ def config_changed():
     add_source(config('source'), config('key'))
     apt_update(fatal=True)
     # Copy in defaults file for updated ulimits
-    shutil.copyfile('templates/rabbitmq.limits.conf',
-                    '/etc/security/limits.d/rabbitmq.limits.conf')
+    shutil.copyfile(
+        'templates/rabbitmq-server',
+        '/etc/default/rabbitmq-server')
     # Install packages to ensure any changes to source
     # result in an upgrade if applicable.
     apt_install(rabbit.PACKAGES, fatal=True)
