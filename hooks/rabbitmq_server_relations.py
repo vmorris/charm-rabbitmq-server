@@ -33,6 +33,7 @@ from charmhelpers.core.hookenv import (
     related_units,
     service_name,
     local_unit,
+    relations_of_type,
     config,
     unit_get,
     is_relation_made,
@@ -360,6 +361,12 @@ def update_nrpe_checks():
                            'check_rabbitmq.py'),
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
 
+    # Find out if nrpe set nagios_hostname
+    hostname=None
+    for rel in relations_of_type('nrpe-external-master'):
+        if 'nagios_hostname' in rel:
+            hostname = rel['nagios_hostname']
+            break
     # create unique user and vhost for each unit
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
@@ -370,7 +377,7 @@ def update_nrpe_checks():
     rabbit.create_user(user, password)
     rabbit.grant_permissions(user, vhost)
 
-    nrpe_compat = NRPE()
+    nrpe_compat = NRPE(hostname=hostname)
     nrpe_compat.add_check(
         shortname=rabbit.RABBIT_USER,
         description='Check RabbitMQ',
