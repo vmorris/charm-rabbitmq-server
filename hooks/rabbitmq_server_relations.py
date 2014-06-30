@@ -52,6 +52,8 @@ from charmhelpers.contrib.peerstorage import (
     peer_retrieve
 )
 
+from charmhelpers.contrib.network.ip import get_address_in_network
+
 hooks = Hooks()
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
@@ -82,59 +84,66 @@ def configure_amqp(username, vhost):
 
 @hooks.hook('amqp-relation-changed')
 def amqp_changed(relation_id=None, remote_unit=None):
-    if not eligible_leader('res_rabbitmq_vip'):
-        log('amqp_changed(): Deferring amqp_changed'
-            ' to eligible_leader.')
-        return
-
     relation_settings = {}
-    settings = relation_get(rid=relation_id, unit=remote_unit)
+    if eligible_leader('res_rabbitmq_vip'):
+        settings = relation_get(rid=relation_id, unit=remote_unit)
 
-    singleset = set(['username', 'vhost'])
+        singleset = set(['username', 'vhost'])
 
-    if singleset.issubset(settings):
-        if None in [settings['username'], settings['vhost']]:
-            log('amqp_changed(): Relation not ready.')
-            return
+        if singleset.issubset(settings):
+            if None in [settings['username'], settings['vhost']]:
+                log('Relation not ready.')
+                return
 
-        relation_settings['password'] = configure_amqp(
-            username=settings['username'],
-            vhost=settings['vhost'])
-    else:
-        queues = {}
-        for k, v in settings.iteritems():
-            amqp = k.split('_')[0]
-            x = '_'.join(k.split('_')[1:])
-            if amqp not in queues:
-                queues[amqp] = {}
-            queues[amqp][x] = v
-        for amqp in queues:
-            if singleset.issubset(queues[amqp]):
-                relation_settings[
-                    '_'.join([amqp, 'password'])] = configure_amqp(
-                    queues[amqp]['username'],
-                    queues[amqp]['vhost'])
+            relation_settings['password'] = configure_amqp(
+                username=settings['username'],
+                vhost=settings['vhost'])
+        else:
+            queues = {}
+            for k, v in settings.iteritems():
+                amqp = k.split('_')[0]
+                x = '_'.join(k.split('_')[1:])
+                if amqp not in queues:
+                    queues[amqp] = {}
+                queues[amqp][x] = v
+            for amqp in queues:
+                if singleset.issubset(queues[amqp]):
+                    relation_settings[
+                        '_'.join([amqp, 'password'])] = configure_amqp(
+                        queues[amqp]['username'],
+                        queues[amqp]['vhost'])
 
-    relation_settings['hostname'] = unit_get('private-address')
-    configure_client_ssl(relation_settings)
+        relation_settings['hostname'] = \
+            get_address_in_network(config('access-network'),
+                                   unit_get('private-address'))
 
-    if is_clustered():
-        relation_settings['clustered'] = 'true'
-        if is_relation_made('ha'):
-            # active/passive settings
-            relation_settings['vip'] = config('vip')
-            # or ha-vip-only to support active/active, but
-            # accessed via a VIP for older clients.
-            if config('ha-vip-only') is True:
-                relation_settings['ha-vip-only'] = 'true'
+        configure_client_ssl(relation_settings)
 
-    if relation_id:
-        relation_settings['rid'] = relation_id
+        if is_clustered():
+            relation_settings['clustered'] = 'true'
+            if is_relation_made('ha'):
+                # active/passive settings
+                relation_settings['vip'] = config('vip')
+                # or ha-vip-only to support active/active, but
+                # accessed via a VIP for older clients.
+                if config('ha-vip-only') is True:
+                    relation_settings['ha-vip-only'] = 'true'
 
-    # set if need HA queues or not
-    if rabbit.compare_version('3.0.1') < 0:
-        relation_settings['ha_queues'] = True
-    relation_set(relation_settings=relation_settings)
+        # set if need HA queues or not
+        if rabbit.compare_version('3.0.1') < 0:
+            relation_settings['ha_queues'] = True
+        else:
+            relation_settings['ha_queues'] = False
+
+    # NOTE(jamespage)
+    # override private-address settings if access-network is
+    # configured and an appropriate network interface is configured.
+    relation_settings['private-address'] = \
+        get_address_in_network(config('access-network'),
+                               unit_get('private-address'))
+
+    relation_set(relation_id=relation_id,
+                 relation_settings=relation_settings)
 
 
 @hooks.hook('cluster-relation-joined')
@@ -305,8 +314,8 @@ def ha_changed():
 @hooks.hook('ceph-relation-joined')
 def ceph_joined():
     log('Start Ceph Relation Joined')
-    #NOTE fixup
-    #utils.configure_source()
+    # NOTE fixup
+    # utils.configure_source()
     ceph.install()
     log('Finish Ceph Relation Joined')
 
@@ -334,10 +343,10 @@ def ceph_changed():
                                  rbd_img=rbd_img, sizemb=sizemb,
                                  fstype='ext4', mount_point=RABBIT_DIR,
                                  blk_device=blk_device,
-                                 system_services=['rabbitmq-server'])#,
-                                 #rbd_pool_replicas=rbd_pool_rep_count)
+                                 system_services=['rabbitmq-server'])  # ,
+        # rbd_pool_replicas=rbd_pool_rep_count)
         subprocess.check_call(['chown', '-R', '%s:%s' %
-            (RABBIT_USER,RABBIT_GROUP), RABBIT_DIR])
+                               (RABBIT_USER, RABBIT_GROUP), RABBIT_DIR])
     else:
         log('This is not the peer leader. Not configuring RBD.')
         log('Stopping rabbitmq-server.')
@@ -362,7 +371,7 @@ def update_nrpe_checks():
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
 
     # Find out if nrpe set nagios_hostname
-    hostname=None
+    hostname = None
     for rel in relations_of_type('nrpe-external-master'):
         if 'nagios_hostname' in rel:
             hostname = rel['nagios_hostname']
@@ -541,6 +550,13 @@ def config_changed():
         service_restart('rabbitmq-server')
 
     update_nrpe_checks()
+
+    # NOTE(jamespage)
+    # trigger amqp_changed to pickup and changes to network
+    # configuration via the access-network config option.
+    for rid in relation_ids('amqp'):
+        for unit in related_units(rid):
+            amqp_changed(relation_id=rid, remote_unit=unit)
 
 
 def pre_install_hooks():

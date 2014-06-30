@@ -133,3 +133,12 @@ options:
       description: |
         Key ID to import to the apt keyring to support use with arbitary source
         configuration from outside of Launchpad archives or PPA's.
+  # Network configuration options
+  # by default all access is over 'private-address'
+  access-network:
+    type: string
+    description: |
+      The IP address and netmask of the 'access' network (e.g., 192.168.0.0/24)
+      .
+      This network will be used for access to RabbitMQ messaging services.
+
