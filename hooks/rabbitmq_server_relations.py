@@ -13,7 +13,8 @@ from lib.utils import (
 )
 from charmhelpers.contrib.hahelpers.cluster import (
     is_clustered,
-    eligible_leader
+    eligible_leader,
+    get_ipv6_addr
 )
 
 import charmhelpers.contrib.storage.linux.ceph as ceph
@@ -115,7 +116,11 @@ def amqp_changed(relation_id=None, remote_unit=None):
                     queues[amqp]['username'],
                     queues[amqp]['vhost'])
 
-    relation_settings['hostname'] = unit_get('private-address')
+    if config('use-ipv6'):
+        relation_settings['hostname'] = '[%s]' % get_ipv6_addr()
+    else:
+        relation_settings['hostname'] = unit_get('private-address')
+
     configure_client_ssl(relation_settings)
 
     if is_clustered():
@@ -527,6 +532,9 @@ def config_changed():
 
     chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     chmod(RABBIT_DIR, 0o775)
+
+    if config('use-ipv6'):
+        rabbit.bind_ipv6_interface()
 
     if config('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)

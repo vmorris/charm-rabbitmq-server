@@ -133,3 +133,7 @@ options:
       description: |
         Key ID to import to the apt keyring to support use with arbitary source
         configuration from outside of Launchpad archives or PPA's.
+  use-ipv6:
+    type: boolean
+    default: False
+    description: "Enable Ipv6"  
