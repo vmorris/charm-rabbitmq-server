@@ -28,6 +28,10 @@ from charmhelpers.contrib.peerstorage import (
     peer_retrieve
 )
 
+from charmhelpers.contrib.hahelpers.cluster import (
+    get_ipv6_addr
+)
+
 PACKAGES = ['rabbitmq-server', 'python-amqplib']
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
@@ -367,3 +371,11 @@ def get_rabbit_password(username, password=None):
         # cluster relation is not yet started, use on-disk
         _password = get_rabbit_password_on_disk(username, password)
     return _password
+
+
+def bind_ipv6_interface():
+    ipv6_addr = get_ipv6_addr()
+    out = "RABBITMQ_NODE_IP_ADDRESS=%s" % ipv6_addr
+
+    with open(ENV_CONF, 'wb') as conf:
+        conf.write(''.join(out))
