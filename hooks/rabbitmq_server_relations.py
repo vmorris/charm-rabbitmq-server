@@ -116,7 +116,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
                     queues[amqp]['username'],
                     queues[amqp]['vhost'])
 
-    if config('use-ipv6'):
+    if config('prefer-ipv6'):
         relation_settings['hostname'] = '[%s]' % get_ipv6_addr()
     else:
         relation_settings['hostname'] = unit_get('private-address')
@@ -533,7 +533,7 @@ def config_changed():
     chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     chmod(RABBIT_DIR, 0o775)
 
-    if config('use-ipv6'):
+    if config('prefer-ipv6'):
         rabbit.bind_ipv6_interface()
 
     if config('management_plugin') is True:
