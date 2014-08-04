@@ -117,9 +117,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
                     queues[amqp]['vhost'])
 
     if config('prefer-ipv6'):
-        relation_settings['hostname'] = '[%s]' % get_ipv6_addr()
-    else:
-        relation_settings['hostname'] = unit_get('private-address')
+        relation_settings['private-address'] = '[%s]' % get_ipv6_addr()
 
     configure_client_ssl(relation_settings)
 
