@@ -28,7 +28,7 @@ from charmhelpers.contrib.peerstorage import (
     peer_retrieve
 )
 
-from charmhelpers.contrib.hahelpers.cluster import (
+from charmhelpers.contrib.network.ip import (
     get_ipv6_addr
 )
 
@@ -375,7 +375,7 @@ def get_rabbit_password(username, password=None):
 
 def bind_ipv6_interface():
     ipv6_addr = get_ipv6_addr()
-    out = "RABBITMQ_NODE_IP_ADDRESS=%s" % ipv6_addr
+    out = "RABBITMQ_SERVER_START_ARGS='-proto_dist inet6_tcp'"
 
     with open(ENV_CONF, 'wb') as conf:
         conf.write(''.join(out))

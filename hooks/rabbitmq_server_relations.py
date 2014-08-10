@@ -14,6 +14,9 @@ from lib.utils import (
 from charmhelpers.contrib.hahelpers.cluster import (
     is_clustered,
     eligible_leader,
+)
+
+from charmhelpers.contrib.network.ip import (
     get_ipv6_addr
 )
 
