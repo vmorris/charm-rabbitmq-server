@@ -28,10 +28,6 @@ from charmhelpers.contrib.peerstorage import (
     peer_retrieve
 )
 
-from charmhelpers.contrib.network.ip import (
-    get_ipv6_addr
-)
-
 PACKAGES = ['rabbitmq-server', 'python-amqplib']
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
@@ -145,8 +141,12 @@ def cluster_with():
     available_nodes = []
     for r_id in relation_ids('cluster'):
         for unit in related_units(r_id):
-            address = relation_get('private-address',
-                                   rid=r_id, unit=unit)
+            if config('prefer-ipv6'):
+                address = relation_get('hostname',
+                                       rid=r_id, unit=unit)
+            else:
+                address = relation_get('private-address',
+                                       rid=r_id, unit=unit)
             if address is not None:
                 node = get_hostname(address, fqdn=False)
                 available_nodes.append(node)
@@ -374,8 +374,23 @@ def get_rabbit_password(username, password=None):
 
 
 def bind_ipv6_interface():
-    ipv6_addr = get_ipv6_addr()
     out = "RABBITMQ_SERVER_START_ARGS='-proto_dist inet6_tcp'"
-
     with open(ENV_CONF, 'wb') as conf:
         conf.write(''.join(out))
+
+
+def render_hosts(ip, hostname):
+    if not ip or not hostname:
+        return
+    FILE = '/etc/hosts'
+    with open(FILE, 'r') as hosts:
+        lines = hosts.readlines()
+
+    for line in lines:
+        if line.startswith(ip) or hostname in line:
+            lines.remove(line)
+    lines.append(ip + ' ' + hostname + '\n')
+
+    with open(FILE, 'w') as hosts:
+        for line in lines:
+            hosts.write(line)

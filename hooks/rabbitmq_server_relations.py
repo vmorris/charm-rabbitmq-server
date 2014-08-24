@@ -5,6 +5,7 @@ import shutil
 import sys
 import subprocess
 import glob
+import socket
 
 import rabbit_utils as rabbit
 from lib.utils import (
@@ -26,7 +27,8 @@ from charmhelpers.contrib.openstack.utils import save_script_rc
 from charmhelpers.fetch import (
     add_source,
     apt_update,
-    apt_install)
+    apt_install,
+    apt_upgrade,)
 
 from charmhelpers.core.hookenv import (
     open_port, close_port,
@@ -39,13 +41,13 @@ from charmhelpers.core.hookenv import (
     local_unit,
     relations_of_type,
     config,
-    unit_get,
     is_relation_made,
     Hooks,
     UnregisteredHookError
 )
 from charmhelpers.core.host import (
-    rsync, service_stop, service_restart
+    rsync, service_stop, service_restart,
+    lsb_release,
 )
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
 from charmhelpers.contrib.ssl.service import ServiceCA
@@ -89,6 +91,12 @@ def amqp_changed(relation_id=None, remote_unit=None):
     if not eligible_leader('res_rabbitmq_vip'):
         log('amqp_changed(): Deferring amqp_changed'
             ' to eligible_leader.')
+
+        #Note: active/active case
+        if config('prefer-ipv6'):
+            relation_settings = {}
+            relation_settings['private-address'] = '[%s]' % get_ipv6_addr()
+            relation_set(relation_settings=relation_settings)
         return
 
     relation_settings = {}
@@ -145,6 +153,10 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
 @hooks.hook('cluster-relation-joined')
 def cluster_joined():
+    if config('prefer-ipv6'):
+        peer_store('hostname', socket.gethostname())
+        peer_store('private-address', get_ipv6_addr())
+
     if is_relation_made('ha') and \
             config('ha-vip-only') is False:
         log('hacluster relation is present, skipping native '
@@ -170,8 +182,14 @@ def cluster_changed():
     if 'cookie' not in rdata:
         log('cluster_joined: cookie not yet set.')
         return
+
+    if config('prefer-ipv6') and rdata['hostname']:
+        private_address = rdata['private-address']
+        hostname = rdata['hostname']
+        rabbit.render_hosts(private_address, hostname)
+
     # sync passwords
-    peer_echo()
+    peer_echo(['cookie'])
 
     # sync cookie
     cookie = peer_retrieve('cookie')
@@ -518,9 +536,17 @@ def configure_rabbit_ssl():
 
 @hooks.hook('config-changed')
 def config_changed():
+    trusty = lsb_release()['DISTRIB_CODENAME'] == 'trusty'
+    if config('prefer-ipv6') and trusty:
+        add_source('deb http://archive.ubuntu.com/ubuntu'
+                   ' trusty-proposed main')
+        add_source('deb-src http://archive.ubuntu.com/ubuntu'
+                   ' trusty-proposed main')
+
     # Add archive source if provided
     add_source(config('source'), config('key'))
     apt_update(fatal=True)
+    apt_upgrade(fatal=True)
     # Copy in defaults file for updated ulimits
     shutil.copyfile(
         'templates/rabbitmq-server',
