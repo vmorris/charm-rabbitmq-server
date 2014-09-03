@@ -68,13 +68,13 @@ def install():
     # NOTE(jamespage) install actually happens in config_changed hook
 
 
-def configure_amqp(username, vhost):
+def configure_amqp(username, vhost, admin=False):
     # get and update service password
     password = rabbit.get_rabbit_password(username)
 
     # update vhost
     rabbit.create_vhost(vhost)
-    rabbit.create_user(username, password)
+    rabbit.create_user(username, password, admin)
     rabbit.grant_permissions(username, vhost)
 
     return password
@@ -99,7 +99,8 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
         relation_settings['password'] = configure_amqp(
             username=settings['username'],
-            vhost=settings['vhost'])
+            vhost=settings['vhost'],
+            admin=settings.get('admin', False))
     else:
         queues = {}
         for k, v in settings.iteritems():
