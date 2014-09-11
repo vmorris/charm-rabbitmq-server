@@ -511,6 +511,10 @@ def configure_rabbit_ssl():
     open_port(ssl_port)
 
 
+def restart_rabbit_update_nrpe():
+    service_restart('rabbitmq-server')
+    update_nrpe_checks()
+
 @hooks.hook('config-changed')
 def config_changed():
     # Add archive source if provided
@@ -538,11 +542,19 @@ def config_changed():
 
     configure_rabbit_ssl()
 
-    if eligible_leader('res_rabbitmq_vip') or \
-       config('ha-vip-only') is True:
-        service_restart('rabbitmq-server')
+    if is_relation_made("ha"):
+        ha_is_active_active = config("ha-vip-only")
 
-    update_nrpe_checks()
+        if ha_is_active_active:
+            restart_rabbit_update_nrpe()
+        else:
+            if eligible_leader('res_rabbitmq_vip'):
+                restart_rabbit_update_nrpe()
+            else:
+                log("hacluster relation is present but this node is not active"
+                    " skipping update nrpe checks")
+    else:
+        restart_rabbit_update_nrpe()
 
 
 def pre_install_hooks():
