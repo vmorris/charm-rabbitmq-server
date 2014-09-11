@@ -70,13 +70,13 @@ def install():
     # NOTE(jamespage) install actually happens in config_changed hook
 
 
-def configure_amqp(username, vhost):
+def configure_amqp(username, vhost, admin=False):
     # get and update service password
     password = rabbit.get_rabbit_password(username)
 
     # update vhost
     rabbit.create_vhost(vhost)
-    rabbit.create_user(username, password)
+    rabbit.create_user(username, password, admin)
     rabbit.grant_permissions(username, vhost)
 
     return password
@@ -85,55 +85,48 @@ def configure_amqp(username, vhost):
 @hooks.hook('amqp-relation-changed')
 def amqp_changed(relation_id=None, remote_unit=None):
     relation_settings = {}
-    if eligible_leader('res_rabbitmq_vip'):
-        settings = relation_get(rid=relation_id, unit=remote_unit)
+    settings = relation_get(rid=relation_id, unit=remote_unit)
 
-        singleset = set(['username', 'vhost'])
+    singleset = set(['username', 'vhost'])
 
-        if singleset.issubset(settings):
-            if None in [settings['username'], settings['vhost']]:
-                log('Relation not ready.')
-                return
+    if singleset.issubset(settings):
+        if None in [settings['username'], settings['vhost']]:
+            log('amqp_changed(): Relation not ready.')
+            return
 
-            relation_settings['password'] = configure_amqp(
-                username=settings['username'],
-                vhost=settings['vhost'])
-        else:
-            queues = {}
-            for k, v in settings.iteritems():
-                amqp = k.split('_')[0]
-                x = '_'.join(k.split('_')[1:])
-                if amqp not in queues:
-                    queues[amqp] = {}
-                queues[amqp][x] = v
-            for amqp in queues:
-                if singleset.issubset(queues[amqp]):
-                    relation_settings[
-                        '_'.join([amqp, 'password'])] = configure_amqp(
-                        queues[amqp]['username'],
-                        queues[amqp]['vhost'])
+        relation_settings['password'] = configure_amqp(
+            username=settings['username'],
+            vhost=settings['vhost'],
+            admin=settings.get('admin', False))
+    else:
+        queues = {}
+        for k, v in settings.iteritems():
+            amqp = k.split('_')[0]
+            x = '_'.join(k.split('_')[1:])
+            if amqp not in queues:
+                queues[amqp] = {}
+            queues[amqp][x] = v
+        for amqp in queues:
+            if singleset.issubset(queues[amqp]):
+                relation_settings[
+                    '_'.join([amqp, 'password'])] = configure_amqp(
+                    queues[amqp]['username'],
+                    queues[amqp]['vhost'])
 
-        relation_settings['hostname'] = \
-            get_address_in_network(config('access-network'),
-                                   unit_get('private-address'))
+    relation_settings['hostname'] = \
+        get_address_in_network(config('access-network'),
+                               unit_get('private-address'))
+    configure_client_ssl(relation_settings)
 
-        configure_client_ssl(relation_settings)
-
-        if is_clustered():
-            relation_settings['clustered'] = 'true'
-            if is_relation_made('ha'):
-                # active/passive settings
-                relation_settings['vip'] = config('vip')
-                # or ha-vip-only to support active/active, but
-                # accessed via a VIP for older clients.
-                if config('ha-vip-only') is True:
-                    relation_settings['ha-vip-only'] = 'true'
-
-        # set if need HA queues or not
-        if rabbit.compare_version('3.0.1') < 0:
-            relation_settings['ha_queues'] = True
-        else:
-            relation_settings['ha_queues'] = None
+    if is_clustered():
+        relation_settings['clustered'] = 'true'
+        if is_relation_made('ha'):
+            # active/passive settings
+            relation_settings['vip'] = config('vip')
+            # or ha-vip-only to support active/active, but
+            # accessed via a VIP for older clients.
+            if config('ha-vip-only') is True:
+                relation_settings['ha-vip-only'] = 'true'
 
     # NOTE(jamespage)
     # override private-address settings if access-network is
@@ -141,6 +134,10 @@ def amqp_changed(relation_id=None, remote_unit=None):
     relation_settings['private-address'] = \
         get_address_in_network(config('access-network'),
                                unit_get('private-address'))
+
+    # set if need HA queues or not
+    if rabbit.compare_version('3.0.1') < 0:
+        relation_settings['ha_queues'] = True
 
     relation_set(relation_id=relation_id,
                  relation_settings=relation_settings)

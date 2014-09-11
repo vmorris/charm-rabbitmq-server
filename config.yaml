@@ -25,17 +25,17 @@ options:
   ssl_key:
     type: string
     description: private unencrypted key in base64 PEM format (starts "-----BEGIN RSA PRIVATE KEY-----")
-    default: ""
+    default:
   ssl_cert:
     type: string
     description: X.509 certificate in base64 PEM format (starts "-----BEGIN CERTIFICATE-----")
-    default: ""
+    default:
   ssl_ca:
     type: string
     description: |
       Certificate authority cert that the cert. Optional if the ssl_cert is signed by a ca
       recognized by the os. Format is base64 PEM (concatenated certs if needed).
-    default: ""
+    default:
 
   nagios_context:
     default: "juju"
@@ -51,7 +51,7 @@ options:
   vip:
       type: string
       description: "Virtual IP to use to front rabbitmq in ha configuration"
-      default: ""
+      default:
   vip_iface:
       type: string
       default: eth0
@@ -119,6 +119,7 @@ options:
         a hook error.
   source:
       type: string
+      default:
       description: |
         Optional configuration to support use of additional sources such as:
         .
@@ -130,6 +131,7 @@ options:
         option.
   key:
       type: string
+      default:
       description: |
         Key ID to import to the apt keyring to support use with arbitary source
         configuration from outside of Launchpad archives or PPA's.
@@ -137,6 +139,7 @@ options:
   # by default all access is over 'private-address'
   access-network:
     type: string
+    default:
     description: |
       The IP address and netmask of the 'access' network (e.g., 192.168.0.0/24)
       .
