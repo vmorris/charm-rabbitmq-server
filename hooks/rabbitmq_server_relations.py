@@ -85,33 +85,34 @@ def configure_amqp(username, vhost, admin=False):
 @hooks.hook('amqp-relation-changed')
 def amqp_changed(relation_id=None, remote_unit=None):
     relation_settings = {}
-    settings = relation_get(rid=relation_id, unit=remote_unit)
 
-    singleset = set(['username', 'vhost'])
+    if eligible_leader('res_rabbitmq_vip'):
+        settings = relation_get(rid=relation_id, unit=remote_unit)
+        singleset = set(['username', 'vhost'])
 
-    if singleset.issubset(settings):
-        if None in [settings['username'], settings['vhost']]:
-            log('amqp_changed(): Relation not ready.')
-            return
+        if singleset.issubset(settings):
+            if None in [settings['username'], settings['vhost']]:
+                log('amqp_changed(): Relation not ready.')
+                return
 
-        relation_settings['password'] = configure_amqp(
-            username=settings['username'],
-            vhost=settings['vhost'],
-            admin=settings.get('admin', False))
-    else:
-        queues = {}
-        for k, v in settings.iteritems():
-            amqp = k.split('_')[0]
-            x = '_'.join(k.split('_')[1:])
-            if amqp not in queues:
-                queues[amqp] = {}
-            queues[amqp][x] = v
-        for amqp in queues:
-            if singleset.issubset(queues[amqp]):
-                relation_settings[
-                    '_'.join([amqp, 'password'])] = configure_amqp(
-                    queues[amqp]['username'],
-                    queues[amqp]['vhost'])
+            relation_settings['password'] = configure_amqp(
+                username=settings['username'],
+                vhost=settings['vhost'],
+                admin=settings.get('admin', False))
+        else:
+            queues = {}
+            for k, v in settings.iteritems():
+                amqp = k.split('_')[0]
+                x = '_'.join(k.split('_')[1:])
+                if amqp not in queues:
+                    queues[amqp] = {}
+                queues[amqp][x] = v
+            for amqp in queues:
+                if singleset.issubset(queues[amqp]):
+                    relation_settings[
+                        '_'.join([amqp, 'password'])] = configure_amqp(
+                        queues[amqp]['username'],
+                        queues[amqp]['vhost'])
 
     relation_settings['hostname'] = \
         get_address_in_network(config('access-network'),
