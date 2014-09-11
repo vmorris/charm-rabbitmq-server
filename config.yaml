@@ -3,13 +3,12 @@ options:
     type: boolean
     default: False
     description: enable the management plugin
-
   # SSL Configuration options
   ssl:
     type: string
     default: "off"
     description: |
-      Enable SSL connections on rabbitmq, valid values are 'off', 'on', 'only'. If ssl_key, 
+      Enable SSL connections on rabbitmq, valid values are 'off', 'on', 'only'. If ssl_key,
       ssl_cert, ssl_ca are provided then then those values will be used. Otherwise
       the service will act as its own certificate authority and pass its ca cert to clients.
       For HA or clustered rabbits ssl key/cert must be provided.
@@ -25,18 +24,17 @@ options:
   ssl_key:
     type: string
     description: private unencrypted key in base64 PEM format (starts "-----BEGIN RSA PRIVATE KEY-----")
-    default: ""
+    default:
   ssl_cert:
     type: string
     description: X.509 certificate in base64 PEM format (starts "-----BEGIN CERTIFICATE-----")
-    default: ""
+    default:
   ssl_ca:
     type: string
     description: |
       Certificate authority cert that the cert. Optional if the ssl_cert is signed by a ca
       recognized by the os. Format is base64 PEM (concatenated certs if needed).
-    default: ""
-
+    default:
   nagios_context:
     default: "juju"
     type: string
@@ -49,62 +47,62 @@ options:
       this allows you to differentiate between them.
   # HA configuration settings
   vip:
-      type: string
-      description: "Virtual IP to use to front rabbitmq in ha configuration"
-      default: ""
+    type: string
+    description: "Virtual IP to use to front rabbitmq in ha configuration"
+    default:
   vip_iface:
-      type: string
-      default: eth0
-      description: "Network Interface where to place the Virtual IP"
+    type: string
+    default: eth0
+    description: "Network Interface where to place the Virtual IP"
   vip_cidr:
-      type: int
-      default: 24
-      description: "Netmask that will be used for the Virtual IP"
+    type: int
+    default: 24
+    description: "Netmask that will be used for the Virtual IP"
   ha-bindiface:
-      type: string
-      default: eth0
-      description: |
-        Default network interface on which HA cluster will bind to communication
-        with the other members of the HA Cluster.
+    type: string
+    default: eth0
+    description: |
+      Default network interface on which HA cluster will bind to communication
+      with the other members of the HA Cluster.
   ha-mcastport:
-      type: int
-      default: 5406
-      description: |
-        Default multicast port number that will be used to communicate between
-        HA Cluster nodes.
+    type: int
+    default: 5406
+    description: |
+      Default multicast port number that will be used to communicate between
+      HA Cluster nodes.
   ha-vip-only:
-      type: boolean
-      default: False
-      description: |
-        By default, without pairing with hacluster charm, rabbitmq will deploy
-        in active/active/active... HA. When pairied with hacluster charm, it
-        will deploy as active/passive. By enabling this option, pairing with
-        hacluster charm will keep rabbit in active/active setup, but in addition
-        it will deploy a VIP that can be used by services that cannot work
-        with mutiple AMQPs (like Glance in pre-Icehouse).
+    type: boolean
+    default: False
+    description: |
+      By default, without pairing with hacluster charm, rabbitmq will deploy
+      in active/active/active... HA. When pairied with hacluster charm, it
+      will deploy as active/passive. By enabling this option, pairing with
+      hacluster charm will keep rabbit in active/active setup, but in addition
+      it will deploy a VIP that can be used by services that cannot work
+      with mutiple AMQPs (like Glance in pre-Icehouse).
   rbd-size:
-      type: string
-      default: 5G
-      description: |
-        Default rbd storage size to create when setting up block storage.
-        This value should be specified in GB (e.g. 100G).
+    type: string
+    default: 5G
+    description: |
+      Default rbd storage size to create when setting up block storage.
+      This value should be specified in GB (e.g. 100G).
   rbd-name:
-      type: string
-      default: rabbitmq1
-      description: |
-        The name that will be used to create the Ceph's RBD image with. If the
-        image name exists in Ceph, it will be re-used and the data will be
-        overwritten.
+    type: string
+    default: rabbitmq1
+    description: |
+      The name that will be used to create the Ceph's RBD image with. If the
+      image name exists in Ceph, it will be re-used and the data will be
+      overwritten.
   ceph-osd-replication-count:
-      default: 2
-      type: int
-      description: |
-        This value dictates the number of replicas ceph must make of any
-        object it stores within the rabbitmq rbd pool. Of course, this only
-        applies if using Ceph as a backend store. Note that once the rabbitmq
-        rbd pool has been created, changing this value will not have any
-        effect (although it can be changed in ceph by manually configuring
-        your ceph cluster).
+    default: 2
+    type: int
+    description: |
+      This value dictates the number of replicas ceph must make of any
+      object it stores within the rabbitmq rbd pool. Of course, this only
+      applies if using Ceph as a backend store. Note that once the rabbitmq
+      rbd pool has been created, changing this value will not have any
+      effect (although it can be changed in ceph by manually configuring
+      your ceph cluster).
   use-syslog:
     type: boolean
     default: False
@@ -112,31 +110,34 @@ options:
       If True, services that support it will log to syslog instead of their normal
       log location.
   max-cluster-tries:
-      type: int
-      default: 3
-      description: |
-        Number of tries to cluster with other units before giving up and throwing
-        a hook error.
+    type: int
+    default: 3
+    description: |
+      Number of tries to cluster with other units before giving up and throwing
+      a hook error.
   source:
-      type: string
-      description: |
-        Optional configuration to support use of additional sources such as:
-        .
-          - ppa:myteam/ppa
-          - cloud:precise-proposed/folsom
-          - http://my.archive.com/ubuntu main
-        .
-        The last option should be used in conjunction with the key configuration
-        option.
+    type: string
+    default:
+    description: |
+      Optional configuration to support use of additional sources such as:
+      .
+        - ppa:myteam/ppa
+        - cloud:precise-proposed/folsom
+        - http://my.archive.com/ubuntu main
+      .
+      The last option should be used in conjunction with the key configuration
+      option.
   key:
-      type: string
-      description: |
-        Key ID to import to the apt keyring to support use with arbitary source
-        configuration from outside of Launchpad archives or PPA's.
+    type: string
+    default:
+    description: |
+      Key ID to import to the apt keyring to support use with arbitary source
+      configuration from outside of Launchpad archives or PPA's.
   # Network configuration options
   # by default all access is over 'private-address'
   access-network:
     type: string
+    default:
     description: |
       The IP address and netmask of the 'access' network (e.g., 192.168.0.0/24)
       .
