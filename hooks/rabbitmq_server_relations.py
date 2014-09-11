@@ -116,6 +116,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
     relation_settings['hostname'] = \
         get_address_in_network(config('access-network'),
                                unit_get('private-address'))
+
     configure_client_ssl(relation_settings)
 
     if is_clustered():
