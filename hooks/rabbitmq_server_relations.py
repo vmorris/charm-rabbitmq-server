@@ -68,6 +68,9 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 @hooks.hook('install')
 def install():
+    if config('prefer-ipv6'):
+        rabbit.setup_ipv6()
+
     pre_install_hooks()
     # NOTE(jamespage) install actually happens in config_changed hook
 
@@ -155,7 +158,7 @@ def cluster_joined():
     if config('prefer-ipv6'):
         relation_settings = {'hostname': socket.gethostname(),
                              'private-address': get_ipv6_addr()}
- 
+
         for rid in relation_ids('cluster'):
             relation_set(relation_id=rid,
                          relation_settings=relation_settings)
@@ -541,8 +544,12 @@ def restart_rabbit_update_nrpe():
     service_restart('rabbitmq-server')
     update_nrpe_checks()
 
+
 @hooks.hook('config-changed')
 def config_changed():
+    if config('prefer-ipv6'):
+        rabbit.setup_ipv6()
+
     # Add archive source if provided
     add_source(config('source'), config('key'))
     apt_update(fatal=True)

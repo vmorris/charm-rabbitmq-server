@@ -21,7 +21,12 @@ from charmhelpers.core.hookenv import (
     service_name
 )
 
-from charmhelpers.core.host import pwgen, mkdir, write_file
+from charmhelpers.core.host import (
+    pwgen,
+    mkdir,
+    write_file,
+    lsb_release
+)
 
 from charmhelpers.contrib.peerstorage import (
     peer_store,
@@ -394,3 +399,10 @@ def render_hosts(ip, hostname):
     with open(FILE, 'w') as hosts:
         for line in lines:
             hosts.write(line)
+
+
+def setup_ipv6():
+    ubuntu_rel = float(lsb_release()['DISTRIB_RELEASE'])
+    if ubuntu_rel < 14.04:
+        raise Exception("IPv6 is not supported for Ubuntu "
+                        "versions less than Trusty 14.04")
