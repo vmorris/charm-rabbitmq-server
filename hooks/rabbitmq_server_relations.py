@@ -96,7 +96,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
         #Note: active/active case
         if config('prefer-ipv6'):
             relation_settings = {}
-            relation_settings['private-address'] = get_ipv6_addr()
+            relation_settings['private-address'] = get_ipv6_addr()[0]
             relation_set(relation_settings=relation_settings)
         return
 
@@ -130,7 +130,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
                     queues[amqp]['vhost'])
 
     if config('prefer-ipv6'):
-        relation_settings['private-address'] = get_ipv6_addr()
+        relation_settings['private-address'] = get_ipv6_addr()[0]
 
     configure_client_ssl(relation_settings)
 
@@ -157,7 +157,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
 def cluster_joined():
     if config('prefer-ipv6'):
         relation_settings = {'hostname': socket.gethostname(),
-                             'private-address': get_ipv6_addr()}
+                             'private-address': get_ipv6_addr()[0]}
 
         for rid in relation_ids('cluster'):
             relation_set(relation_id=rid,
