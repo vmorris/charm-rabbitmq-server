@@ -93,7 +93,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
         log('amqp_changed(): Deferring amqp_changed'
             ' to eligible_leader.')
 
-        #Note: active/active case
+        # NOTE: active/active case
         if config('prefer-ipv6'):
             relation_settings = {}
             relation_settings['private-address'] = get_ipv6_addr()[0]
