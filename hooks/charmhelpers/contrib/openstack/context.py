@@ -250,11 +250,13 @@ class IdentityServiceContext(OSContextGenerator):
                 rdata = relation_get(rid=rid, unit=unit)
                 serv_host = rdata.get('service_host')
                 serv_host = format_ipv6_addr(serv_host) or serv_host
+                auth_host = rdata.get('auth_host')
+                auth_host = format_ipv6_addr(auth_host) or auth_host
 
                 ctxt = {
                     'service_port': rdata.get('service_port'),
                     'service_host': serv_host,
-                    'auth_host': rdata.get('auth_host'),
+                    'auth_host': auth_host,
                     'auth_port': rdata.get('auth_port'),
                     'admin_tenant_name': rdata.get('service_tenant'),
                     'admin_user': rdata.get('service_username'),
@@ -414,10 +416,12 @@ class HAProxyContext(OSContextGenerator):
 
         cluster_hosts = {}
         l_unit = local_unit().replace('/', '-')
+
         if config('prefer-ipv6'):
-            addr = get_ipv6_addr()[0]
+            addr = get_ipv6_addr(exc_list=[config('vip')])[0]
         else:
             addr = unit_get('private-address')
+
         cluster_hosts[l_unit] = get_address_in_network(config('os-internal-network'),
                                                        addr)
 
