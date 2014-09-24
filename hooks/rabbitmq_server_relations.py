@@ -515,6 +515,7 @@ def restart_rabbit_update_nrpe():
     service_restart('rabbitmq-server')
     update_nrpe_checks()
 
+
 @hooks.hook('config-changed')
 def config_changed():
     # Add archive source if provided
