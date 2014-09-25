@@ -15,6 +15,10 @@ from charmhelpers.contrib.hahelpers.cluster import (
     is_clustered,
     eligible_leader
 )
+from charmhelpers.contrib.openstack.utils import (
+    get_hostname,
+    get_host_ip
+)
 
 import charmhelpers.contrib.storage.linux.ceph as ceph
 from charmhelpers.contrib.openstack.utils import save_script_rc
@@ -145,6 +149,15 @@ def cluster_joined():
         log('hacluster relation is present, skipping native '
             'rabbitmq cluster config.')
         return
+
+    # Set RABBITMQ_NODENAME to something that's resolvable by my peers
+    nodename = get_hostname(get_host_ip(unit_get('private-address')), fqdn=False)
+    if nodename:
+        log('forcing nodename=%s' % nodename)
+        service_stop('rabbitmq-server')
+        # need to 1st stop it under current foo@nodename
+        rabbit.set_node_name('rabbit@%s' % nodename)
+        service_restart('rabbitmq-server')
 
     if is_newer():
         log('cluster_joined: Relation greater.')
