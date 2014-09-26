@@ -69,7 +69,7 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 @hooks.hook('install')
 def install():
     if config('prefer-ipv6'):
-        rabbit.setup_ipv6()
+        rabbit.assert_charm_supports_ipv6()
 
     pre_install_hooks()
     # NOTE(jamespage) install actually happens in config_changed hook
@@ -548,7 +548,7 @@ def restart_rabbit_update_nrpe():
 @hooks.hook('config-changed')
 def config_changed():
     if config('prefer-ipv6'):
-        rabbit.setup_ipv6()
+        rabbit.assert_charm_supports_ipv6()
 
     # Add archive source if provided
     add_source(config('source'), config('key'))
