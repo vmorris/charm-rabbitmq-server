@@ -8,7 +8,6 @@ from subprocess import (
     check_call
 )
 
-
 from charmhelpers.fetch import (
     apt_install,
     filter_installed_packages,
@@ -21,9 +20,16 @@ from charmhelpers.core.hookenv import (
     relation_get,
     relation_ids,
     related_units,
+    relation_set,
     unit_get,
     unit_private_ip,
     ERROR,
+    INFO
+)
+
+from charmhelpers.core.host import (
+    mkdir,
+    write_file
 )
 
 from charmhelpers.contrib.hahelpers.cluster import (
@@ -36,10 +42,17 @@ from charmhelpers.contrib.hahelpers.cluster import (
 from charmhelpers.contrib.hahelpers.apache import (
     get_cert,
     get_ca_cert,
+    install_ca_cert,
 )
 
 from charmhelpers.contrib.openstack.neutron import (
     neutron_plugin_attribute,
+)
+
+from charmhelpers.contrib.network.ip import (
+    get_address_in_network,
+    get_ipv6_addr,
+    is_address_in_network
 )
 
 CA_CERT_PATH = '/usr/local/share/ca-certificates/keystone_juju_ca_cert.crt'
@@ -134,7 +147,25 @@ class SharedDBContext(OSContextGenerator):
                 'Missing required charm config options. '
                 '(database name and user)')
             raise OSContextError
+
         ctxt = {}
+
+        # NOTE(jamespage) if mysql charm provides a network upon which
+        # access to the database should be made, reconfigure relation
+        # with the service units local address and defer execution
+        access_network = relation_get('access-network')
+        if access_network is not None:
+            if self.relation_prefix is not None:
+                hostname_key = "{}_hostname".format(self.relation_prefix)
+            else:
+                hostname_key = "hostname"
+            access_hostname = get_address_in_network(access_network,
+                                                     unit_get('private-address'))
+            set_hostname = relation_get(attribute=hostname_key,
+                                        unit=local_unit())
+            if set_hostname != access_hostname:
+                relation_set(relation_settings={hostname_key: access_hostname})
+                return ctxt  # Defer any further hook execution for now....
 
         password_setting = 'password'
         if self.relation_prefix:
@@ -243,23 +274,31 @@ class IdentityServiceContext(OSContextGenerator):
 
 
 class AMQPContext(OSContextGenerator):
-    interfaces = ['amqp']
 
-    def __init__(self, ssl_dir=None):
+    def __init__(self, ssl_dir=None, rel_name='amqp', relation_prefix=None):
         self.ssl_dir = ssl_dir
+        self.rel_name = rel_name
+        self.relation_prefix = relation_prefix
+        self.interfaces = [rel_name]
 
     def __call__(self):
         log('Generating template context for amqp')
         conf = config()
+        user_setting = 'rabbit-user'
+        vhost_setting = 'rabbit-vhost'
+        if self.relation_prefix:
+            user_setting = self.relation_prefix + '-rabbit-user'
+            vhost_setting = self.relation_prefix + '-rabbit-vhost'
+
         try:
-            username = conf['rabbit-user']
-            vhost = conf['rabbit-vhost']
+            username = conf[user_setting]
+            vhost = conf[vhost_setting]
         except KeyError as e:
             log('Could not generate shared_db context. '
                 'Missing required charm config options: %s.' % e)
             raise OSContextError
         ctxt = {}
-        for rid in relation_ids('amqp'):
+        for rid in relation_ids(self.rel_name):
             ha_vip_only = False
             for unit in related_units(rid):
                 if relation_get('clustered', rid=rid, unit=unit):
@@ -332,10 +371,12 @@ class CephContext(OSContextGenerator):
         use_syslog = str(config('use-syslog')).lower()
         for rid in relation_ids('ceph'):
             for unit in related_units(rid):
-                mon_hosts.append(relation_get('private-address', rid=rid,
-                                              unit=unit))
                 auth = relation_get('auth', rid=rid, unit=unit)
                 key = relation_get('key', rid=rid, unit=unit)
+                ceph_addr = \
+                    relation_get('ceph-public-address', rid=rid, unit=unit) or \
+                    relation_get('private-address', rid=rid, unit=unit)
+                mon_hosts.append(ceph_addr)
 
         ctxt = {
             'mon_hosts': ' '.join(mon_hosts),
@@ -369,7 +410,12 @@ class HAProxyContext(OSContextGenerator):
 
         cluster_hosts = {}
         l_unit = local_unit().replace('/', '-')
-        cluster_hosts[l_unit] = unit_get('private-address')
+        if config('prefer-ipv6'):
+            addr = get_ipv6_addr()
+        else:
+            addr = unit_get('private-address')
+        cluster_hosts[l_unit] = get_address_in_network(config('os-internal-network'),
+                                                       addr)
 
         for rid in relation_ids('cluster'):
             for unit in related_units(rid):
@@ -380,6 +426,21 @@ class HAProxyContext(OSContextGenerator):
         ctxt = {
             'units': cluster_hosts,
         }
+
+        if config('haproxy-server-timeout'):
+            ctxt['haproxy-server-timeout'] = config('haproxy-server-timeout')
+        if config('haproxy-client-timeout'):
+            ctxt['haproxy-client-timeout'] = config('haproxy-client-timeout')
+
+        if config('prefer-ipv6'):
+            ctxt['local_host'] = 'ip6-localhost'
+            ctxt['haproxy_host'] = '::'
+            ctxt['stat_port'] = ':::8888'
+        else:
+            ctxt['local_host'] = '127.0.0.1'
+            ctxt['haproxy_host'] = '0.0.0.0'
+            ctxt['stat_port'] = ':8888'
+
         if len(cluster_hosts.keys()) > 1:
             # Enable haproxy when we have enough peers.
             log('Ensuring haproxy enabled in /etc/default/haproxy.')
@@ -418,12 +479,13 @@ class ApacheSSLContext(OSContextGenerator):
     """
     Generates a context for an apache vhost configuration that configures
     HTTPS reverse proxying for one or many endpoints.  Generated context
-    looks something like:
-    {
-        'namespace': 'cinder',
-        'private_address': 'iscsi.mycinderhost.com',
-        'endpoints': [(8776, 8766), (8777, 8767)]
-    }
+    looks something like::
+
+        {
+            'namespace': 'cinder',
+            'private_address': 'iscsi.mycinderhost.com',
+            'endpoints': [(8776, 8766), (8777, 8767)]
+        }
 
     The endpoints list consists of a tuples mapping external ports
     to internal ports.
@@ -439,22 +501,36 @@ class ApacheSSLContext(OSContextGenerator):
         cmd = ['a2enmod', 'ssl', 'proxy', 'proxy_http']
         check_call(cmd)
 
-    def configure_cert(self):
-        if not os.path.isdir('/etc/apache2/ssl'):
-            os.mkdir('/etc/apache2/ssl')
+    def configure_cert(self, cn=None):
         ssl_dir = os.path.join('/etc/apache2/ssl/', self.service_namespace)
-        if not os.path.isdir(ssl_dir):
-            os.mkdir(ssl_dir)
-        cert, key = get_cert()
-        with open(os.path.join(ssl_dir, 'cert'), 'w') as cert_out:
-            cert_out.write(b64decode(cert))
-        with open(os.path.join(ssl_dir, 'key'), 'w') as key_out:
-            key_out.write(b64decode(key))
+        mkdir(path=ssl_dir)
+        cert, key = get_cert(cn)
+        if cn:
+            cert_filename = 'cert_{}'.format(cn)
+            key_filename = 'key_{}'.format(cn)
+        else:
+            cert_filename = 'cert'
+            key_filename = 'key'
+        write_file(path=os.path.join(ssl_dir, cert_filename),
+                   content=b64decode(cert))
+        write_file(path=os.path.join(ssl_dir, key_filename),
+                   content=b64decode(key))
+
+    def configure_ca(self):
         ca_cert = get_ca_cert()
         if ca_cert:
-            with open(CA_CERT_PATH, 'w') as ca_out:
-                ca_out.write(b64decode(ca_cert))
-            check_call(['update-ca-certificates'])
+            install_ca_cert(b64decode(ca_cert))
+
+    def canonical_names(self):
+        '''Figure out which canonical names clients will access this service'''
+        cns = []
+        for r_id in relation_ids('identity-service'):
+            for unit in related_units(r_id):
+                rdata = relation_get(rid=r_id, unit=unit)
+                for k in rdata:
+                    if k.startswith('ssl_key_'):
+                        cns.append(k.lstrip('ssl_key_'))
+        return list(set(cns))
 
     def __call__(self):
         if isinstance(self.external_ports, basestring):
@@ -462,21 +538,47 @@ class ApacheSSLContext(OSContextGenerator):
         if (not self.external_ports or not https()):
             return {}
 
-        self.configure_cert()
+        self.configure_ca()
         self.enable_modules()
 
         ctxt = {
             'namespace': self.service_namespace,
-            'private_address': unit_get('private-address'),
-            'endpoints': []
+            'endpoints': [],
+            'ext_ports': []
         }
-        if is_clustered():
-            ctxt['private_address'] = config('vip')
-        for api_port in self.external_ports:
-            ext_port = determine_apache_port(api_port)
-            int_port = determine_api_port(api_port)
-            portmap = (int(ext_port), int(int_port))
-            ctxt['endpoints'].append(portmap)
+
+        for cn in self.canonical_names():
+            self.configure_cert(cn)
+
+        addresses = []
+        vips = []
+        if config('vip'):
+            vips = config('vip').split()
+
+        for network_type in ['os-internal-network',
+                             'os-admin-network',
+                             'os-public-network']:
+            address = get_address_in_network(config(network_type),
+                                             unit_get('private-address'))
+            if len(vips) > 0 and is_clustered():
+                for vip in vips:
+                    if is_address_in_network(config(network_type),
+                                             vip):
+                        addresses.append((address, vip))
+                        break
+            elif is_clustered():
+                addresses.append((address, config('vip')))
+            else:
+                addresses.append((address, address))
+
+        for address, endpoint in set(addresses):
+            for api_port in self.external_ports:
+                ext_port = determine_apache_port(api_port)
+                int_port = determine_api_port(api_port)
+                portmap = (address, endpoint, int(ext_port), int(int_port))
+                ctxt['endpoints'].append(portmap)
+                ctxt['ext_ports'].append(int(ext_port))
+        ctxt['ext_ports'] = list(set(ctxt['ext_ports']))
         return ctxt
 
 
@@ -541,6 +643,26 @@ class NeutronContext(OSContextGenerator):
 
         return nvp_ctxt
 
+    def n1kv_ctxt(self):
+        driver = neutron_plugin_attribute(self.plugin, 'driver',
+                                          self.network_manager)
+        n1kv_config = neutron_plugin_attribute(self.plugin, 'config',
+                                               self.network_manager)
+        n1kv_ctxt = {
+            'core_plugin': driver,
+            'neutron_plugin': 'n1kv',
+            'neutron_security_groups': self.neutron_security_groups,
+            'local_ip': unit_private_ip(),
+            'config': n1kv_config,
+            'vsm_ip': config('n1kv-vsm-ip'),
+            'vsm_username': config('n1kv-vsm-username'),
+            'vsm_password': config('n1kv-vsm-password'),
+            'restrict_policy_profiles': config(
+                'n1kv_restrict_policy_profiles'),
+        }
+
+        return n1kv_ctxt
+
     def neutron_ctxt(self):
         if https():
             proto = 'https'
@@ -570,8 +692,10 @@ class NeutronContext(OSContextGenerator):
 
         if self.plugin == 'ovs':
             ctxt.update(self.ovs_ctxt())
-        elif self.plugin == 'nvp':
+        elif self.plugin in ['nvp', 'nsx']:
             ctxt.update(self.nvp_ctxt())
+        elif self.plugin == 'n1kv':
+            ctxt.update(self.n1kv_ctxt())
 
         alchemy_flags = config('neutron-alchemy-flags')
         if alchemy_flags:
@@ -611,7 +735,7 @@ class SubordinateConfigContext(OSContextGenerator):
     The subordinate interface allows subordinates to export their
     configuration requirements to the principle for multiple config
     files and multiple serivces.  Ie, a subordinate that has interfaces
-    to both glance and nova may export to following yaml blob as json:
+    to both glance and nova may export to following yaml blob as json::
 
         glance:
             /etc/glance/glance-api.conf:
@@ -630,7 +754,8 @@ class SubordinateConfigContext(OSContextGenerator):
 
     It is then up to the principle charms to subscribe this context to
     the service+config file it is interestd in.  Configuration data will
-    be available in the template context, in glance's case, as:
+    be available in the template context, in glance's case, as::
+
         ctxt = {
             ... other context ...
             'subordinate_config': {
@@ -657,7 +782,7 @@ class SubordinateConfigContext(OSContextGenerator):
         self.interface = interface
 
     def __call__(self):
-        ctxt = {}
+        ctxt = {'sections': {}}
         for rid in relation_ids(self.interface):
             for unit in related_units(rid):
                 sub_config = relation_get('subordinate_configuration',
@@ -683,11 +808,26 @@ class SubordinateConfigContext(OSContextGenerator):
 
                     sub_config = sub_config[self.config_file]
                     for k, v in sub_config.iteritems():
-                        ctxt[k] = v
+                        if k == 'sections':
+                            for section, config_dict in v.iteritems():
+                                log("adding section '%s'" % (section))
+                                ctxt[k][section] = config_dict
+                        else:
+                            ctxt[k] = v
 
-        if not ctxt:
-            ctxt['sections'] = {}
+        log("%d section(s) found" % (len(ctxt['sections'])), level=INFO)
 
+        return ctxt
+
+
+class LogLevelContext(OSContextGenerator):
+
+    def __call__(self):
+        ctxt = {}
+        ctxt['debug'] = \
+            False if config('debug') is None else config('debug')
+        ctxt['verbose'] = \
+            False if config('verbose') is None else config('verbose')
         return ctxt
 
 
