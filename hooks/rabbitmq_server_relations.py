@@ -151,7 +151,8 @@ def cluster_joined():
         return
 
     # Set RABBITMQ_NODENAME to something that's resolvable by my peers
-    nodename = get_hostname(get_host_ip(unit_get('private-address')), fqdn=False)
+    nodename = get_hostname(get_host_ip(unit_get('private-address')),
+                            fqdn=False)
     if nodename:
         log('forcing nodename=%s' % nodename)
         service_stop('rabbitmq-server')
@@ -527,6 +528,7 @@ def configure_rabbit_ssl():
 def restart_rabbit_update_nrpe():
     service_restart('rabbitmq-server')
     update_nrpe_checks()
+
 
 @hooks.hook('config-changed')
 def config_changed():
