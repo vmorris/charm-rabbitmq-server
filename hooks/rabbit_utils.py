@@ -6,7 +6,6 @@ import sys
 import subprocess
 import glob
 from lib.utils import render_template
-import apt_pkg as apt
 
 from charmhelpers.contrib.openstack.utils import (
     get_hostname,
@@ -25,7 +24,8 @@ from charmhelpers.core.host import (
     pwgen,
     mkdir,
     write_file,
-    lsb_release
+    lsb_release,
+    cmp_pkgrevno
 )
 
 from charmhelpers.contrib.peerstorage import (
@@ -108,21 +108,9 @@ def service(action):
     subprocess.check_call(cmd)
 
 
-def compare_version(base_version):
-    apt.init()
-    cache = apt.Cache()
-    pkg = cache['rabbitmq-server']
-    if pkg.current_ver:
-        return apt.version_compare(
-            apt.upstream_version(pkg.current_ver.ver_str),
-            base_version)
-    else:
-        return False
-
-
 def cluster_with():
     log('Clustering with new node')
-    if compare_version('3.0.1') >= 0:
+    if cmp_pkgrevno('rabbitmq-server', '3.0.1') >= 0:
         cluster_cmd = 'join_cluster'
     else:
         cluster_cmd = 'cluster'
@@ -176,7 +164,7 @@ def cluster_with():
             cmd = [RABBITMQ_CTL, 'start_app']
             subprocess.check_call(cmd)
             log('Host clustered with %s.' % node)
-            if compare_version('3.0.1') >= 0:
+            if cmp_pkgrevno('rabbitmq-server', '3.0.1') >= 0:
                 cmd = [RABBITMQ_CTL, 'set_policy', 'HA',
                        '^(?!amq\.).*', '{"ha-mode": "all"}']
                 subprocess.check_call(cmd)
