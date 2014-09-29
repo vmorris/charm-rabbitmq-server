@@ -46,7 +46,6 @@ from charmhelpers.core.hookenv import (
 )
 from charmhelpers.core.host import (
     rsync, service_stop, service_restart,
-    cmp_pkgrevno
 )
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
 from charmhelpers.contrib.ssl.service import ServiceCA
@@ -149,7 +148,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
         relation_settings['rid'] = relation_id
 
     # set if need HA queues or not
-    if cmp_pkgrevno('rabbitmq-server', '3.0.1') >= 0:
+    if rabbit.compare_version('3.0.1') < 0:
         relation_settings['ha_queues'] = True
     relation_set(relation_settings=relation_settings)
 
