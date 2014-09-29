@@ -1,5 +1,8 @@
 #!/usr/bin/make
 PYTHON := /usr/bin/env python
+CHARM_DIR := $(PWD)
+HOOKS_DIR := $(PWD)/hooks
+TEST_PREFIX := PYTHONPATH=$(HOOKS_DIR)
 
 lint:
 	@flake8 --exclude hooks/charmhelpers hooks
@@ -16,3 +19,8 @@ sync: bin/charm_helpers_sync.py
 publish: lint
 	bzr push lp:charms/rabbitmq-server
 	bzr push lp:charms/trusty/rabbitmq-server
+
+test:
+	@echo Starting tests...
+	CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) nosetests $(CHARM_DIR)/hooks
+

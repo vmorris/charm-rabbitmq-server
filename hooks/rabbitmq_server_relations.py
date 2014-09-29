@@ -41,7 +41,7 @@ from charmhelpers.core.hookenv import (
     UnregisteredHookError
 )
 from charmhelpers.core.host import (
-    rsync, service_stop, service_restart
+    rsync, service_stop, service_restart, cmp_pkgrevno
 )
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
 from charmhelpers.contrib.ssl.service import ServiceCA
@@ -133,7 +133,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
         relation_settings['rid'] = relation_id
 
     # set if need HA queues or not
-    if rabbit.compare_version('3.0.1') < 0:
+    if cmp_pkgrevno('rabbitmq-server', '3.0.1') < 0:
         relation_settings['ha_queues'] = True
     relation_set(relation_settings=relation_settings)
 
@@ -514,6 +514,7 @@ def configure_rabbit_ssl():
 def restart_rabbit_update_nrpe():
     service_restart('rabbitmq-server')
     update_nrpe_checks()
+
 
 @hooks.hook('config-changed')
 def config_changed():
