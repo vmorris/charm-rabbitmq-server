@@ -40,6 +40,7 @@ from charmhelpers.core.hookenv import (
     local_unit,
     relations_of_type,
     config,
+    unit_get,
     is_relation_made,
     Hooks,
     UnregisteredHookError
@@ -68,9 +69,6 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 
 @hooks.hook('install')
 def install():
-    if config('prefer-ipv6'):
-        rabbit.assert_charm_supports_ipv6()
-
     pre_install_hooks()
     # NOTE(jamespage) install actually happens in config_changed hook
 
@@ -95,8 +93,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
         # NOTE: active/active case
         if config('prefer-ipv6'):
-            relation_settings = {}
-            relation_settings['private-address'] = get_ipv6_addr()[0]
+            relation_settings = {'private-address': get_ipv6_addr()[0]}
             relation_set(relation_settings=relation_settings)
         return
 
@@ -131,6 +128,8 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
     if config('prefer-ipv6'):
         relation_settings['private-address'] = get_ipv6_addr()[0]
+    else:
+        relation_settings['hostname'] = unit_get('private-address')
 
     configure_client_ssl(relation_settings)
 
@@ -154,14 +153,12 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
 
 @hooks.hook('cluster-relation-joined')
-def cluster_joined():
+def cluster_joined(relation_id=None):
     if config('prefer-ipv6'):
         relation_settings = {'hostname': socket.gethostname(),
                              'private-address': get_ipv6_addr()[0]}
-
-        for rid in relation_ids('cluster'):
-            relation_set(relation_id=rid,
-                         relation_settings=relation_settings)
+        relation_set(relation_id=relation_id,
+                     relation_settings=relation_settings)
 
     if is_relation_made('ha') and \
             config('ha-vip-only') is False:
