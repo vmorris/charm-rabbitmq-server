@@ -14,7 +14,7 @@ from lib.utils import (
 )
 from charmhelpers.contrib.hahelpers.cluster import (
     is_clustered,
-    eligible_leader,
+    eligible_leader
 )
 
 from charmhelpers.contrib.network.ip import (
@@ -27,7 +27,7 @@ from charmhelpers.contrib.openstack.utils import save_script_rc
 from charmhelpers.fetch import (
     add_source,
     apt_update,
-    apt_install,)
+    apt_install)
 
 from charmhelpers.core.hookenv import (
     open_port, close_port,
