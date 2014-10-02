@@ -52,8 +52,10 @@ from charmhelpers.contrib.ssl.service import ServiceCA
 
 from charmhelpers.contrib.peerstorage import (
     peer_echo,
+    peer_retrieve,
     peer_store,
-    peer_retrieve
+    peer_store_and_set,
+    peer_retrieve_by_prefix,
 )
 
 hooks = Hooks()
@@ -87,6 +89,14 @@ def configure_amqp(username, vhost, admin=False):
 @hooks.hook('amqp-relation-changed')
 def amqp_changed(relation_id=None, remote_unit=None):
     if not eligible_leader('res_rabbitmq_vip'):
+        # Each unit needs to set the db information otherwise if the unit
+        # with the info dies the settings die with it Bug# 1355848
+        for rel_id in relation_ids('amqp'):
+            peerdb_settings = peer_retrieve_by_prefix(rel_id,
+                                                      exc_list=['hostname'])
+            peerdb_settings['hostname'] = unit_get('private-address')
+            if 'password' in peerdb_settings:
+                relation_set(relation_id=rel_id, **peerdb_settings)
         log('amqp_changed(): Deferring amqp_changed'
             ' to eligible_leader.')
         return
@@ -139,7 +149,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
     # set if need HA queues or not
     if cmp_pkgrevno('rabbitmq-server', '3.0.1') < 0:
         relation_settings['ha_queues'] = True
-    relation_set(relation_settings=relation_settings)
+    peer_store_and_set(relation_settings=relation_settings)
 
 
 @hooks.hook('cluster-relation-joined')
@@ -206,6 +216,11 @@ def cluster_changed():
         if rabbit.cluster_with():
             # resync nrpe user after clustering
             update_nrpe_checks()
+    # If cluster has changed peer db may have changed so run amqp_changed
+    # to sync any changes
+    for rid in relation_ids('amqp'):
+        for unit in related_units(rid):
+            amqp_changed(relation_id=rid, remote_unit=unit)
 
 
 @hooks.hook('cluster-relation-departed')
