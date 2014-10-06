@@ -16,6 +16,10 @@ from charmhelpers.contrib.hahelpers.cluster import (
     is_clustered,
     eligible_leader
 )
+from charmhelpers.contrib.openstack.utils import (
+    get_hostname,
+    get_host_ip
+)
 
 from charmhelpers.contrib.network.ip import (
     get_ipv6_addr
@@ -53,8 +57,10 @@ from charmhelpers.contrib.ssl.service import ServiceCA
 
 from charmhelpers.contrib.peerstorage import (
     peer_echo,
+    peer_retrieve,
     peer_store,
-    peer_retrieve
+    peer_store_and_set,
+    peer_retrieve_by_prefix,
 )
 
 hooks = Hooks()
@@ -88,6 +94,14 @@ def configure_amqp(username, vhost, admin=False):
 @hooks.hook('amqp-relation-changed')
 def amqp_changed(relation_id=None, remote_unit=None):
     if not eligible_leader('res_rabbitmq_vip'):
+        # Each unit needs to set the db information otherwise if the unit
+        # with the info dies the settings die with it Bug# 1355848
+        for rel_id in relation_ids('amqp'):
+            peerdb_settings = peer_retrieve_by_prefix(rel_id,
+                                                      exc_list=['hostname'])
+            peerdb_settings['hostname'] = unit_get('private-address')
+            if 'password' in peerdb_settings:
+                relation_set(relation_id=rel_id, **peerdb_settings)
         log('amqp_changed(): Deferring amqp_changed'
             ' to eligible_leader.')
 
@@ -149,7 +163,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
     # set if need HA queues or not
     if cmp_pkgrevno('rabbitmq-server', '3.0.1') < 0:
         relation_settings['ha_queues'] = True
-    relation_set(relation_settings=relation_settings)
+    peer_store_and_set(relation_settings=relation_settings)
 
 
 @hooks.hook('cluster-relation-joined')
@@ -165,6 +179,18 @@ def cluster_joined(relation_id=None):
         log('hacluster relation is present, skipping native '
             'rabbitmq cluster config.')
         return
+
+    # Set RABBITMQ_NODENAME to something that's resolvable by my peers
+    # get_host_ip() is called to sanitize private-address in case it
+    # doesn't return an IP address
+    nodename = get_hostname(get_host_ip(unit_get('private-address')),
+                            fqdn=False)
+    if nodename:
+        log('forcing nodename=%s' % nodename)
+        # need to stop it under current nodename
+        service_stop('rabbitmq-server')
+        rabbit.set_node_name('rabbit@%s' % nodename)
+        service_restart('rabbitmq-server')
 
     if is_newer():
         log('cluster_joined: Relation greater.')
@@ -216,6 +242,11 @@ def cluster_changed():
         if rabbit.cluster_with():
             # resync nrpe user after clustering
             update_nrpe_checks()
+    # If cluster has changed peer db may have changed so run amqp_changed
+    # to sync any changes
+    for rid in relation_ids('amqp'):
+        for unit in related_units(rid):
+            amqp_changed(relation_id=rid, remote_unit=unit)
 
 
 @hooks.hook('cluster-relation-departed')

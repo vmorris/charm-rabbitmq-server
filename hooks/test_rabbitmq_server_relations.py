@@ -31,6 +31,7 @@ class RelationUtil(TestCase):
         cache.__getitem__.side_effect = cache_get
         return cache
 
+    @patch('rabbitmq_server_relations.peer_store_and_set')
     @patch('rabbitmq_server_relations.get_ipv6_addr')
     @patch('rabbitmq_server_relations.config')
     @patch('rabbitmq_server_relations.relation_set')
@@ -43,7 +44,7 @@ class RelationUtil(TestCase):
             self,
             eligible_leader, relation_get, configure_client_ssl,
             is_clustered, apt_cache, relation_set, mock_config,
-            mock_get_ipv6_addr):
+            mock_get_ipv6_addr, mock_peer_store_and_set):
         """
         Compare version above and below 3.0.1.
         Make sure ha_queues is set correctly on each side.
@@ -56,11 +57,11 @@ class RelationUtil(TestCase):
 
         self.fake_repo = {'rabbitmq-server': {'pkg_vers': '3.0'}}
         rabbitmq_server_relations.amqp_changed(None, None)
-        relation_set.assert_called_with(
+        mock_peer_store_and_set.assert_called_with(
             relation_settings={'private-address': 'oo.la.la',
                                'ha_queues': True})
 
         self.fake_repo = {'rabbitmq-server': {'pkg_vers': '3.0.2'}}
         rabbitmq_server_relations.amqp_changed(None, None)
-        relation_set.assert_called_with(
+        mock_peer_store_and_set.assert_called_with(
             relation_settings={'private-address': 'oo.la.la'})
