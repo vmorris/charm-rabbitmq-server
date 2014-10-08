@@ -422,7 +422,7 @@ def update_hosts_file(map):
                 hosts.write(line)
 
     os.rename(tmpfile.name, HOSTS_FILE)
-    os.chmod(HOSTS_FILE, '0644')
+    os.chmod(path, 0o644)
 
 
 def assert_charm_supports_ipv6():
