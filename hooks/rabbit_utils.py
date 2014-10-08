@@ -370,7 +370,7 @@ def get_rabbit_password(username, password=None):
 
 
 def bind_ipv6_interface():
-    out = "RABBITMQ_SERVER_START_ARGS='-proto_dist inet6_tcp'"
+    out = "RABBITMQ_SERVER_START_ARGS='-proto_dist inet6_tcp'\n"
     with open(ENV_CONF, 'wb') as conf:
         conf.write(''.join(out))
 
