@@ -6,6 +6,7 @@ import sys
 import subprocess
 import glob
 from lib.utils import render_template
+import tempfile
 
 from charmhelpers.contrib.openstack.utils import (
     get_hostname,
@@ -17,6 +18,7 @@ from charmhelpers.core.hookenv import (
     relation_get,
     related_units,
     log, ERROR,
+    INFO,
     service_name
 )
 
@@ -41,6 +43,7 @@ ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
 RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
 RABBIT_USER = 'rabbitmq'
 LIB_PATH = '/var/lib/rabbitmq/'
+HOSTS_FILE = '/etc/hosts'
 
 _named_passwd = '/var/lib/charm/{}/{}.passwd'
 
@@ -372,21 +375,42 @@ def bind_ipv6_interface():
         conf.write(''.join(out))
 
 
-def render_hosts(ip, hostname):
-    if not ip or not hostname:
-        return
-    FILE = '/etc/hosts'
-    with open(FILE, 'r') as hosts:
+def update_hosts_file(map):
+    """Rabbitmq does not currently like ipv6 addresses so we need to use dns
+    names instead. In order to make them resolvable we ensure they are  in
+    /etc/hosts.
+
+    """
+    with open(HOSTS_FILE, 'r') as hosts:
         lines = hosts.readlines()
 
-    for line in lines:
-        if line.startswith(ip) or hostname in line:
-            lines.remove(line)
-    lines.append(ip + ' ' + hostname + '\n')
+    log("Updating hosts file with: %s (current: %s)" % (map, lines),
+        level=INFO)
 
-    with open(FILE, 'w') as hosts:
+    newlines = []
+    for ip, hostname in map.items():
+        if not ip or not hostname:
+            continue
+
+        keepers = []
         for line in lines:
-            hosts.write(line)
+            _line = line.split()
+            if len(line) < 2 or not (_line[0] == ip or hostname in _line[1:]):
+                keepers.append(line)
+            else:
+                log("Removing line '%s' from hosts file" % (line))
+
+        lines = keepers
+        newlines.append("%s %s\n" % (ip, hostname))
+
+    lines += newlines
+
+    with tempfile.NamedTemporaryFile(delete=False) as tmpfile:
+        with open(tmpfile.name, 'w') as hosts:
+            for line in lines:
+                hosts.write(line)
+
+    os.rename(tmpfile.name, HOSTS_FILE)
 
 
 def assert_charm_supports_ipv6():
