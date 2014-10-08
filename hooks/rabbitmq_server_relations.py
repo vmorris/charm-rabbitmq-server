@@ -215,10 +215,11 @@ def cluster_changed():
     if config('prefer-ipv6') and rdata.get('hostname'):
         private_address = rdata['private-address']
         hostname = rdata['hostname']
-        rabbit.render_hosts(private_address, hostname)
+        if hostname:
+            rabbit.update_hosts_file({private_address: hostname})
 
     # sync passwords
-    peer_echo(['cookie', 'password'])
+    peer_echo(includes=['cookie', 'password'])
 
     # sync cookie
     cookie = peer_retrieve('cookie')
