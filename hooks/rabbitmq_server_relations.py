@@ -598,7 +598,9 @@ def config_changed():
     chmod(RABBIT_DIR, 0o775)
 
     if config('prefer-ipv6'):
+        service_stop('rabbitmq-server')
         rabbit.update_rmq_env_conf(ipv6=config('prefer-ipv6'))
+        service_restart('rabbitmq-server')
 
     if config('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
