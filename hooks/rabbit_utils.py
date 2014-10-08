@@ -230,6 +230,8 @@ def update_rmq_env_conf(hostname=None, ipv6=False):
 
     with open(ENV_CONF, 'wb') as conf:
         conf.write('\n'.join(out))
+        # Ensure newline at EOF
+        conf.write('\n')
 
 
 def get_node_name():
