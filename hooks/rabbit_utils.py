@@ -214,7 +214,7 @@ def update_rmq_env_conf(hostname=None, ipv6=False):
 
     out = []
     keys_found = []
-    if os.path.exist(ENV_CONF):
+    if os.path.exists(ENV_CONF):
         for line in open(ENV_CONF).readlines():
             for key, val in keyvals.items():
                 if line.strip().startswith(key):
@@ -224,7 +224,7 @@ def update_rmq_env_conf(hostname=None, ipv6=False):
             out.append(line)
 
     for key, val in keyvals.items():
-        log('Updating %s, %s=%s' % (key, val))
+        log('Updating %s, %s=%s' % (ENV_CONF, key, val))
         if key not in keys_found:
             out.append('%s=%s' % (key, val))
 
