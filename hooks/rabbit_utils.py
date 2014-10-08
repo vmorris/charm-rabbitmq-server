@@ -198,29 +198,38 @@ def break_cluster():
         raise
 
 
-def set_node_name(name):
-    # update or append RABBITMQ_NODENAME to environment config.
-    # rabbitmq.conf.d is not present on all releases, so use or create
-    # rabbitmq-env.conf instead.
-    if not os.path.isfile(ENV_CONF):
-        log('%s does not exist, creating.' % ENV_CONF)
-        with open(ENV_CONF, 'wb') as out:
-            out.write('RABBITMQ_NODENAME=%s\n' % name)
-        return
+def update_rmq_env_conf(hostname=None, ipv6=False):
+    """Update or append environment config.
+
+    rabbitmq.conf.d is not present on all releases, so use or create
+    rabbitmq-env.conf instead.
+    """
+
+    keyvals = {}
+    if ipv6:
+        keyvals['RABBITMQ_SERVER_START_ARGS'] = "'-proto_dist inet6_tcp'"
+
+    if hostname:
+        keyvals['RABBITMQ_NODENAME'] = hostname
 
     out = []
-    f = False
-    for line in open(ENV_CONF).readlines():
-        if line.strip().startswith('RABBITMQ_NODENAME'):
-            f = True
-            line = 'RABBITMQ_NODENAME=%s\n' % name
-        out.append(line)
-    if not f:
-        out.append('RABBITMQ_NODENAME=%s\n' % name)
-    log('Updating %s, RABBITMQ_NODENAME=%s' %
-        (ENV_CONF, name))
+    keys_found = []
+    if os.path.exist(ENV_CONF):
+        for line in open(ENV_CONF).readlines():
+            for key, val in keyvals.items():
+                if line.strip().startswith(key):
+                    keys_found.append(key)
+                    line = '%s=%s' % (key, val)
+
+            out.append(line)
+
+    for key, val in keyvals.items():
+        log('Updating %s, %s=%s' % (key, val))
+        if key not in keys_found:
+            out.append('%s=%s' % (key, val))
+
     with open(ENV_CONF, 'wb') as conf:
-        conf.write(''.join(out))
+        conf.write('\n'.join(out))
 
 
 def get_node_name():
@@ -372,7 +381,7 @@ def get_rabbit_password(username, password=None):
 def bind_ipv6_interface():
     out = "RABBITMQ_SERVER_START_ARGS='-proto_dist inet6_tcp'\n"
     with open(ENV_CONF, 'wb') as conf:
-        conf.write(''.join(out))
+        conf.write(out)
 
 
 def update_hosts_file(map):

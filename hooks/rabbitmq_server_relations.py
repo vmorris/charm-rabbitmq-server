@@ -189,7 +189,8 @@ def cluster_joined(relation_id=None):
         log('forcing nodename=%s' % nodename)
         # need to stop it under current nodename
         service_stop('rabbitmq-server')
-        rabbit.set_node_name('rabbit@%s' % nodename)
+        rabbit.update_rmq_env_conf(hostname='rabbit@%s' % nodename,
+                                   ipv6=config('prefer-ipv6'))
         service_restart('rabbitmq-server')
 
     if is_newer():
@@ -292,7 +293,8 @@ def ha_joined():
     if rabbit.get_node_name() != name and vip_only is False:
         log('Stopping rabbitmq-server.')
         service_stop('rabbitmq-server')
-        rabbit.set_node_name('%s@localhost' % SERVICE_NAME)
+        rabbit.update_rmq_env_conf(hostname='%s@localhost' % SERVICE_NAME,
+                                   ipv6=config('prefer-ipv6'))
     else:
         log('Node name already set to %s.' % name)
 
@@ -596,7 +598,7 @@ def config_changed():
     chmod(RABBIT_DIR, 0o775)
 
     if config('prefer-ipv6'):
-        rabbit.bind_ipv6_interface()
+        rabbit.update_rmq_env_conf(ipv6=config('prefer-ipv6'))
 
     if config('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
