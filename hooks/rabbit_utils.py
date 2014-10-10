@@ -86,10 +86,11 @@ def create_user(user, password, admin=False):
 
     if admin:
         cmd = [RABBITMQ_CTL, 'set_user_tags', user, 'administrator']
-        log('Granting user (%s) admin access.')
+        log('Granting user (%s) admin access.' % user)
     else:
         cmd = [RABBITMQ_CTL, 'set_user_tags', user]
-        log('Revoking user (%s) admin access.')
+        log('Revoking user (%s) admin access.' % user)
+    subprocess.check_call(cmd)
 
 
 def grant_permissions(user, vhost):
