@@ -114,14 +114,44 @@ def neutron_plugins():
             'server_packages': ['neutron-server',
                                 'neutron-plugin-nicira'],
             'server_services': ['neutron-server']
+        },
+        'nsx': {
+            'config': '/etc/neutron/plugins/vmware/nsx.ini',
+            'driver': 'vmware',
+            'contexts': [
+                context.SharedDBContext(user=config('neutron-database-user'),
+                                        database=config('neutron-database'),
+                                        relation_prefix='neutron',
+                                        ssl_dir=NEUTRON_CONF_DIR)],
+            'services': [],
+            'packages': [],
+            'server_packages': ['neutron-server',
+                                'neutron-plugin-vmware'],
+            'server_services': ['neutron-server']
+        },
+        'n1kv': {
+            'config': '/etc/neutron/plugins/cisco/cisco_plugins.ini',
+            'driver': 'neutron.plugins.cisco.network_plugin.PluginV2',
+            'contexts': [
+                context.SharedDBContext(user=config('neutron-database-user'),
+                                        database=config('neutron-database'),
+                                        relation_prefix='neutron',
+                                        ssl_dir=NEUTRON_CONF_DIR)],
+            'services': [],
+            'packages': [['neutron-plugin-cisco']],
+            'server_packages': ['neutron-server',
+                                'neutron-plugin-cisco'],
+            'server_services': ['neutron-server']
         }
     }
-    # NOTE: patch in ml2 plugin for icehouse onwards
     if release >= 'icehouse':
+        # NOTE: patch in ml2 plugin for icehouse onwards
         plugins['ovs']['config'] = '/etc/neutron/plugins/ml2/ml2_conf.ini'
         plugins['ovs']['driver'] = 'neutron.plugins.ml2.plugin.Ml2Plugin'
         plugins['ovs']['server_packages'] = ['neutron-server',
                                              'neutron-plugin-ml2']
+        # NOTE: patch in vmware renames nvp->nsx for icehouse onwards
+        plugins['nvp'] = plugins['nsx']
     return plugins
 
 
