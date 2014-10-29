@@ -31,7 +31,7 @@ class RelationUtil(TestCase):
         cache.__getitem__.side_effect = cache_get
         return cache
 
-    @patch('rabbitmq_server_relations.relation_set')
+    @patch('rabbitmq_server_relations.peer_store_and_set')
     @patch('apt_pkg.Cache')
     @patch('rabbitmq_server_relations.is_clustered')
     @patch('rabbitmq_server_relations.configure_client_ssl')
@@ -41,7 +41,7 @@ class RelationUtil(TestCase):
     def test_amqp_changed_compare_versions_ha_queues(
             self,
             eligible_leader, relation_get, unit_get, configure_client_ssl,
-            is_clustered, apt_cache, relation_set):
+            is_clustered, apt_cache, peer_store_and_set):
         """
         Compare version above and below 3.0.1.
         Make sure ha_queues is set correctly on each side.
@@ -54,10 +54,10 @@ class RelationUtil(TestCase):
 
         self.fake_repo = {'rabbitmq-server': {'pkg_vers': '3.0'}}
         rabbitmq_server_relations.amqp_changed(None, None)
-        relation_set.assert_called_with(
-            relation_settings={'hostname': 'UNIT_TEST', 'ha_queues': True})
+        peer_store_and_set.assert_called_with(
+            relation_settings={'ha_queues': True, 'hostname': 'UNIT_TEST'})
 
         self.fake_repo = {'rabbitmq-server': {'pkg_vers': '3.0.2'}}
         rabbitmq_server_relations.amqp_changed(None, None)
-        relation_set.assert_called_with(
+        peer_store_and_set.assert_called_with(
             relation_settings={'hostname': 'UNIT_TEST'})
