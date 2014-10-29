@@ -9,3 +9,4 @@ include:
     - contrib.peerstorage
     - contrib.ssl
     - contrib.hahelpers.cluster
+    - contrib.network.ip
