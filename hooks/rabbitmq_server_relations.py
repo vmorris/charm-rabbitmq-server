@@ -173,7 +173,8 @@ def cluster_joined():
         #If the private-address is not resolvable using DNS
         # then use the current hostname
         nodename = socket.gethostname()
-    finally:
+
+    if nodename:
         log('forcing nodename=%s' % nodename)
         # need to stop it under current nodename
         service_stop('rabbitmq-server')
