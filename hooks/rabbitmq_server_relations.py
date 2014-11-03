@@ -5,6 +5,7 @@ import shutil
 import sys
 import subprocess
 import glob
+import socket
 
 import rabbit_utils as rabbit
 from lib.utils import (
@@ -163,9 +164,16 @@ def cluster_joined():
     # Set RABBITMQ_NODENAME to something that's resolvable by my peers
     # get_host_ip() is called to sanitize private-address in case it
     # doesn't return an IP address
-    nodename = get_hostname(get_host_ip(unit_get('private-address')),
-                            fqdn=False)
-    if nodename:
+    ip_addr = get_host_ip(unit_get('private-address'))
+    try:
+        nodename = get_hostname(ip_addr, fqdn=False)
+    except:
+        log('Cannot resolve hostname for %s using DNS servers' % ip_addr)
+    else:
+        #If the private-address is not resolvable using DNS
+        # then use the current hostname
+        nodename = socket.gethostname()
+    finally:
         log('forcing nodename=%s' % nodename)
         # need to stop it under current nodename
         service_stop('rabbitmq-server')
