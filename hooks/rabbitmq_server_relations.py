@@ -395,6 +395,7 @@ def update_nrpe_checks():
 
     # Find out if nrpe set nagios_hostname
     hostname = None
+    host_context = None
     for rel in relations_of_type('nrpe-external-master'):
         if 'nagios_hostname' in rel:
             hostname = rel['nagios_hostname']
@@ -406,7 +407,10 @@ def update_nrpe_checks():
     vhost = 'nagios-%s' % current_unit
     password = rabbit.get_rabbit_password(user)
 
-    myunit = "%s:%s" % (host_context, local_unit())
+    if host_context:
+        myunit = "%s:%s" % (host_context, local_unit())
+    else:
+        myunit = local_unit()
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
