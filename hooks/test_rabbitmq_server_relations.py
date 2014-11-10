@@ -37,16 +37,16 @@ class RelationUtil(TestCase):
     @patch('rabbitmq_server_relations.configure_client_ssl')
     @patch('rabbitmq_server_relations.unit_get')
     @patch('rabbitmq_server_relations.relation_get')
-    @patch('rabbitmq_server_relations.eligible_leader')
+    @patch('rabbitmq_server_relations.is_elected_leader')
     def test_amqp_changed_compare_versions_ha_queues(
             self,
-            eligible_leader, relation_get, unit_get, configure_client_ssl,
+            is_elected_leader, relation_get, unit_get, configure_client_ssl,
             is_clustered, apt_cache, peer_store_and_set):
         """
         Compare version above and below 3.0.1.
         Make sure ha_queues is set correctly on each side.
         """
-        eligible_leader.return_value = True
+        is_elected_leader.return_value = True
         relation_get.return_value = {}
         unit_get.return_value = 'UNIT_TEST'
         is_clustered.return_value = False
