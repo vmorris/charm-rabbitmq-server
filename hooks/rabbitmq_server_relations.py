@@ -14,7 +14,7 @@ from lib.utils import (
 )
 from charmhelpers.contrib.hahelpers.cluster import (
     is_clustered,
-    eligible_leader
+    is_elected_leader
 )
 from charmhelpers.contrib.openstack.utils import (
     get_hostname,
@@ -89,7 +89,7 @@ def configure_amqp(username, vhost, admin=False):
 
 @hooks.hook('amqp-relation-changed')
 def amqp_changed(relation_id=None, remote_unit=None):
-    if not eligible_leader('res_rabbitmq_vip'):
+    if not is_elected_leader('res_rabbitmq_vip'):
         # Each unit needs to set the db information otherwise if the unit
         # with the info dies the settings die with it Bug# 1355848
         for rel_id in relation_ids('amqp'):
@@ -99,7 +99,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
             if 'password' in peerdb_settings:
                 relation_set(relation_id=rel_id, **peerdb_settings)
         log('amqp_changed(): Deferring amqp_changed'
-            ' to eligible_leader.')
+            ' to is_elected_leader.')
         return
 
     relation_settings = {}
@@ -365,7 +365,7 @@ def ceph_changed():
     ceph.configure(service=SERVICE_NAME, key=key, auth=auth,
                    use_syslog=use_syslog)
 
-    if eligible_leader('res_rabbitmq_vip'):
+    if is_elected_leader('res_rabbitmq_vip'):
         rbd_img = config('rbd-name')
         rbd_size = config('rbd-size')
         sizemb = int(rbd_size.split('G')[0]) * 1024
@@ -589,7 +589,7 @@ def config_changed():
         if ha_is_active_active:
             restart_rabbit_update_nrpe()
         else:
-            if eligible_leader('res_rabbitmq_vip'):
+            if is_elected_leader('res_rabbitmq_vip'):
                 restart_rabbit_update_nrpe()
             else:
                 log("hacluster relation is present but this node is not active"
