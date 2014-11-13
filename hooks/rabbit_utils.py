@@ -142,8 +142,9 @@ def cluster_with():
                     node = get_hostname(address, fqdn=False)
                 except:
                     log('Cannot resolve hostname for {} '
-                        'using DNS servers'.format(address))
-                    log('Falling back to use socket.gethostname()')
+                        'using DNS servers'.format(address), level='WARNING')
+                    log('Falling back to use socket.gethostname()',
+                        level='WARNING')
                     # If the private-address is not resolvable using DNS
                     # then use the current hostname
                     node = socket.gethostname()
