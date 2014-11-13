@@ -168,8 +168,10 @@ def cluster_joined():
     try:
         nodename = get_hostname(ip_addr, fqdn=False)
     except:
-        log('Cannot resolve hostname for %s using DNS servers' % ip_addr)
-        log('Falling back to use socket.gethostname()')
+        log('Cannot resolve hostname for %s using DNS servers' % ip_addr,
+            level='WARNING')
+        log('Falling back to use socket.gethostname()',
+            level='WARNING')
         # If the private-address is not resolvable using DNS
         # then use the current hostname
         nodename = socket.gethostname()
