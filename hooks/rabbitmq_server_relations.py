@@ -170,7 +170,7 @@ def cluster_joined():
     except:
         log('Cannot resolve hostname for %s using DNS servers' % ip_addr)
         log('Falling back to use socket.gethostname()')
-        #If the private-address is not resolvable using DNS
+        # If the private-address is not resolvable using DNS
         # then use the current hostname
         nodename = socket.gethostname()
 
@@ -404,15 +404,22 @@ def update_nrpe_checks():
 
     # Find out if nrpe set nagios_hostname
     hostname = None
+    host_context = None
     for rel in relations_of_type('nrpe-external-master'):
         if 'nagios_hostname' in rel:
             hostname = rel['nagios_hostname']
+            host_context = rel['nagios_host_context']
             break
     # create unique user and vhost for each unit
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
     password = rabbit.get_rabbit_password(user)
+
+    if host_context:
+        myunit = "%s:%s" % (host_context, local_unit())
+    else:
+        myunit = local_unit()
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
@@ -421,7 +428,7 @@ def update_nrpe_checks():
     nrpe_compat = NRPE(hostname=hostname)
     nrpe_compat.add_check(
         shortname=rabbit.RABBIT_USER,
-        description='Check RabbitMQ',
+        description='Check RabbitMQ {%s}' % myunit,
         check_cmd='{}/check_rabbitmq.py --user {} --password {} --vhost {}'
                   ''.format(NAGIOS_PLUGINS, user, password, vhost)
     )
