@@ -2,6 +2,7 @@ import os
 import pwd
 import grp
 import re
+import socket
 import sys
 import subprocess
 import glob
@@ -94,10 +95,11 @@ def create_user(user, password, admin=False):
 
     if admin:
         cmd = [RABBITMQ_CTL, 'set_user_tags', user, 'administrator']
-        log('Granting user (%s) admin access.')
+        log('Granting user (%s) admin access.' % user)
     else:
         cmd = [RABBITMQ_CTL, 'set_user_tags', user]
-        log('Revoking user (%s) admin access.')
+        log('Revoking user (%s) admin access.' % user)
+    subprocess.check_call(cmd)
 
 
 def grant_permissions(user, vhost):
@@ -144,7 +146,17 @@ def cluster_with():
                 address = relation_get('private-address',
                                        rid=r_id, unit=unit)
             if address is not None:
-                node = get_hostname(address, fqdn=False)
+                try:
+                    node = get_hostname(address, fqdn=False)
+                except:
+                    log('Cannot resolve hostname for {} '
+                        'using DNS servers'.format(address), level='WARNING')
+                    log('Falling back to use socket.gethostname()',
+                        level='WARNING')
+                    # If the private-address is not resolvable using DNS
+                    # then use the current hostname
+                    node = socket.gethostname()
+
                 available_nodes.append(node)
 
     if len(available_nodes) == 0:

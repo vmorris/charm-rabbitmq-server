@@ -14,7 +14,7 @@ from lib.utils import (
 )
 from charmhelpers.contrib.hahelpers.cluster import (
     is_clustered,
-    eligible_leader
+    is_elected_leader
 )
 from charmhelpers.contrib.openstack.utils import (
     get_hostname,
@@ -93,7 +93,7 @@ def configure_amqp(username, vhost, admin=False):
 
 @hooks.hook('amqp-relation-changed')
 def amqp_changed(relation_id=None, remote_unit=None):
-    if not eligible_leader('res_rabbitmq_vip'):
+    if not is_elected_leader('res_rabbitmq_vip'):
         # Each unit needs to set the db information otherwise if the unit
         # with the info dies the settings die with it Bug# 1355848
         for rel_id in relation_ids('amqp'):
@@ -103,12 +103,13 @@ def amqp_changed(relation_id=None, remote_unit=None):
             if 'password' in peerdb_settings:
                 relation_set(relation_id=rel_id, **peerdb_settings)
         log('amqp_changed(): Deferring amqp_changed'
-            ' to eligible_leader.')
+            ' to is_elected_leader.')
 
         # NOTE: active/active case
         if config('prefer-ipv6'):
             relation_settings = {'private-address': get_ipv6_addr()[0]}
             relation_set(relation_settings=relation_settings)
+
         return
 
     relation_settings = {}
@@ -183,8 +184,18 @@ def cluster_joined(relation_id=None):
     # Set RABBITMQ_NODENAME to something that's resolvable by my peers
     # get_host_ip() is called to sanitize private-address in case it
     # doesn't return an IP address
-    nodename = get_hostname(get_host_ip(unit_get('private-address')),
-                            fqdn=False)
+    ip_addr = get_host_ip(unit_get('private-address'))
+    try:
+        nodename = get_hostname(ip_addr, fqdn=False)
+    except:
+        log('Cannot resolve hostname for %s using DNS servers' % ip_addr,
+            level='WARNING')
+        log('Falling back to use socket.gethostname()',
+            level='WARNING')
+        # If the private-address is not resolvable using DNS
+        # then use the current hostname
+        nodename = socket.gethostname()
+
     if nodename:
         log('forcing nodename=%s' % nodename)
         # need to stop it under current nodename
@@ -385,7 +396,7 @@ def ceph_changed():
     ceph.configure(service=SERVICE_NAME, key=key, auth=auth,
                    use_syslog=use_syslog)
 
-    if eligible_leader('res_rabbitmq_vip'):
+    if is_elected_leader('res_rabbitmq_vip'):
         rbd_img = config('rbd-name')
         rbd_size = config('rbd-size')
         sizemb = int(rbd_size.split('G')[0]) * 1024
@@ -424,15 +435,22 @@ def update_nrpe_checks():
 
     # Find out if nrpe set nagios_hostname
     hostname = None
+    host_context = None
     for rel in relations_of_type('nrpe-external-master'):
         if 'nagios_hostname' in rel:
             hostname = rel['nagios_hostname']
+            host_context = rel['nagios_host_context']
             break
     # create unique user and vhost for each unit
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
     password = rabbit.get_rabbit_password(user)
+
+    if host_context:
+        myunit = "%s:%s" % (host_context, local_unit())
+    else:
+        myunit = local_unit()
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
@@ -441,7 +459,7 @@ def update_nrpe_checks():
     nrpe_compat = NRPE(hostname=hostname)
     nrpe_compat.add_check(
         shortname=rabbit.RABBIT_USER,
-        description='Check RabbitMQ',
+        description='Check RabbitMQ {%s}' % myunit,
         check_cmd='{}/check_rabbitmq.py --user {} --password {} --vhost {}'
                   ''.format(NAGIOS_PLUGINS, user, password, vhost)
     )
@@ -617,7 +635,7 @@ def config_changed():
         if ha_is_active_active:
             restart_rabbit_update_nrpe()
         else:
-            if eligible_leader('res_rabbitmq_vip'):
+            if is_elected_leader('res_rabbitmq_vip'):
                 restart_rabbit_update_nrpe()
             else:
                 log("hacluster relation is present but this node is not active"
