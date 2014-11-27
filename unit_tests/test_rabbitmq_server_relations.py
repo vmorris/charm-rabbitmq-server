@@ -70,12 +70,14 @@ class RelationUtil(TestCase):
         rabbitmq_server_relations.amqp_changed(None, None)
         mock_peer_store_and_set.assert_called_with(
             relation_settings={'hostname': host_addr,
-                               'ha_queues': True})
+                               'ha_queues': True},
+            relation_id=None)
 
         self.fake_repo = {'rabbitmq-server': {'pkg_vers': '3.0.2'}}
         rabbitmq_server_relations.amqp_changed(None, None)
         mock_peer_store_and_set.assert_called_with(
-            relation_settings={'hostname': host_addr})
+            relation_settings={'hostname': host_addr},
+            relation_id=None)
 
     @patch('rabbitmq_server_relations.peer_store_and_set')
     @patch('rabbitmq_server_relations.get_ipv6_addr')
@@ -115,9 +117,11 @@ class RelationUtil(TestCase):
         rabbitmq_server_relations.amqp_changed(None, None)
         mock_peer_store_and_set.assert_called_with(
             relation_settings={'private-address': ipv6_addr,
-                               'ha_queues': True})
+                               'ha_queues': True},
+            relation_id=None)
 
         self.fake_repo = {'rabbitmq-server': {'pkg_vers': '3.0.2'}}
         rabbitmq_server_relations.amqp_changed(None, None)
         mock_peer_store_and_set.assert_called_with(
-            relation_settings={'private-address': ipv6_addr})
+            relation_settings={'private-address': ipv6_addr},
+            relation_id=None)
