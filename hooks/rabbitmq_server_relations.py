@@ -21,6 +21,10 @@ from charmhelpers.contrib.openstack.utils import (
     get_host_ip
 )
 
+from charmhelpers.contrib.network.ip import (
+    get_ipv6_addr
+)
+
 import charmhelpers.contrib.storage.linux.ceph as ceph
 from charmhelpers.contrib.openstack.utils import save_script_rc
 
@@ -100,6 +104,12 @@ def amqp_changed(relation_id=None, remote_unit=None):
                 relation_set(relation_id=rel_id, **peerdb_settings)
         log('amqp_changed(): Deferring amqp_changed'
             ' to is_elected_leader.')
+
+        # NOTE: active/active case
+        if config('prefer-ipv6'):
+            relation_settings = {'private-address': get_ipv6_addr()[0]}
+            relation_set(relation_settings=relation_settings)
+
         return
 
     relation_settings = {}
@@ -131,7 +141,11 @@ def amqp_changed(relation_id=None, remote_unit=None):
                     queues[amqp]['username'],
                     queues[amqp]['vhost'])
 
-    relation_settings['hostname'] = unit_get('private-address')
+    if config('prefer-ipv6'):
+        relation_settings['private-address'] = get_ipv6_addr()[0]
+    else:
+        relation_settings['hostname'] = unit_get('private-address')
+
     configure_client_ssl(relation_settings)
 
     if is_clustered():
@@ -144,17 +158,21 @@ def amqp_changed(relation_id=None, remote_unit=None):
             if config('ha-vip-only') is True:
                 relation_settings['ha-vip-only'] = 'true'
 
-    if relation_id:
-        relation_settings['rid'] = relation_id
-
     # set if need HA queues or not
     if cmp_pkgrevno('rabbitmq-server', '3.0.1') < 0:
         relation_settings['ha_queues'] = True
-    peer_store_and_set(relation_settings=relation_settings)
+    peer_store_and_set(relation_id=relation_id,
+                       relation_settings=relation_settings)
 
 
 @hooks.hook('cluster-relation-joined')
-def cluster_joined():
+def cluster_joined(relation_id=None):
+    if config('prefer-ipv6'):
+        relation_settings = {'hostname': socket.gethostname(),
+                             'private-address': get_ipv6_addr()[0]}
+        relation_set(relation_id=relation_id,
+                     relation_settings=relation_settings)
+
     if is_relation_made('ha') and \
             config('ha-vip-only') is False:
         log('hacluster relation is present, skipping native '
@@ -180,7 +198,8 @@ def cluster_joined():
         log('forcing nodename=%s' % nodename)
         # need to stop it under current nodename
         service_stop('rabbitmq-server')
-        rabbit.set_node_name('rabbit@%s' % nodename)
+        rabbit.update_rmq_env_conf(hostname='rabbit@%s' % nodename,
+                                   ipv6=config('prefer-ipv6'))
         service_restart('rabbitmq-server')
 
     if is_newer():
@@ -202,8 +221,17 @@ def cluster_changed():
     if 'cookie' not in rdata:
         log('cluster_joined: cookie not yet set.')
         return
+
+    if config('prefer-ipv6') and rdata.get('hostname'):
+        private_address = rdata['private-address']
+        hostname = rdata['hostname']
+        if hostname:
+            rabbit.update_hosts_file({private_address: hostname})
+
     # sync passwords
-    peer_echo()
+    blacklist = ['hostname', 'private-address', 'public-address']
+    whitelist = [a for a in rdata.keys() if a not in blacklist]
+    peer_echo(includes=whitelist)
 
     # sync cookie
     cookie = peer_retrieve('cookie')
@@ -276,7 +304,8 @@ def ha_joined():
     if rabbit.get_node_name() != name and vip_only is False:
         log('Stopping rabbitmq-server.')
         service_stop('rabbitmq-server')
-        rabbit.set_node_name('%s@localhost' % SERVICE_NAME)
+        rabbit.update_rmq_env_conf(hostname='%s@localhost' % SERVICE_NAME,
+                                   ipv6=config('prefer-ipv6'))
     else:
         log('Node name already set to %s.' % name)
 
@@ -567,6 +596,9 @@ def restart_rabbit_update_nrpe():
 
 @hooks.hook('config-changed')
 def config_changed():
+    if config('prefer-ipv6'):
+        rabbit.assert_charm_supports_ipv6()
+
     # Add archive source if provided
     add_source(config('source'), config('key'))
     apt_update(fatal=True)
@@ -582,6 +614,11 @@ def config_changed():
 
     chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     chmod(RABBIT_DIR, 0o775)
+
+    if config('prefer-ipv6'):
+        service_stop('rabbitmq-server')
+        rabbit.update_rmq_env_conf(ipv6=config('prefer-ipv6'))
+        service_restart('rabbitmq-server')
 
     if config('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)

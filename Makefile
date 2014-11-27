@@ -5,7 +5,7 @@ HOOKS_DIR := $(PWD)/hooks
 TEST_PREFIX := PYTHONPATH=$(HOOKS_DIR)
 
 lint:
-	@flake8 --exclude hooks/charmhelpers hooks
+	@flake8 --exclude hooks/charmhelpers hooks unit_tests
 	@charm proof
 
 bin/charm_helpers_sync.py:
@@ -20,7 +20,7 @@ publish: lint
 	bzr push lp:charms/rabbitmq-server
 	bzr push lp:charms/trusty/rabbitmq-server
 
-test:
+unit_test:
 	@echo Starting tests...
-	CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) nosetests $(CHARM_DIR)/hooks
+	CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) nosetests unit_tests
 
