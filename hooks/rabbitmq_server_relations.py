@@ -158,9 +158,6 @@ def amqp_changed(relation_id=None, remote_unit=None):
             if config('ha-vip-only') is True:
                 relation_settings['ha-vip-only'] = 'true'
 
-    if relation_id:
-        relation_settings['rid'] = relation_id
-
     # set if need HA queues or not
     if cmp_pkgrevno('rabbitmq-server', '3.0.1') < 0:
         relation_settings['ha_queues'] = True
