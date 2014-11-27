@@ -164,7 +164,8 @@ def amqp_changed(relation_id=None, remote_unit=None):
     # set if need HA queues or not
     if cmp_pkgrevno('rabbitmq-server', '3.0.1') < 0:
         relation_settings['ha_queues'] = True
-    peer_store_and_set(relation_settings=relation_settings)
+    peer_store_and_set(relation_id=relation_id,
+                       relation_settings=relation_settings)
 
 
 @hooks.hook('cluster-relation-joined')
