@@ -231,7 +231,9 @@ def cluster_changed():
             rabbit.update_hosts_file({private_address: hostname})
 
     # sync passwords
-    peer_echo(includes=['cookie', 'password'])
+    blacklist = ['hostname', 'private-address', 'public-address']
+    whitelist = [a for a in rdata.keys() if a not in blacklist]
+    peer_echo(includes=whitelist)
 
     # sync cookie
     cookie = peer_retrieve('cookie')
