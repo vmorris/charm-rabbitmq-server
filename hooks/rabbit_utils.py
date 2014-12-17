@@ -6,7 +6,6 @@ import socket
 import sys
 import subprocess
 import glob
-from lib.utils import render_template
 import tempfile
 
 from charmhelpers.contrib.openstack.utils import (
@@ -30,6 +29,8 @@ from charmhelpers.core.host import (
     lsb_release,
     cmp_pkgrevno
 )
+
+from charmhelpers.core.templating import render
 
 from charmhelpers.contrib.peerstorage import (
     peer_store,
@@ -304,9 +305,7 @@ def enable_ssl(ssl_key, ssl_cert, ssl_port,
     if ssl_ca:
         data["ssl_ca_file"] = ssl_ca_file
 
-    with open(RABBITMQ_CONF, 'w') as rmq_conf:
-        rmq_conf.write(render_template(
-            os.path.basename(RABBITMQ_CONF), data))
+    render(os.path.basename(RABBITMQ_CONF), RABBITMQ_CONF, data, perms=0o644)
 
 
 def execute(cmd, die=False, echo=False):
