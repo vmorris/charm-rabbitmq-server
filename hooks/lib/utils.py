@@ -13,9 +13,6 @@ import grp
 import os
 import pwd
 
-from charmhelpers.fetch import (
-    apt_install
-)
 from charmhelpers.core.hookenv import (
     local_unit,
     remote_unit,
