@@ -13,28 +13,11 @@ import grp
 import os
 import pwd
 
-from charmhelpers.fetch import (
-    apt_install
-)
 from charmhelpers.core.hookenv import (
     local_unit,
     remote_unit,
     log
 )
-TEMPLATES_DIR = 'templates'
-
-try:
-    import jinja2
-except ImportError:
-    apt_install('python-jinja2', fatal=True)
-    import jinja2
-
-
-def render_template(template_name, context, template_dir=TEMPLATES_DIR):
-    templates = \
-        jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir))
-    template = templates.get_template(template_name)
-    return template.render(context)
 
 
 def is_newer():
