@@ -2,7 +2,6 @@
 
 import amulet
 import pika
-from helpers import basicconnection
 
 d = amulet.Deployment()
 
@@ -22,13 +21,10 @@ except:
 server = d.sentry.unit['rabbitmq-server/0']
 host = server.info['public-address']
 
-connection = pika.BlockingConnection(pika.ConnectionParameters(host=host))
-
 try:
-    basicconnection.send(connection)
-    basicconnection.receive(connection)
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host=host))
 except Exception as e:
-        amulet.raise_status(
-            amulet.FAIL,
-            str(e)
-        )
+    amulet.raise_status(
+        amulet.FAIL,
+        str(e)
+    )
