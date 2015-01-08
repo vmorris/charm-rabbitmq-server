@@ -6,9 +6,9 @@ import pika
 d = amulet.Deployment()
 
 d.add('rabbitmq-server', charm='cs:trusty/rabbitmq-server')
-d.configure('rabbitmq-server',
-            source="deb http://www.rabbitmq.com/debian/ testing main"
-            )
+d.configure('rabbitmq-server', {
+    "source": "deb http://www.rabbitmq.com/debian/ testing main"
+})
 d.expose('rabbitmq-server')
 
 # Don't forget to expose using d.expose(service)
