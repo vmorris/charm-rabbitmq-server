@@ -1,0 +1,33 @@
+#!/usr/bin/python3
+
+import amulet
+import pika
+
+d = amulet.Deployment()
+
+d.add('rabbitmq-server', charm='cs:trusty/rabbitmq-server')
+d.configure('rabbitmq-server',
+            source="deb http://www.rabbitmq.com/debian/ testing main"
+            )
+d.expose('rabbitmq-server')
+
+# Don't forget to expose using d.expose(service)
+
+try:
+    d.setup(timeout=900)
+    d.sentry.wait()
+except amulet.helpers.TimeoutError:
+    amulet.raise_status(amulet.SKIP, msg="Environment wasn't stood up in time")
+except:
+    raise
+
+server = d.sentry.unit['rabbitmq-server/0']
+host = server.info['public-address']
+
+try:
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host=host))
+except Exception as e:
+    amulet.raise_status(
+        amulet.FAIL,
+        str(e)
+    )
