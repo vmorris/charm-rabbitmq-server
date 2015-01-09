@@ -88,6 +88,12 @@ def configure_amqp(username, vhost, admin=False):
     rabbit.create_user(username, password, admin)
     rabbit.grant_permissions(username, vhost)
 
+    # NOTE(freyes): after rabbitmq-server 3.0 the method to define HA in the
+    # queues is different
+    # http://www.rabbitmq.com/blog/2012/11/19/breaking-things-with-rabbitmq-3-0
+    if cmp_pkgrevno('rabbitmq-server', '3.0.1') >= 0:
+        rabbit.set_ha_mode(vhost, 'all')
+
     return password
 
 
@@ -628,6 +634,8 @@ def config_changed():
         close_port(55672)
 
     configure_rabbit_ssl()
+
+    rabbit.set_all_mirroring_queues(config('mirroring-queues'))
 
     if is_relation_made("ha"):
         ha_is_active_active = config("ha-vip-only")
