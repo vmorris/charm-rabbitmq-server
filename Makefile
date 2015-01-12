@@ -20,7 +20,11 @@ publish: lint
 	bzr push lp:charms/rabbitmq-server
 	bzr push lp:charms/trusty/rabbitmq-server
 
+functional_test: 
+	@echo Starting functional tests...
+	@juju test -v -p AMULET_HTTP_PROXY --timeout 900
+
 unit_test:
-	@echo Starting tests...
+	@echo Starting unit tests...
 	CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) nosetests unit_tests
 
