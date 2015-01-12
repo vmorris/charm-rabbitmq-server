@@ -91,7 +91,7 @@ def configure_amqp(username, vhost, admin=False):
     # NOTE(freyes): after rabbitmq-server 3.0 the method to define HA in the
     # queues is different
     # http://www.rabbitmq.com/blog/2012/11/19/breaking-things-with-rabbitmq-3-0
-    if cmp_pkgrevno('rabbitmq-server', '3.0.1') >= 0:
+    if config('mirroring-queues'):
         rabbit.set_ha_mode(vhost, 'all')
 
     return password
