@@ -24,3 +24,6 @@ unit_test:
 	@echo Starting tests...
 	CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) nosetests unit_tests
 
+functional_test:
+	@echo Starting amulet tests...
+	@juju test -v -p AMULET_HTTP_PROXY --timeout 900
