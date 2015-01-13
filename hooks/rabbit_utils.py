@@ -37,17 +37,38 @@ from charmhelpers.contrib.peerstorage import (
     peer_retrieve
 )
 
+from collections import OrderedDict
+
 PACKAGES = ['rabbitmq-server', 'python-amqplib']
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
 ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
 RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
+ENABLED_PLUGINS = '/etc/rabbitmq/enabled_plugins'
 RABBIT_USER = 'rabbitmq'
 LIB_PATH = '/var/lib/rabbitmq/'
 HOSTS_FILE = '/etc/hosts'
 
 _named_passwd = '/var/lib/charm/{}/{}.passwd'
+
+# hook_contexts are used as a convenient mechanism to render templates
+# logically, consider building a hook_context for template rendering so
+# the charm doesn't concern itself with template specifics etc.
+CONFIG_FILES = OrderedDict([
+    (RABBITMQ_CONF, {
+        'hook_contexts': None,
+        'services': ['rabbitmq-server']
+    }),
+    (ENV_CONF, {
+        'hook_contexts': None,
+        'services': ['rabbitmq-server']
+    }),
+    (ENABLED_PLUGINS, {
+        'hook_contexts': None,
+        'services': ['rabbitmq-server']
+    }),
+])
 
 
 def vhost_exists(vhost):
@@ -441,3 +462,20 @@ def assert_charm_supports_ipv6():
     if lsb_release()['DISTRIB_CODENAME'].lower() < "trusty":
         raise Exception("IPv6 is not supported in the charms for Ubuntu "
                         "versions less than Trusty 14.04")
+
+
+def restart_map():
+    '''Determine the correct resource map to be passed to
+    charmhelpers.core.restart_on_change() based on the services configured.
+
+    :returns: dict: A dictionary mapping config file to lists of services
+                    that should be restarted when file changes.
+    '''
+    _map = []
+    for f, ctxt in CONFIG_FILES.iteritems():
+        svcs = []
+        for svc in ctxt['services']:
+            svcs.append(svc)
+        if svcs:
+            _map.append((f, svcs))
+    return OrderedDict(_map)
