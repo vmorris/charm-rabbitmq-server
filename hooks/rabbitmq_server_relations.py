@@ -31,11 +31,15 @@ from charmhelpers.contrib.openstack.utils import save_script_rc
 from charmhelpers.fetch import (
     add_source,
     apt_update,
-    apt_install)
+    apt_install,
+)
 
 from charmhelpers.core.hookenv import (
-    open_port, close_port,
-    log, ERROR,
+    open_port,
+    close_port,
+    log,
+    ERROR,
+    INFO,
     relation_get,
     relation_set,
     relation_ids,
@@ -54,6 +58,7 @@ from charmhelpers.core.host import (
     restart_on_change,
     rsync,
     service_stop,
+    service_restart,
 )
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
 from charmhelpers.contrib.ssl.service import ServiceCA
@@ -169,7 +174,6 @@ def amqp_changed(relation_id=None, remote_unit=None):
 
 
 @hooks.hook('cluster-relation-joined')
-@restart_on_change(rabbit.restart_map())
 def cluster_joined(relation_id=None):
     if config('prefer-ipv6'):
         relation_settings = {'hostname': socket.gethostname(),
@@ -198,11 +202,14 @@ def cluster_joined(relation_id=None):
         # then use the current hostname
         nodename = socket.gethostname()
 
-    if nodename:
+    if nodename and rabbit.get_node_name() != nodename:
         log('forcing nodename=%s' % nodename)
-        # need to stop it under current nodename
+        # would like to have used the restart_on_change decorator, but
+        # need to stop it under current nodename prior to updating env
+        service_stop('rabbitmq-server')
         rabbit.update_rmq_env_conf(hostname='rabbit@%s' % nodename,
                                    ipv6=config('prefer-ipv6'))
+        service_restart('rabbitmq-server')
 
     if is_newer():
         log('cluster_joined: Relation greater.')
@@ -220,7 +227,7 @@ def cluster_joined(relation_id=None):
 def cluster_changed():
     rdata = relation_get()
     if 'cookie' not in rdata:
-        log('cluster_joined: cookie not yet set.')
+        log('cluster_joined: cookie not yet set.', level=INFO)
         return
 
     if config('prefer-ipv6') and rdata.get('hostname'):
@@ -236,11 +243,11 @@ def cluster_changed():
 
     # sync the cookie with peers if necessary
     update_cookie()
-   
+
     if is_relation_made('ha') and \
             config('ha-vip-only') is False:
         log('hacluster relation is present, skipping native '
-            'rabbitmq cluster config.')
+            'rabbitmq cluster config.', level=INFO)
         return
 
     # cluster with node
@@ -255,16 +262,22 @@ def cluster_changed():
             amqp_changed(relation_id=rid, remote_unit=unit)
 
 
-@restart_on_change(rabbit.restart_map())
 def update_cookie():
     # sync cookie
     cookie = peer_retrieve('cookie')
-    if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
+    cookie_local = None
+    with open(rabbit.COOKIE_PATH, 'r') as f:
+        cookie_local = f.read().strip()
+
+    if cookie_local == cookie:
         log('Cookie already synchronized with peer.')
-    else:
-        log('Synchronizing erlang cookie from peer.')
-        with open(rabbit.COOKIE_PATH, 'wb') as out:
-            out.write(cookie)
+        return
+
+    log('Synchronizing erlang cookie from peer.', level=INFO)
+    service_stop('rabbitmq-server')
+    with open(rabbit.COOKIE_PATH, 'wb') as out:
+        out.write(cookie)
+    service_restart('rabbitmq-server')
 
 
 @hooks.hook('cluster-relation-departed')
