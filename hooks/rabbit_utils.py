@@ -162,7 +162,8 @@ def set_ha_mode(vhost, mode, params=None, sync_mode='automatic'):
     elif mode == 'nodes':
         value = '{"ha-mode":"nodes","ha-params":[%s]}' % ",".join(params)
     else:
-        RabbitmqError("Unknown mode '%s', known modes: all, exactly, nodes")
+        raise RabbitmqError(("Unknown mode '%s', known modes: "
+                             "all, exactly, nodes"))
 
     log("Setting HA policy to vhost '%s'" % vhost, level='INFO')
     set_policy(vhost, 'HA', '^(?!amq\.).*', value)
