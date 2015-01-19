@@ -17,8 +17,7 @@ d = amulet.Deployment(series="trusty")
 d.add('rabbitmq-server', units=2)
 
 # Create a configuration.
-configuration = {'mirroring-queues': True,
-                 'management_plugin': True}
+configuration = {'mirroring-queues': True}
 d.configure('rabbitmq-server', configuration)
 d.expose('rabbitmq-server')
 
@@ -61,6 +60,9 @@ print('Publishing message: %s' % orig_msg)
 channel.basic_publish(exchange='',
                       routing_key='hello',
                       body=orig_msg)
+
+print('stopping rabbit in unit 0')
+rabbit_unit.run('service rabbitmq-server stop')
 
 print('Consuming message from second unit')
 rabbit_addr2 = rabbit_unit2.info["public-address"]

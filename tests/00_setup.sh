@@ -1,24 +1,16 @@
 #!/bin/sh
 
-# The script installs amulet and other tools needed for the amulet tests.
+# Install Juju Amulet and any other applications that are needed for the tests.
 
-set -x 
+set -x
 
-# Get the status of the amulet package, this returns 0 of package is installed.
+# Check if amulet is installed before adding repository and updating apt-get.
 dpkg -s amulet
-if [ $? -ne 0 ]; then
-  # Install the Amulet testing harness.
-  sudo add-apt-repository -y ppa:juju/stable
-  sudo apt-get update 
-  sudo apt-get install -y amulet juju-core charm-tools
-fi
-dpkg -s python3
-if [ $? -ne 0 ]; then
-  # Install the Python3 libraries.
-  sudo apt-get install -y python3
+if [ $? -ne 0 ]; then 
+    sudo add-apt-repository -y ppa:juju/stable
+    sudo apt-get update 
+    sudo apt-get install -y amulet
 fi
 
-dpkg -s amqp-tools
-if [ $? -ne 0 ]; then
-  sudo apt-get install -y amqp-tools
-fi
+# Install any additional python packages, or software here.
+sudo apt-get install -y python python-pika python3-requests
