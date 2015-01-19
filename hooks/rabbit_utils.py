@@ -50,18 +50,26 @@ HOSTS_FILE = '/etc/hosts'
 _named_passwd = '/var/lib/charm/{}/{}.passwd'
 
 
-def vhost_exists(vhost):
+class RabbitmqError(Exception):
+    pass
+
+
+def list_vhosts():
+    """
+    Returns a list of all the available vhosts
+    """
     try:
-        cmd = [RABBITMQ_CTL, 'list_vhosts']
-        out = subprocess.check_output(cmd)
-        for line in out.split('\n')[1:]:
-            if line == vhost:
-                log('vhost (%s) already exists.' % vhost)
-                return True
-        return False
-    except:
+        output = subprocess.check_output([RABBITMQ_CTL, 'list_vhosts'])
+
+        return output.split('\n')[1:-2]
+    except Exception as ex:
         # if no vhosts, just raises an exception
-        return False
+        log(str(ex), level='DEBUG')
+        return []
+
+
+def vhost_exists(vhost):
+    return vhost in list_vhosts()
 
 
 def create_vhost(vhost):
@@ -107,6 +115,93 @@ def grant_permissions(user, vhost):
     cmd = [RABBITMQ_CTL, 'set_permissions', '-p',
            vhost, user, '.*', '.*', '.*']
     subprocess.check_call(cmd)
+
+
+def set_policy(vhost, policy_name, match, value):
+    cmd = [RABBITMQ_CTL, 'set_policy', '-p', vhost,
+           policy_name, match, value]
+    log("setting policy: %s" % str(cmd), level='DEBUG')
+    subprocess.check_call(cmd)
+
+
+def set_ha_mode(vhost, mode, params=None, sync_mode='automatic'):
+    """Valid mode values:
+
+      * 'all': Queue is mirrored across all nodes in the cluster. When a new
+         node is added to the cluster, the queue will be mirrored to that node.
+      * 'exactly': Queue is mirrored to count nodes in the cluster.
+      * 'nodes': Queue is mirrored to the nodes listed in node names
+
+    More details at http://www.rabbitmq.com./ha.html
+
+    :param vhost: virtual host name
+    :param mode: ha mode
+    :param params: values to pass to the policy, possible values depend on the
+                   mode chosen.
+    :param sync_mode: when `mode` is 'exactly' this used to indicate how the
+                      sync has to be done
+                      http://www.rabbitmq.com./ha.html#eager-synchronisation
+    """
+
+    if cmp_pkgrevno('rabbitmq-server', '3.0.0') < 0:
+        log(("Mirroring queues cannot be enabled, only supported "
+             "in rabbitmq-server >= 3.0"), level='WARN')
+        log(("More information at http://www.rabbitmq.com/blog/"
+             "2012/11/19/breaking-things-with-rabbitmq-3-0"), level='INFO')
+        return
+
+    if mode == 'all':
+        value = '{"ha-mode": "all"}'
+    elif mode == 'exactly':
+        value = '{"ha-mode":"exactly","ha-params":%s,"ha-sync-mode":"%s"}' \
+                % (params, sync_mode)
+    elif mode == 'nodes':
+        value = '{"ha-mode":"nodes","ha-params":[%s]}' % ",".join(params)
+    else:
+        raise RabbitmqError(("Unknown mode '%s', known modes: "
+                             "all, exactly, nodes"))
+
+    log("Setting HA policy to vhost '%s'" % vhost, level='INFO')
+    set_policy(vhost, 'HA', '^(?!amq\.).*', value)
+
+
+def clear_ha_mode(vhost, name='HA', force=False):
+    """
+    Clear policy from the `vhost` by `name`
+    """
+    if cmp_pkgrevno('rabbitmq-server', '3.0.0') < 0:
+        log(("Mirroring queues not supported "
+             "in rabbitmq-server >= 3.0"), level='WARN')
+        log(("More information at http://www.rabbitmq.com/blog/"
+             "2012/11/19/breaking-things-with-rabbitmq-3-0"), level='INFO')
+        return
+
+    log("Clearing '%s' policy from vhost '%s'" % (name, vhost), level='INFO')
+    try:
+        subprocess.check_call([RABBITMQ_CTL, 'clear_policy', '-p', vhost,
+                               name])
+    except subprocess.CalledProcessError as ex:
+        if not force:
+            raise ex
+
+
+def set_all_mirroring_queues(enable):
+    """
+    :param enable: if True then enable mirroring queue for all the vhosts,
+                   otherwise the HA policy is removed
+    """
+    if cmp_pkgrevno('rabbitmq-server', '3.0.0') < 0:
+        log(("Mirroring queues not supported "
+             "in rabbitmq-server >= 3.0"), level='WARN')
+        log(("More information at http://www.rabbitmq.com/blog/"
+             "2012/11/19/breaking-things-with-rabbitmq-3-0"), level='INFO')
+        return
+
+    for vhost in list_vhosts():
+        if enable:
+            set_ha_mode(vhost, 'all')
+        else:
+            clear_ha_mode(vhost, force=True)
 
 
 def service(action):
@@ -180,10 +275,6 @@ def cluster_with():
             cmd = [RABBITMQ_CTL, 'start_app']
             subprocess.check_call(cmd)
             log('Host clustered with %s.' % node)
-            if cmp_pkgrevno('rabbitmq-server', '3.0.1') >= 0:
-                cmd = [RABBITMQ_CTL, 'set_policy', 'HA',
-                       '^(?!amq\.).*', '{"ha-mode": "all"}']
-                subprocess.check_call(cmd)
             return True
         except:
             log('Failed to cluster with %s.' % node)
