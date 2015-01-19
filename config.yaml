@@ -82,7 +82,7 @@ options:
       with mutiple AMQPs (like Glance in pre-Icehouse).
   mirroring-queues:
     type: boolean
-    default: False
+    default: True
     description: |
       When set to true the 'ha-mode: all' policy is applied to all the exchages
       that match the expression '^(?!amq\.).*'
