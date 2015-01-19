@@ -69,11 +69,7 @@ def list_vhosts():
 
 
 def vhost_exists(vhost):
-    if vhost in list_vhosts():
-        log('vhost (%s) already exists.' % vhost)
-        return True
-    else:
-        return False
+    return vhost in list_vhosts()
 
 
 def create_vhost(vhost):
