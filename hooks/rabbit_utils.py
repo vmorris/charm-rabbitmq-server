@@ -278,10 +278,6 @@ def cluster_with():
             cmd = [RABBITMQ_CTL, 'start_app']
             subprocess.check_call(cmd)
             log('Host clustered with %s.' % node)
-            if cmp_pkgrevno('rabbitmq-server', '3.0.1') >= 0:
-                cmd = [RABBITMQ_CTL, 'set_policy', 'HA',
-                       '^(?!amq\.).*', '{"ha-mode": "all"}']
-                subprocess.check_call(cmd)
             return True
         except:
             log('Failed to cluster with %s.' % node)
