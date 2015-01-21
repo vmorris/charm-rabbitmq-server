@@ -61,7 +61,12 @@ def list_vhosts():
     try:
         output = subprocess.check_output([RABBITMQ_CTL, 'list_vhosts'])
 
-        return output.split('\n')[1:-2]
+        # NOTE(jamespage): Earlier rabbitmqctl versions append "...done"
+        #                  to the output of list_vhosts
+        if '...done' in output:
+            return output.split('\n')[1:-2]
+        else:
+            return output.split('\n')[1:-1]
     except Exception as ex:
         # if no vhosts, just raises an exception
         log(str(ex), level='DEBUG')
