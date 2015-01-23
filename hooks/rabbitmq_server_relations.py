@@ -71,6 +71,8 @@ from charmhelpers.contrib.peerstorage import (
     peer_retrieve_by_prefix,
 )
 
+from charmhelpers.contrib.network.ip import get_address_in_network
+
 hooks = Hooks()
 
 SERVICE_NAME = os.getenv('JUJU_UNIT_NAME').split('/')[0]
@@ -158,7 +160,13 @@ def amqp_changed(relation_id=None, remote_unit=None):
     if config('prefer-ipv6'):
         relation_settings['private-address'] = get_ipv6_addr()[0]
     else:
-        relation_settings['hostname'] = unit_get('private-address')
+        # NOTE(jamespage)
+        # override private-address settings if access-network is
+        # configured and an appropriate network interface is configured.
+        relation_settings['hostname'] = \
+            relation_settings['private-address'] = \
+            get_address_in_network(config('access-network'),
+                                   unit_get('private-address'))
 
     configure_client_ssl(relation_settings)
 
@@ -425,13 +433,13 @@ def ceph_changed():
         rbd_size = config('rbd-size')
         sizemb = int(rbd_size.split('G')[0]) * 1024
         blk_device = '/dev/rbd/%s/%s' % (POOL_NAME, rbd_img)
-        # rbd_pool_rep_count = config('ceph-osd-replication-count')
+        ceph.create_pool(service=SERVICE_NAME, name=POOL_NAME,
+                         replicas=int(config('ceph-osd-replication-count')))
         ceph.ensure_ceph_storage(service=SERVICE_NAME, pool=POOL_NAME,
                                  rbd_img=rbd_img, sizemb=sizemb,
                                  fstype='ext4', mount_point=RABBIT_DIR,
                                  blk_device=blk_device,
-                                 system_services=['rabbitmq-server'])  # ,
-        # rbd_pool_replicas=rbd_pool_rep_count)
+                                 system_services=['rabbitmq-server'])
         subprocess.check_call(['chown', '-R', '%s:%s' %
                                (RABBIT_USER, RABBIT_GROUP), RABBIT_DIR])
     else:
@@ -662,6 +670,13 @@ def config_changed():
                     " skipping update nrpe checks")
     else:
         update_nrpe_checks()
+
+    # NOTE(jamespage)
+    # trigger amqp_changed to pickup and changes to network
+    # configuration via the access-network config option.
+    for rid in relation_ids('amqp'):
+        for unit in related_units(rid):
+            amqp_changed(relation_id=rid, remote_unit=unit)
 
 
 def pre_install_hooks():
