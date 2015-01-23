@@ -80,6 +80,12 @@ options:
       hacluster charm will keep rabbit in active/active setup, but in addition
       it will deploy a VIP that can be used by services that cannot work
       with mutiple AMQPs (like Glance in pre-Icehouse).
+  mirroring-queues:
+    type: boolean
+    default: True
+    description: |
+      When set to true the 'ha-mode: all' policy is applied to all the exchages
+      that match the expression '^(?!amq\.).*'
   rbd-size:
     type: string
     default: 5G
@@ -94,7 +100,7 @@ options:
       image name exists in Ceph, it will be re-used and the data will be
       overwritten.
   ceph-osd-replication-count:
-    default: 2
+    default: 3
     type: int
     description: |
       This value dictates the number of replicas ceph must make of any
@@ -133,12 +139,15 @@ options:
     description: |
       Key ID to import to the apt keyring to support use with arbitary source
       configuration from outside of Launchpad archives or PPA's.
-  # Network configuration options
-  # by default all access is over 'private-address'
-  access-network:
-    type: string
-    default:
+  prefer-ipv6:
+    type: boolean
+    default: False
     description: |
-      The IP address and netmask of the 'access' network (e.g., 192.168.0.0/24)
+      If True enables IPv6 support. The charm will expect network interfaces
+      to be configured with an IPv6 address. If set to False (default) IPv4
+      is expected.
       .
-      This network will be used for access to RabbitMQ messaging services.
+      NOTE: these charms do not currently support IPv6 privacy extension. In
+      order for this charm to function correctly, the privacy extension must be
+      disabled and a non-temporary address must be configured/available on
+      your network interface.

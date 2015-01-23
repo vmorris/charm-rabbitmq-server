@@ -6,10 +6,16 @@
 #  Adam Gandelman <adamg@ubuntu.com>
 #
 
+"""
+Helpers for clustering and determining "cluster leadership" and other
+clustering-related helpers.
+"""
+
 import subprocess
 import os
-
 from socket import gethostname as get_unit_hostname
+
+import six
 
 from charmhelpers.core.hookenv import (
     log,
@@ -19,12 +25,36 @@ from charmhelpers.core.hookenv import (
     config as config_get,
     INFO,
     ERROR,
+    WARNING,
     unit_get,
 )
 
 
 class HAIncompleteConfig(Exception):
     pass
+
+
+def is_elected_leader(resource):
+    """
+    Returns True if the charm executing this is the elected cluster leader.
+
+    It relies on two mechanisms to determine leadership:
+        1. If the charm is part of a corosync cluster, call corosync to
+        determine leadership.
+        2. If the charm is not part of a corosync cluster, the leader is
+        determined as being "the alive unit with the lowest unit numer". In
+        other words, the oldest surviving unit.
+    """
+    if is_clustered():
+        if not is_crm_leader(resource):
+            log('Deferring action to CRM leader.', level=INFO)
+            return False
+    else:
+        peers = peer_units()
+        if peers and not oldest_peer(peers):
+            log('Deferring action to oldest service unit.', level=INFO)
+            return False
+    return True
 
 
 def is_clustered():
@@ -38,13 +68,17 @@ def is_clustered():
     return False
 
 
-def is_leader(resource):
+def is_crm_leader(resource):
+    """
+    Returns True if the charm calling this is the elected corosync leader,
+    as returned by calling the external "crm" command.
+    """
     cmd = [
         "crm", "resource",
         "show", resource
     ]
     try:
-        status = subprocess.check_output(cmd)
+        status = subprocess.check_output(cmd).decode('UTF-8')
     except subprocess.CalledProcessError:
         return False
     else:
@@ -54,15 +88,31 @@ def is_leader(resource):
             return False
 
 
-def peer_units():
+def is_leader(resource):
+    log("is_leader is deprecated. Please consider using is_crm_leader "
+        "instead.", level=WARNING)
+    return is_crm_leader(resource)
+
+
+def peer_units(peer_relation="cluster"):
     peers = []
-    for r_id in (relation_ids('cluster') or []):
+    for r_id in (relation_ids(peer_relation) or []):
         for unit in (relation_list(r_id) or []):
             peers.append(unit)
     return peers
 
 
+def peer_ips(peer_relation='cluster', addr_key='private-address'):
+    '''Return a dict of peers and their private-address'''
+    peers = {}
+    for r_id in relation_ids(peer_relation):
+        for unit in relation_list(r_id):
+            peers[unit] = relation_get(addr_key, rid=r_id, unit=unit)
+    return peers
+
+
 def oldest_peer(peers):
+    """Determines who the oldest peer is by comparing unit numbers."""
     local_unit_no = int(os.getenv('JUJU_UNIT_NAME').split('/')[1])
     for peer in peers:
         remote_unit_no = int(peer.split('/')[1])
@@ -72,16 +122,9 @@ def oldest_peer(peers):
 
 
 def eligible_leader(resource):
-    if is_clustered():
-        if not is_leader(resource):
-            log('Deferring action to CRM leader.', level=INFO)
-            return False
-    else:
-        peers = peer_units()
-        if peers and not oldest_peer(peers):
-            log('Deferring action to oldest service unit.', level=INFO)
-            return False
-    return True
+    log("eligible_leader is deprecated. Please consider using "
+        "is_elected_leader instead.", level=WARNING)
+    return is_elected_leader(resource)
 
 
 def https():
@@ -97,10 +140,9 @@ def https():
         return True
     for r_id in relation_ids('identity-service'):
         for unit in relation_list(r_id):
+            # TODO - needs fixing for new helper as ssl_cert/key suffixes with CN
             rel_state = [
                 relation_get('https_keystone', rid=r_id, unit=unit),
-                relation_get('ssl_cert', rid=r_id, unit=unit),
-                relation_get('ssl_key', rid=r_id, unit=unit),
                 relation_get('ca_cert', rid=r_id, unit=unit),
             ]
             # NOTE: works around (LP: #1203241)
@@ -109,34 +151,42 @@ def https():
     return False
 
 
-def determine_api_port(public_port):
+def determine_api_port(public_port, singlenode_mode=False):
     '''
     Determine correct API server listening port based on
     existence of HTTPS reverse proxy and/or haproxy.
 
     public_port: int: standard public port for given service
 
+    singlenode_mode: boolean: Shuffle ports when only a single unit is present
+
     returns: int: the correct listening port for the API service
     '''
     i = 0
-    if len(peer_units()) > 0 or is_clustered():
+    if singlenode_mode:
+        i += 1
+    elif len(peer_units()) > 0 or is_clustered():
         i += 1
     if https():
         i += 1
     return public_port - (i * 10)
 
 
-def determine_apache_port(public_port):
+def determine_apache_port(public_port, singlenode_mode=False):
     '''
     Description: Determine correct apache listening port based on public IP +
     state of the cluster.
 
     public_port: int: standard public port for given service
 
+    singlenode_mode: boolean: Shuffle ports when only a single unit is present
+
     returns: int: the correct listening port for the HAProxy service
     '''
     i = 0
-    if len(peer_units()) > 0 or is_clustered():
+    if singlenode_mode:
+        i += 1
+    elif len(peer_units()) > 0 or is_clustered():
         i += 1
     return public_port - (i * 10)
 
@@ -156,7 +206,7 @@ def get_hacluster_config():
     for setting in settings:
         conf[setting] = config_get(setting)
     missing = []
-    [missing.append(s) for s, v in conf.iteritems() if v is None]
+    [missing.append(s) for s, v in six.iteritems(conf) if v is None]
     if missing:
         log('Insufficient config data to configure hacluster.', level=ERROR)
         raise HAIncompleteConfig

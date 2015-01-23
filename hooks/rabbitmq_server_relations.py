@@ -5,6 +5,7 @@ import shutil
 import sys
 import subprocess
 import glob
+import socket
 
 import rabbit_utils as rabbit
 from lib.utils import (
@@ -13,7 +14,15 @@ from lib.utils import (
 )
 from charmhelpers.contrib.hahelpers.cluster import (
     is_clustered,
-    eligible_leader
+    is_elected_leader
+)
+from charmhelpers.contrib.openstack.utils import (
+    get_hostname,
+    get_host_ip
+)
+
+from charmhelpers.contrib.network.ip import (
+    get_ipv6_addr
 )
 
 import charmhelpers.contrib.storage.linux.ceph as ceph
@@ -22,11 +31,15 @@ from charmhelpers.contrib.openstack.utils import save_script_rc
 from charmhelpers.fetch import (
     add_source,
     apt_update,
-    apt_install)
+    apt_install,
+)
 
 from charmhelpers.core.hookenv import (
-    open_port, close_port,
-    log, ERROR,
+    open_port,
+    close_port,
+    log,
+    ERROR,
+    INFO,
     relation_get,
     relation_set,
     relation_ids,
@@ -41,15 +54,21 @@ from charmhelpers.core.hookenv import (
     UnregisteredHookError
 )
 from charmhelpers.core.host import (
-    rsync, service_stop, service_restart
+    cmp_pkgrevno,
+    restart_on_change,
+    rsync,
+    service_stop,
+    service_restart,
 )
 from charmhelpers.contrib.charmsupport.nrpe import NRPE
 from charmhelpers.contrib.ssl.service import ServiceCA
 
 from charmhelpers.contrib.peerstorage import (
     peer_echo,
+    peer_retrieve,
     peer_store,
-    peer_retrieve
+    peer_store_and_set,
+    peer_retrieve_by_prefix,
 )
 
 from charmhelpers.contrib.network.ip import get_address_in_network
@@ -79,44 +98,78 @@ def configure_amqp(username, vhost, admin=False):
     rabbit.create_user(username, password, admin)
     rabbit.grant_permissions(username, vhost)
 
+    # NOTE(freyes): after rabbitmq-server 3.0 the method to define HA in the
+    # queues is different
+    # http://www.rabbitmq.com/blog/2012/11/19/breaking-things-with-rabbitmq-3-0
+    if config('mirroring-queues'):
+        rabbit.set_ha_mode(vhost, 'all')
+
     return password
 
 
 @hooks.hook('amqp-relation-changed')
 def amqp_changed(relation_id=None, remote_unit=None):
+    if not is_elected_leader('res_rabbitmq_vip'):
+        # Each unit needs to set the db information otherwise if the unit
+        # with the info dies the settings die with it Bug# 1355848
+        for rel_id in relation_ids('amqp'):
+            peerdb_settings = peer_retrieve_by_prefix(rel_id,
+                                                      exc_list=['hostname'])
+            peerdb_settings['hostname'] = unit_get('private-address')
+            if 'password' in peerdb_settings:
+                relation_set(relation_id=rel_id, **peerdb_settings)
+        log('amqp_changed(): Deferring amqp_changed'
+            ' to is_elected_leader.')
+
+        # NOTE: active/active case
+        if config('prefer-ipv6'):
+            relation_settings = {'private-address': get_ipv6_addr()[0]}
+            relation_set(relation_settings=relation_settings)
+
+        return
+
     relation_settings = {}
+    settings = relation_get(rid=relation_id, unit=remote_unit)
 
-    if eligible_leader('res_rabbitmq_vip'):
-        settings = relation_get(rid=relation_id, unit=remote_unit)
-        singleset = set(['username', 'vhost'])
+    singleset = set(['username', 'vhost'])
 
-        if singleset.issubset(settings):
-            if None in [settings['username'], settings['vhost']]:
-                log('amqp_changed(): Relation not ready.')
-                return
+    if singleset.issubset(settings):
+        if None in [settings['username'], settings['vhost']]:
+            log('amqp_changed(): Relation not ready.')
+            return
 
-            relation_settings['password'] = configure_amqp(
-                username=settings['username'],
-                vhost=settings['vhost'],
-                admin=settings.get('admin', False))
-        else:
-            queues = {}
-            for k, v in settings.iteritems():
-                amqp = k.split('_')[0]
-                x = '_'.join(k.split('_')[1:])
-                if amqp not in queues:
-                    queues[amqp] = {}
-                queues[amqp][x] = v
-            for amqp in queues:
-                if singleset.issubset(queues[amqp]):
-                    relation_settings[
-                        '_'.join([amqp, 'password'])] = configure_amqp(
-                        queues[amqp]['username'],
-                        queues[amqp]['vhost'])
+        relation_settings['password'] = configure_amqp(
+            username=settings['username'],
+            vhost=settings['vhost'],
+            admin=settings.get('admin', False))
+    else:
+        queues = {}
+        for k, v in settings.iteritems():
+            amqp = k.split('_')[0]
+            x = '_'.join(k.split('_')[1:])
+            if amqp not in queues:
+                queues[amqp] = {}
+            queues[amqp][x] = v
+        for amqp in queues:
+            if singleset.issubset(queues[amqp]):
+                relation_settings[
+                    '_'.join([amqp, 'password'])] = configure_amqp(
+                    queues[amqp]['username'],
+                    queues[amqp]['vhost'])
 
-    relation_settings['hostname'] = \
-        get_address_in_network(config('access-network'),
-                               unit_get('private-address'))
+    if config('prefer-ipv6'):
+        relation_settings['private-address'] = get_ipv6_addr()[0]
+    else:
+        # NOTE(jamespage)
+        # override private-address settings if access-network is
+        # configured and an appropriate network interface is configured.
+        relation_settings['hostname'] = \
+            get_address_in_network(config('access-network'),
+                                   unit_get('private-address'))
+        relation_settings['private-address'] = \
+            get_address_in_network(config('access-network'),
+                                   unit_get('private-address'))
+
 
     configure_client_ssl(relation_settings)
 
@@ -130,34 +183,56 @@ def amqp_changed(relation_id=None, remote_unit=None):
             if config('ha-vip-only') is True:
                 relation_settings['ha-vip-only'] = 'true'
 
-    # NOTE(jamespage)
-    # override private-address settings if access-network is
-    # configured and an appropriate network interface is configured.
-    relation_settings['private-address'] = \
-        get_address_in_network(config('access-network'),
-                               unit_get('private-address'))
-
     # set if need HA queues or not
-    if rabbit.compare_version('3.0.1') < 0:
+    if cmp_pkgrevno('rabbitmq-server', '3.0.1') < 0:
         relation_settings['ha_queues'] = True
 
-    relation_set(relation_id=relation_id,
-                 relation_settings=relation_settings)
+    peer_store_and_set(relation_id=relation_id,
+                       relation_settings=relation_settings)
 
 
 @hooks.hook('cluster-relation-joined')
-def cluster_joined():
+def cluster_joined(relation_id=None):
+    if config('prefer-ipv6'):
+        relation_settings = {'hostname': socket.gethostname(),
+                             'private-address': get_ipv6_addr()[0]}
+        relation_set(relation_id=relation_id,
+                     relation_settings=relation_settings)
+
     if is_relation_made('ha') and \
             config('ha-vip-only') is False:
         log('hacluster relation is present, skipping native '
             'rabbitmq cluster config.')
         return
 
+    # Set RABBITMQ_NODENAME to something that's resolvable by my peers
+    # get_host_ip() is called to sanitize private-address in case it
+    # doesn't return an IP address
+    ip_addr = get_host_ip(unit_get('private-address'))
+    try:
+        nodename = get_hostname(ip_addr, fqdn=False)
+    except:
+        log('Cannot resolve hostname for %s using DNS servers' % ip_addr,
+            level='WARNING')
+        log('Falling back to use socket.gethostname()',
+            level='WARNING')
+        # If the private-address is not resolvable using DNS
+        # then use the current hostname
+        nodename = socket.gethostname()
+
+    if nodename and rabbit.get_node_name() != nodename:
+        log('forcing nodename=%s' % nodename)
+        # would like to have used the restart_on_change decorator, but
+        # need to stop it under current nodename prior to updating env
+        service_stop('rabbitmq-server')
+        rabbit.update_rmq_env_conf(hostname='rabbit@%s' % nodename,
+                                   ipv6=config('prefer-ipv6'))
+        service_restart('rabbitmq-server')
+
     if is_newer():
         log('cluster_joined: Relation greater.')
         return
 
-    rabbit.COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
     if not os.path.isfile(rabbit.COOKIE_PATH):
         log('erlang cookie missing from %s' % rabbit.COOKIE_PATH,
             level=ERROR)
@@ -170,26 +245,27 @@ def cluster_joined():
 def cluster_changed():
     rdata = relation_get()
     if 'cookie' not in rdata:
-        log('cluster_joined: cookie not yet set.')
+        log('cluster_joined: cookie not yet set.', level=INFO)
         return
-    # sync passwords
-    peer_echo()
 
-    # sync cookie
-    cookie = peer_retrieve('cookie')
-    if open(rabbit.COOKIE_PATH, 'r').read().strip() == cookie:
-        log('Cookie already synchronized with peer.')
-    else:
-        log('Synchronizing erlang cookie from peer.')
-        rabbit.service('stop')
-        with open(rabbit.COOKIE_PATH, 'wb') as out:
-            out.write(cookie)
-        rabbit.service('start')
+    if config('prefer-ipv6') and rdata.get('hostname'):
+        private_address = rdata['private-address']
+        hostname = rdata['hostname']
+        if hostname:
+            rabbit.update_hosts_file({private_address: hostname})
+
+    # sync passwords
+    blacklist = ['hostname', 'private-address', 'public-address']
+    whitelist = [a for a in rdata.keys() if a not in blacklist]
+    peer_echo(includes=whitelist)
+
+    # sync the cookie with peers if necessary
+    update_cookie()
 
     if is_relation_made('ha') and \
             config('ha-vip-only') is False:
         log('hacluster relation is present, skipping native '
-            'rabbitmq cluster config.')
+            'rabbitmq cluster config.', level=INFO)
         return
 
     # cluster with node
@@ -197,6 +273,29 @@ def cluster_changed():
         if rabbit.cluster_with():
             # resync nrpe user after clustering
             update_nrpe_checks()
+    # If cluster has changed peer db may have changed so run amqp_changed
+    # to sync any changes
+    for rid in relation_ids('amqp'):
+        for unit in related_units(rid):
+            amqp_changed(relation_id=rid, remote_unit=unit)
+
+
+def update_cookie():
+    # sync cookie
+    cookie = peer_retrieve('cookie')
+    cookie_local = None
+    with open(rabbit.COOKIE_PATH, 'r') as f:
+        cookie_local = f.read().strip()
+
+    if cookie_local == cookie:
+        log('Cookie already synchronized with peer.')
+        return
+
+    log('Synchronizing erlang cookie from peer.', level=INFO)
+    service_stop('rabbitmq-server')
+    with open(rabbit.COOKIE_PATH, 'wb') as out:
+        out.write(cookie)
+    service_restart('rabbitmq-server')
 
 
 @hooks.hook('cluster-relation-departed')
@@ -241,7 +340,8 @@ def ha_joined():
     if rabbit.get_node_name() != name and vip_only is False:
         log('Stopping rabbitmq-server.')
         service_stop('rabbitmq-server')
-        rabbit.set_node_name('%s@localhost' % SERVICE_NAME)
+        rabbit.update_rmq_env_conf(hostname='%s@localhost' % SERVICE_NAME,
+                                   ipv6=config('prefer-ipv6'))
     else:
         log('Node name already set to %s.' % name)
 
@@ -332,7 +432,7 @@ def ceph_changed():
     ceph.configure(service=SERVICE_NAME, key=key, auth=auth,
                    use_syslog=use_syslog)
 
-    if eligible_leader('res_rabbitmq_vip'):
+    if is_elected_leader('res_rabbitmq_vip'):
         rbd_img = config('rbd-name')
         rbd_size = config('rbd-size')
         sizemb = int(rbd_size.split('G')[0]) * 1024
@@ -371,15 +471,22 @@ def update_nrpe_checks():
 
     # Find out if nrpe set nagios_hostname
     hostname = None
+    host_context = None
     for rel in relations_of_type('nrpe-external-master'):
         if 'nagios_hostname' in rel:
             hostname = rel['nagios_hostname']
+            host_context = rel['nagios_host_context']
             break
     # create unique user and vhost for each unit
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
     password = rabbit.get_rabbit_password(user)
+
+    if host_context:
+        myunit = "%s:%s" % (host_context, local_unit())
+    else:
+        myunit = local_unit()
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
@@ -388,7 +495,7 @@ def update_nrpe_checks():
     nrpe_compat = NRPE(hostname=hostname)
     nrpe_compat.add_check(
         shortname=rabbit.RABBIT_USER,
-        description='Check RabbitMQ',
+        description='Check RabbitMQ {%s}' % myunit,
         check_cmd='{}/check_rabbitmq.py --user {} --password {} --vhost {}'
                   ''.format(NAGIOS_PLUGINS, user, password, vhost)
     )
@@ -519,7 +626,11 @@ def configure_rabbit_ssl():
 
 
 @hooks.hook('config-changed')
+@restart_on_change(rabbit.restart_map())
 def config_changed():
+    if config('prefer-ipv6'):
+        rabbit.assert_charm_supports_ipv6()
+
     # Add archive source if provided
     add_source(config('source'), config('key'))
     apt_update(fatal=True)
@@ -536,6 +647,9 @@ def config_changed():
     chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     chmod(RABBIT_DIR, 0o775)
 
+    if config('prefer-ipv6'):
+        rabbit.update_rmq_env_conf(ipv6=config('prefer-ipv6'))
+
     if config('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
         open_port(55672)
@@ -545,11 +659,21 @@ def config_changed():
 
     configure_rabbit_ssl()
 
-    if eligible_leader('res_rabbitmq_vip') or \
-       config('ha-vip-only') is True:
-        service_restart('rabbitmq-server')
+    rabbit.set_all_mirroring_queues(config('mirroring-queues'))
 
-    update_nrpe_checks()
+    if is_relation_made("ha"):
+        ha_is_active_active = config("ha-vip-only")
+
+        if ha_is_active_active:
+            update_nrpe_checks()
+        else:
+            if is_elected_leader('res_rabbitmq_vip'):
+                update_nrpe_checks()
+            else:
+                log("hacluster relation is present but this node is not active"
+                    " skipping update nrpe checks")
+    else:
+        update_nrpe_checks()
 
     # NOTE(jamespage)
     # trigger amqp_changed to pickup and changes to network
