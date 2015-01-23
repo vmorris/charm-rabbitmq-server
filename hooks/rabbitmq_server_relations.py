@@ -164,12 +164,9 @@ def amqp_changed(relation_id=None, remote_unit=None):
         # override private-address settings if access-network is
         # configured and an appropriate network interface is configured.
         relation_settings['hostname'] = \
+            relation_settings['private-address'] = \
             get_address_in_network(config('access-network'),
                                    unit_get('private-address'))
-        relation_settings['private-address'] = \
-            get_address_in_network(config('access-network'),
-                                   unit_get('private-address'))
-
 
     configure_client_ssl(relation_settings)
 
@@ -186,7 +183,6 @@ def amqp_changed(relation_id=None, remote_unit=None):
     # set if need HA queues or not
     if cmp_pkgrevno('rabbitmq-server', '3.0.1') < 0:
         relation_settings['ha_queues'] = True
-
     peer_store_and_set(relation_id=relation_id,
                        relation_settings=relation_settings)
 
