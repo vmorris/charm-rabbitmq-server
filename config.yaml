@@ -144,7 +144,7 @@ options:
   access-network:
     type: string
     default:
-     description: |
+    description: |
       The IP address and netmask of the 'access' network (e.g., 192.168.0.0/24)
        .
       This network will be used for access to RabbitMQ messaging services.
