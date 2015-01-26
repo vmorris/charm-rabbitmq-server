@@ -99,21 +99,29 @@ def configure_amqp(username, vhost, admin=False):
 
 @hooks.hook('amqp-relation-changed')
 def amqp_changed(relation_id=None, remote_unit=None):
+    if config('prefer-ipv6'):
+        host_addr = get_ipv6_addr()[0]
+    else:
+        host_addr = unit_get('private-address')
+
     if not is_elected_leader('res_rabbitmq_vip'):
         # Each unit needs to set the db information otherwise if the unit
         # with the info dies the settings die with it Bug# 1355848
+        exc_list = ['hostname', 'private-address']
         for rel_id in relation_ids('amqp'):
             peerdb_settings = peer_retrieve_by_prefix(rel_id,
-                                                      exc_list=['hostname'])
-            peerdb_settings['hostname'] = unit_get('private-address')
+                                                      exc_list=exc_list)
+            peerdb_settings['hostname'] = host_addr
+            peerdb_settings['private-address'] = host_addr
             if 'password' in peerdb_settings:
                 relation_set(relation_id=rel_id, **peerdb_settings)
+
         log('amqp_changed(): Deferring amqp_changed'
             ' to is_elected_leader.')
 
         # NOTE: active/active case
         if config('prefer-ipv6'):
-            relation_settings = {'private-address': get_ipv6_addr()[0]}
+            relation_settings = {'private-address': host_addr}
             relation_set(relation_settings=relation_settings)
 
         return
@@ -148,7 +156,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
                     queues[amqp]['vhost'])
 
     if config('prefer-ipv6'):
-        relation_settings['private-address'] = get_ipv6_addr()[0]
+        relation_settings['private-address'] = host_addr
     else:
         relation_settings['hostname'] = unit_get('private-address')
 
