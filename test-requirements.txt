@@ -1,3 +1,5 @@
 nose
 testtools
 mock
+coverage
+flake8

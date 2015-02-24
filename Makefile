@@ -15,8 +15,8 @@ clean:
 	virtualenv .venv --system-site-packages
 	.venv/bin/pip install -I -r test-requirements.txt
 
-lint:
-	@flake8 --exclude hooks/charmhelpers hooks unit_tests
+lint: .venv
+	@.venv/bin/flake8 --exclude hooks/charmhelpers hooks unit_tests
 	@charm proof
 
 bin/charm_helpers_sync.py:
@@ -31,7 +31,7 @@ publish: lint
 	bzr push lp:charms/rabbitmq-server
 	bzr push lp:charms/trusty/rabbitmq-server
 
-unit_test: clean .venv
+unit_test: .venv
 	@echo Starting tests...
 	env CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) .venv/bin/nosetests unit_tests/
 
