@@ -570,3 +570,11 @@ def restart_map():
         if svcs:
             _map.append((f, svcs))
     return OrderedDict(_map)
+
+
+def services():
+    ''' Returns a list of services associate with this charm '''
+    _services = []
+    for v in restart_map().values():
+        _services = _services + v
+    return list(set(_services))

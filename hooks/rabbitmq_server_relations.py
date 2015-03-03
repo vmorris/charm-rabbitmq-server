@@ -494,7 +494,7 @@ def update_nrpe_checks():
         check_cmd='{}/check_rabbitmq.py --user {} --password {} --vhost {}'
                   ''.format(NAGIOS_PLUGINS, user, password, vhost)
     )
-    nrpe.add_init_service_checks(nrpe_compat, "rabbitmq-server", current_unit)
+    nrpe.add_init_service_checks(nrpe_compat, rabbit.services(), current_unit)
     nrpe_compat.write()
 
 
