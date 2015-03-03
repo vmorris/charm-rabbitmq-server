@@ -474,23 +474,14 @@ def update_nrpe_checks():
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
 
     # Find out if nrpe set nagios_hostname
-    hostname = None
-    host_context = None
-    for rel in relations_of_type('nrpe-external-master'):
-        if 'nagios_hostname' in rel:
-            hostname = rel['nagios_hostname']
-            host_context = rel['nagios_host_context']
-            break
+    hostname = nrpe.get_nagios_hostname()
+    myunit = nrpe.get_nagios_unit_name()
+
     # create unique user and vhost for each unit
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
     password = rabbit.get_rabbit_password(user)
-
-    if host_context:
-        myunit = "%s:%s" % (host_context, local_unit())
-    else:
-        myunit = local_unit()
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
@@ -503,6 +494,7 @@ def update_nrpe_checks():
         check_cmd='{}/check_rabbitmq.py --user {} --password {} --vhost {}'
                   ''.format(NAGIOS_PLUGINS, user, password, vhost)
     )
+    nrpe.add_init_service_checks(nrpe_compat, "rabbitmq-server", current_unit)
     nrpe_compat.write()
 
 
