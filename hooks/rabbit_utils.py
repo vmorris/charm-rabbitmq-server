@@ -80,9 +80,9 @@ def list_vhosts():
     Returns a list of all the available vhosts
     """
     try:
-        output = subprocess.check_output([RABBITMQ_CTL, 'list_vhosts'])
+        output = subprocess.check_output([RABBITMQ_CTL, 'list_vhosts', '-q'])
 
-        return output.split('\n')[1:-2]
+        return output.split('\n')
     except Exception as ex:
         # if no vhosts, just raises an exception
         log(str(ex), level='DEBUG')
@@ -102,9 +102,9 @@ def create_vhost(vhost):
 
 
 def user_exists(user):
-    cmd = [RABBITMQ_CTL, 'list_users']
+    cmd = [RABBITMQ_CTL, 'list_users', '-q']
     out = subprocess.check_output(cmd)
-    for line in out.split('\n')[1:]:
+    for line in out.split('\n'):
         _user = line.split('\t')[0]
         if _user == user:
             admin = line.split('\t')[1]
