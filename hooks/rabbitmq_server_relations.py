@@ -60,7 +60,7 @@ from charmhelpers.core.host import (
     service_stop,
     service_restart,
 )
-from charmhelpers.contrib.charmsupport.nrpe import NRPE
+from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.ssl.service import ServiceCA
 
 from charmhelpers.contrib.peerstorage import (
@@ -487,7 +487,7 @@ def update_nrpe_checks():
     rabbit.create_user(user, password)
     rabbit.grant_permissions(user, vhost)
 
-    nrpe_compat = NRPE(hostname=hostname)
+    nrpe_compat = nrpe.NRPE(hostname=hostname)
     nrpe_compat.add_check(
         shortname=rabbit.RABBIT_USER,
         description='Check RabbitMQ {%s}' % myunit,
