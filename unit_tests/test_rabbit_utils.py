@@ -4,8 +4,8 @@ import unittest
 import tempfile
 import sys
 
-sys.modules['MySQLdb'] = mock.Mock()
 import rabbit_utils
+sys.modules['MySQLdb'] = mock.Mock()
 
 
 class UtilsTests(unittest.TestCase):
