@@ -253,11 +253,12 @@ def cluster_joined(relation_id=None):
 
 @hooks.hook('cluster-relation-changed')
 def cluster_changed():
-    rdata = relation_get()
-    if 'cookie' not in rdata:
+    cookie = peer_retrieve('cookie')
+    if not cookie:
         log('cluster_joined: cookie not yet set.', level=INFO)
         return
 
+    rdata = relation_get()
     if config('prefer-ipv6') and rdata.get('hostname'):
         private_address = rdata['private-address']
         hostname = rdata['hostname']
