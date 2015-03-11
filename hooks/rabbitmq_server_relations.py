@@ -51,7 +51,8 @@ from charmhelpers.core.hookenv import (
     unit_get,
     is_relation_made,
     Hooks,
-    UnregisteredHookError
+    UnregisteredHookError,
+    is_leader
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
@@ -233,9 +234,14 @@ def cluster_joined(relation_id=None):
                                    ipv6=config('prefer-ipv6'))
         service_restart('rabbitmq-server')
 
-    if is_newer():
-        log('cluster_joined: Relation greater.')
-        return
+    try:
+        if not is_leader():
+            log('Not the leader, deferring cookie propagation to leader')
+            return
+    except NotImplementedError:
+        if is_newer():
+            log('cluster_joined: Relation greater.')
+            return
 
     if not os.path.isfile(rabbit.COOKIE_PATH):
         log('erlang cookie missing from %s' % rabbit.COOKIE_PATH,
