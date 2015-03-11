@@ -225,7 +225,8 @@ def cluster_joined(relation_id=None):
         # then use the current hostname
         nodename = socket.gethostname()
 
-    if nodename and rabbit.get_node_name() != nodename:
+    if (nodename and
+            rabbit.get_node_name() != 'rabbit@%s' % nodename):
         log('forcing nodename=%s' % nodename)
         # would like to have used the restart_on_change decorator, but
         # need to stop it under current nodename prior to updating env
