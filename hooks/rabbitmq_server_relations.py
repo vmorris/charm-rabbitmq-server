@@ -491,7 +491,8 @@ def update_nrpe_checks():
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
-    password = rabbit.get_rabbit_password(user)
+    password = rabbit.get_rabbit_password(username=user,
+                                          local=True)
 
     if host_context:
         myunit = "%s:%s" % (host_context, local_unit())
