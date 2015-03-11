@@ -19,9 +19,12 @@ from charmhelpers.core.hookenv import relation_id as current_relation_id
 from charmhelpers.core.hookenv import (
     is_relation_made,
     relation_ids,
-    relation_get,
+    relation_get as _relation_get,
     local_unit,
-    relation_set,
+    relation_set as _relation_set,
+    leader_get,
+    leader_set,
+    is_leader,
 )
 
 
@@ -52,6 +55,28 @@ def some_hook():
     else:
         print "No peers joind the relation, cannot share key/values :("
 """
+
+
+def relation_set(relation_settings=None, relation_id=None, **kwargs):
+    try:
+        if not relation_id or (relation_id in relation_ids('cluster')):
+            return leader_set(settings=relation_settings, **kwargs)
+        else:
+            raise NotImplementedError
+    except NotImplementedError:
+        return _relation_set(relation_id=relation_id,
+                             relation_settings=relation_settings,
+                             **kwargs)
+
+
+def relation_get(attribute=None, rid=None, unit=None):
+    try:
+        if not rid or (rid in relation_ids('cluster')):
+            return leader_get(attribute)
+        else:
+            raise NotImplementedError
+    except NotImplementedError:
+        return _relation_get(attribute=attribute, rid=rid, unit=unit)
 
 
 def peer_retrieve(key, relation_name='cluster'):
@@ -96,12 +121,26 @@ def peer_store(key, value, relation_name='cluster'):
                          'peer relation {}'.format(relation_name))
 
 
-def peer_echo(includes=None):
+def peer_echo(includes=None, force=False):
     """Echo filtered attributes back onto the same relation for storage.
 
     This is a requirement to use the peerstorage module - it needs to be called
     from the peer relation's changed hook.
+
+    If Juju leader support exists this will be a noop unless force is True.
     """
+    try:
+        is_leader()
+    except NotImplementedError:
+        pass
+    else:
+        if not force:
+            return  # NOOP if leader-election is supported
+
+    # Use original non-leader calls
+    relation_get = _relation_get
+    relation_set = _relation_set
+
     rdata = relation_get()
     echo_data = {}
     if includes is None:
