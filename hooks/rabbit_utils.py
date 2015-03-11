@@ -490,13 +490,17 @@ def migrate_passwords_to_peer_relation():
             pass
 
 
-def get_rabbit_password(username, password=None):
+def get_rabbit_password(username, password=None, local=False):
     ''' Retrieve, generate or store a rabbit password for
     the provided username using peer relation cluster'''
     migrate_passwords_to_peer_relation()
     _key = '{}.passwd'.format(username)
     try:
-        _password = peer_retrieve(_key)
+        if not local:
+            _password = peer_retrieve(_key)
+        else:
+            _password = get_rabbit_password_on_disk(username,
+                                                    password)
         if _password is None:
             _password = password or pwgen(length=64)
             peer_store(_key, _password)
