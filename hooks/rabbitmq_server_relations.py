@@ -312,16 +312,8 @@ def update_cookie():
     service_restart('rabbitmq-server')
 
 
-@hooks.hook('cluster-relation-departed')
-def cluster_departed():
-    if is_relation_made('ha') and \
-            config('ha-vip-only') is False:
-        log('hacluster relation is present, skipping native '
-            'rabbitmq cluster config.')
-        return
-    if not is_newer():
-        log('cluster_joined: Relation lesser.')
-        return
+@hooks.hook('cluster-relation-broken')
+def cluster_broken():
     rabbit.break_cluster()
 
 
