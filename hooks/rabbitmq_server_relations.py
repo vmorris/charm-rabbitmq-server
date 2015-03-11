@@ -90,6 +90,36 @@ def install():
     # NOTE(jamespage) install actually happens in config_changed hook
 
 
+def get_local_nodename():
+    '''Resolve local nodename into something that's universally addressable'''
+    ip_addr = get_host_ip(unit_get('private-address'))
+    try:
+        nodename = get_hostname(ip_addr, fqdn=False)
+    except:
+        log('Cannot resolve hostname for %s using DNS servers' % ip_addr,
+            level='WARNING')
+        log('Falling back to use socket.gethostname()',
+            level='WARNING')
+        # If the private-address is not resolvable using DNS
+        # then use the current hostname
+        nodename = socket.gethostname()
+    return nodename
+
+
+def configure_nodename():
+    '''Set RABBITMQ_NODENAME to something that's resolvable by my peers'''
+    nodename = get_local_nodename()
+    if (nodename and
+            rabbit.get_node_name() != 'rabbit@%s' % nodename):
+        log('forcing nodename=%s' % nodename, level=INFO)
+        # would like to have used the restart_on_change decorator, but
+        # need to stop it under current nodename prior to updating env
+        service_stop('rabbitmq-server')
+        rabbit.update_rmq_env_conf(hostname='rabbit@%s' % nodename,
+                                   ipv6=config('prefer-ipv6'))
+        service_restart('rabbitmq-server')
+
+
 def configure_amqp(username, vhost, admin=False):
     # get and update service password
     password = rabbit.get_rabbit_password(username)
@@ -209,31 +239,6 @@ def cluster_joined(relation_id=None):
         log('hacluster relation is present, skipping native '
             'rabbitmq cluster config.')
         return
-
-    # Set RABBITMQ_NODENAME to something that's resolvable by my peers
-    # get_host_ip() is called to sanitize private-address in case it
-    # doesn't return an IP address
-    ip_addr = get_host_ip(unit_get('private-address'))
-    try:
-        nodename = get_hostname(ip_addr, fqdn=False)
-    except:
-        log('Cannot resolve hostname for %s using DNS servers' % ip_addr,
-            level='WARNING')
-        log('Falling back to use socket.gethostname()',
-            level='WARNING')
-        # If the private-address is not resolvable using DNS
-        # then use the current hostname
-        nodename = socket.gethostname()
-
-    if (nodename and
-            rabbit.get_node_name() != 'rabbit@%s' % nodename):
-        log('forcing nodename=%s' % nodename)
-        # would like to have used the restart_on_change decorator, but
-        # need to stop it under current nodename prior to updating env
-        service_stop('rabbitmq-server')
-        rabbit.update_rmq_env_conf(hostname='rabbit@%s' % nodename,
-                                   ipv6=config('prefer-ipv6'))
-        service_restart('rabbitmq-server')
 
     try:
         if not is_leader():
@@ -655,8 +660,8 @@ def config_changed():
     chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     chmod(RABBIT_DIR, 0o775)
 
-    if config('prefer-ipv6'):
-        rabbit.update_rmq_env_conf(ipv6=config('prefer-ipv6'))
+    rabbit.update_rmq_env_conf(hostname='rabbit@%s' % get_local_nodename(),
+                               ipv6=config('prefer-ipv6'))
 
     if config('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
