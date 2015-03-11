@@ -279,11 +279,14 @@ def cluster_changed():
             'rabbitmq cluster config.', level=INFO)
         return
 
-    # cluster with node
-    if is_newer():
-        if rabbit.cluster_with():
-            # resync nrpe user after clustering
-            update_nrpe_checks()
+    # cluster with node?
+    try:
+        if not is_leader():
+            rabbit.cluster_with()
+    except NotImplementedError:
+        if is_newer():
+            rabbit.cluster_with()
+
     # If cluster has changed peer db may have changed so run amqp_changed
     # to sync any changes
     for rid in relation_ids('amqp'):
