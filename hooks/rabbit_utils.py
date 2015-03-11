@@ -477,6 +477,9 @@ def migrate_passwords_to_peer_relation():
     '''Migrate any passwords storage on disk to cluster peer relation'''
     for f in glob.glob('/var/lib/charm/{}/*.passwd'.format(service_name())):
         _key = os.path.basename(f)
+        # NOTE(jamespage): Don't migrate local use nagios passwords
+        if _key.startswith('nagios-'):
+            continue
         with open(f, 'r') as passwd:
             _value = passwd.read().strip()
         try:
