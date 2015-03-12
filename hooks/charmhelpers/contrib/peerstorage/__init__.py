@@ -1,3 +1,20 @@
+# Copyright 2014-2015 Canonical Limited.
+#
+# This file is part of charm-helpers.
+#
+# charm-helpers is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# charm-helpers is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with charm-helpers.  If not, see <http://www.gnu.org/licenses/>.
+
+import six
 from charmhelpers.core.hookenv import relation_id as current_relation_id
 from charmhelpers.core.hookenv import (
     is_relation_made,
@@ -93,7 +110,7 @@ def peer_echo(includes=None):
             if ex in echo_data:
                 echo_data.pop(ex)
     else:
-        for attribute, value in rdata.iteritems():
+        for attribute, value in six.iteritems(rdata):
             for include in includes:
                 if include in attribute:
                     echo_data[attribute] = value
@@ -119,8 +136,8 @@ def peer_store_and_set(relation_id=None, peer_relation_name='cluster',
                  relation_settings=relation_settings,
                  **kwargs)
     if is_relation_made(peer_relation_name):
-        for key, value in dict(kwargs.items() +
-                               relation_settings.items()).iteritems():
+        for key, value in six.iteritems(dict(list(kwargs.items()) +
+                                             list(relation_settings.items()))):
             key_prefix = relation_id or current_relation_id()
             peer_store(key_prefix + delimiter + key,
                        value,
