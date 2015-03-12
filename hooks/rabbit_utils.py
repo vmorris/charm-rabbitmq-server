@@ -6,7 +6,6 @@ import socket
 import sys
 import subprocess
 import glob
-from lib.utils import render_template
 import tempfile
 
 from charmhelpers.contrib.openstack.utils import (
@@ -31,10 +30,14 @@ from charmhelpers.core.host import (
     cmp_pkgrevno
 )
 
+from charmhelpers.core.templating import render
+
 from charmhelpers.contrib.peerstorage import (
     peer_store,
     peer_retrieve
 )
+
+from collections import OrderedDict
 
 PACKAGES = ['rabbitmq-server', 'python-amqplib']
 
@@ -42,25 +45,52 @@ RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
 ENV_CONF = '/etc/rabbitmq/rabbitmq-env.conf'
 RABBITMQ_CONF = '/etc/rabbitmq/rabbitmq.config'
+ENABLED_PLUGINS = '/etc/rabbitmq/enabled_plugins'
 RABBIT_USER = 'rabbitmq'
 LIB_PATH = '/var/lib/rabbitmq/'
 HOSTS_FILE = '/etc/hosts'
 
 _named_passwd = '/var/lib/charm/{}/{}.passwd'
 
+# hook_contexts are used as a convenient mechanism to render templates
+# logically, consider building a hook_context for template rendering so
+# the charm doesn't concern itself with template specifics etc.
+CONFIG_FILES = OrderedDict([
+    (RABBITMQ_CONF, {
+        'hook_contexts': None,
+        'services': ['rabbitmq-server']
+    }),
+    (ENV_CONF, {
+        'hook_contexts': None,
+        'services': ['rabbitmq-server']
+    }),
+    (ENABLED_PLUGINS, {
+        'hook_contexts': None,
+        'services': ['rabbitmq-server']
+    }),
+])
+
+
+class RabbitmqError(Exception):
+    pass
+
+
+def list_vhosts():
+    """
+    Returns a list of all the available vhosts
+    """
+    try:
+        output = subprocess.check_output([RABBITMQ_CTL, 'list_vhosts'])
+
+        return output.split('\n')[1:-2]
+    except Exception as ex:
+        # if no vhosts, just raises an exception
+        log(str(ex), level='DEBUG')
+        return []
+
 
 def vhost_exists(vhost):
-    try:
-        cmd = [RABBITMQ_CTL, 'list_vhosts']
-        out = subprocess.check_output(cmd)
-        for line in out.split('\n')[1:]:
-            if line == vhost:
-                log('vhost (%s) already exists.' % vhost)
-                return True
-        return False
-    except:
-        # if no vhosts, just raises an exception
-        return False
+    return vhost in list_vhosts()
 
 
 def create_vhost(vhost):
@@ -106,6 +136,93 @@ def grant_permissions(user, vhost):
     cmd = [RABBITMQ_CTL, 'set_permissions', '-p',
            vhost, user, '.*', '.*', '.*']
     subprocess.check_call(cmd)
+
+
+def set_policy(vhost, policy_name, match, value):
+    cmd = [RABBITMQ_CTL, 'set_policy', '-p', vhost,
+           policy_name, match, value]
+    log("setting policy: %s" % str(cmd), level='DEBUG')
+    subprocess.check_call(cmd)
+
+
+def set_ha_mode(vhost, mode, params=None, sync_mode='automatic'):
+    """Valid mode values:
+
+      * 'all': Queue is mirrored across all nodes in the cluster. When a new
+         node is added to the cluster, the queue will be mirrored to that node.
+      * 'exactly': Queue is mirrored to count nodes in the cluster.
+      * 'nodes': Queue is mirrored to the nodes listed in node names
+
+    More details at http://www.rabbitmq.com./ha.html
+
+    :param vhost: virtual host name
+    :param mode: ha mode
+    :param params: values to pass to the policy, possible values depend on the
+                   mode chosen.
+    :param sync_mode: when `mode` is 'exactly' this used to indicate how the
+                      sync has to be done
+                      http://www.rabbitmq.com./ha.html#eager-synchronisation
+    """
+
+    if cmp_pkgrevno('rabbitmq-server', '3.0.0') < 0:
+        log(("Mirroring queues cannot be enabled, only supported "
+             "in rabbitmq-server >= 3.0"), level='WARN')
+        log(("More information at http://www.rabbitmq.com/blog/"
+             "2012/11/19/breaking-things-with-rabbitmq-3-0"), level='INFO')
+        return
+
+    if mode == 'all':
+        value = '{"ha-mode": "all"}'
+    elif mode == 'exactly':
+        value = '{"ha-mode":"exactly","ha-params":%s,"ha-sync-mode":"%s"}' \
+                % (params, sync_mode)
+    elif mode == 'nodes':
+        value = '{"ha-mode":"nodes","ha-params":[%s]}' % ",".join(params)
+    else:
+        raise RabbitmqError(("Unknown mode '%s', known modes: "
+                             "all, exactly, nodes"))
+
+    log("Setting HA policy to vhost '%s'" % vhost, level='INFO')
+    set_policy(vhost, 'HA', '^(?!amq\.).*', value)
+
+
+def clear_ha_mode(vhost, name='HA', force=False):
+    """
+    Clear policy from the `vhost` by `name`
+    """
+    if cmp_pkgrevno('rabbitmq-server', '3.0.0') < 0:
+        log(("Mirroring queues not supported "
+             "in rabbitmq-server >= 3.0"), level='WARN')
+        log(("More information at http://www.rabbitmq.com/blog/"
+             "2012/11/19/breaking-things-with-rabbitmq-3-0"), level='INFO')
+        return
+
+    log("Clearing '%s' policy from vhost '%s'" % (name, vhost), level='INFO')
+    try:
+        subprocess.check_call([RABBITMQ_CTL, 'clear_policy', '-p', vhost,
+                               name])
+    except subprocess.CalledProcessError as ex:
+        if not force:
+            raise ex
+
+
+def set_all_mirroring_queues(enable):
+    """
+    :param enable: if True then enable mirroring queue for all the vhosts,
+                   otherwise the HA policy is removed
+    """
+    if cmp_pkgrevno('rabbitmq-server', '3.0.0') < 0:
+        log(("Mirroring queues not supported "
+             "in rabbitmq-server >= 3.0"), level='WARN')
+        log(("More information at http://www.rabbitmq.com/blog/"
+             "2012/11/19/breaking-things-with-rabbitmq-3-0"), level='INFO')
+        return
+
+    for vhost in list_vhosts():
+        if enable:
+            set_ha_mode(vhost, 'all')
+        else:
+            clear_ha_mode(vhost, force=True)
 
 
 def service(action):
@@ -179,10 +296,6 @@ def cluster_with():
             cmd = [RABBITMQ_CTL, 'start_app']
             subprocess.check_call(cmd)
             log('Host clustered with %s.' % node)
-            if cmp_pkgrevno('rabbitmq-server', '3.0.1') >= 0:
-                cmd = [RABBITMQ_CTL, 'set_policy', 'HA',
-                       '^(?!amq\.).*', '{"ha-mode": "all"}']
-                subprocess.check_call(cmd)
             return True
         except:
             log('Failed to cluster with %s.' % node)
@@ -304,9 +417,7 @@ def enable_ssl(ssl_key, ssl_cert, ssl_port,
     if ssl_ca:
         data["ssl_ca_file"] = ssl_ca_file
 
-    with open(RABBITMQ_CONF, 'w') as rmq_conf:
-        rmq_conf.write(render_template(
-            os.path.basename(RABBITMQ_CONF), data))
+    render(os.path.basename(RABBITMQ_CONF), RABBITMQ_CONF, data, perms=0o644)
 
 
 def execute(cmd, die=False, echo=False):
@@ -442,3 +553,20 @@ def assert_charm_supports_ipv6():
     if lsb_release()['DISTRIB_CODENAME'].lower() < "trusty":
         raise Exception("IPv6 is not supported in the charms for Ubuntu "
                         "versions less than Trusty 14.04")
+
+
+def restart_map():
+    '''Determine the correct resource map to be passed to
+    charmhelpers.core.restart_on_change() based on the services configured.
+
+    :returns: dict: A dictionary mapping config file to lists of services
+                    that should be restarted when file changes.
+    '''
+    _map = []
+    for f, ctxt in CONFIG_FILES.iteritems():
+        svcs = []
+        for svc in ctxt['services']:
+            svcs.append(svc)
+        if svcs:
+            _map.append((f, svcs))
+    return OrderedDict(_map)
