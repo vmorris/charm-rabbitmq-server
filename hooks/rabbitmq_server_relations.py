@@ -702,8 +702,8 @@ def config_changed():
 
 @hooks.hook('leader-settings-changed')
 def leader_settings_changed():
-    # If cluster has changed peer db may have changed so run amqp_changed
-    # to sync any changes
+    # If leader has changed and access credentials, ripple these
+    # out from all units
     for rid in relation_ids('amqp'):
         for unit in related_units(rid):
             amqp_changed(relation_id=rid, remote_unit=unit)
