@@ -41,6 +41,7 @@ from charmhelpers.core.hookenv import (
     ERROR,
     INFO,
     relation_get,
+    relation_clear,
     relation_set,
     relation_ids,
     related_units,
@@ -146,6 +147,9 @@ def amqp_changed(relation_id=None, remote_unit=None):
         host_addr = unit_get('private-address')
 
     if not is_elected_leader('res_rabbitmq_vip'):
+        # NOTE(jamespage) clear relation to deal with data being
+        #                 removed from peer storage
+        relation_clear(relation_id)
         # Each unit needs to set the db information otherwise if the unit
         # with the info dies the settings die with it Bug# 1355848
         exc_list = ['hostname', 'private-address']
@@ -691,6 +695,15 @@ def config_changed():
     # NOTE(jamespage)
     # trigger amqp_changed to pickup and changes to network
     # configuration via the access-network config option.
+    for rid in relation_ids('amqp'):
+        for unit in related_units(rid):
+            amqp_changed(relation_id=rid, remote_unit=unit)
+
+
+@hooks.hook('leader-settings-changed')
+def leader_settings_changed():
+    # If cluster has changed peer db may have changed so run amqp_changed
+    # to sync any changes
     for rid in relation_ids('amqp'):
         for unit in related_units(rid):
             amqp_changed(relation_id=rid, remote_unit=unit)
