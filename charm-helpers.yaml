@@ -4,7 +4,7 @@ include:
     - fetch
     - core
     - contrib.charmsupport
-    - contrib.openstack
+    - contrib.openstack|inc=*
     - contrib.storage
     - contrib.peerstorage
     - contrib.python.packages
