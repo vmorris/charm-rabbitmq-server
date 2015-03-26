@@ -80,9 +80,14 @@ def list_vhosts():
     Returns a list of all the available vhosts
     """
     try:
-        output = subprocess.check_output([RABBITMQ_CTL, 'list_vhosts', '-q'])
+        output = subprocess.check_output([RABBITMQ_CTL, 'list_vhosts'])
 
-        return output.rstrip().split('\n')
+        # NOTE(jamespage): Earlier rabbitmqctl versions append "...done"
+        #                  to the output of list_vhosts
+        if '...done' in output:
+            return output.split('\n')[1:-2]
+        else:
+            return output.split('\n')[1:-1]
     except Exception as ex:
         # if no vhosts, just raises an exception
         log(str(ex), level='DEBUG')
@@ -102,9 +107,9 @@ def create_vhost(vhost):
 
 
 def user_exists(user):
-    cmd = [RABBITMQ_CTL, 'list_users', '-q']
+    cmd = [RABBITMQ_CTL, 'list_users']
     out = subprocess.check_output(cmd)
-    for line in out.rstrip().split('\n'):
+    for line in out.split('\n')[1:]:
         _user = line.split('\t')[0]
         if _user == user:
             admin = line.split('\t')[1]
@@ -477,9 +482,6 @@ def migrate_passwords_to_peer_relation():
     '''Migrate any passwords storage on disk to cluster peer relation'''
     for f in glob.glob('/var/lib/charm/{}/*.passwd'.format(service_name())):
         _key = os.path.basename(f)
-        # NOTE(jamespage): Don't migrate local use nagios passwords
-        if _key.startswith('nagios-'):
-            continue
         with open(f, 'r') as passwd:
             _value = passwd.read().strip()
         try:
@@ -490,17 +492,13 @@ def migrate_passwords_to_peer_relation():
             pass
 
 
-def get_rabbit_password(username, password=None, local=False):
+def get_rabbit_password(username, password=None):
     ''' Retrieve, generate or store a rabbit password for
     the provided username using peer relation cluster'''
     migrate_passwords_to_peer_relation()
     _key = '{}.passwd'.format(username)
     try:
-        if not local:
-            _password = peer_retrieve(_key)
-        else:
-            _password = get_rabbit_password_on_disk(username,
-                                                    password)
+        _password = peer_retrieve(_key)
         if _password is None:
             _password = password or pwgen(length=64)
             peer_store(_key, _password)
@@ -577,3 +575,11 @@ def restart_map():
         if svcs:
             _map.append((f, svcs))
     return OrderedDict(_map)
+
+
+def services():
+    ''' Returns a list of services associate with this charm '''
+    _services = []
+    for v in restart_map().values():
+        _services = _services + v
+    return list(set(_services))

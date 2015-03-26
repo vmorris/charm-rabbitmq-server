@@ -13,4 +13,6 @@ if [ $? -ne 0 ]; then
 fi
 
 # Install any additional python packages, or software here.
-sudo apt-get install -y python python-pika python3-requests
+sudo apt-get install -y python python-pika python3-requests python3-setuptools
+
+sudo easy_install3 python3-pika
