@@ -6,6 +6,7 @@ import sys
 import subprocess
 import glob
 import socket
+import yaml
 
 import rabbit_utils as rabbit
 from lib.utils import (
@@ -59,6 +60,7 @@ from charmhelpers.core.host import (
     rsync,
     service_stop,
     service_restart,
+    write_file,
 )
 from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.ssl.service import ServiceCA
@@ -81,6 +83,10 @@ RABBIT_DIR = '/var/lib/rabbitmq'
 RABBIT_USER = 'rabbitmq'
 RABBIT_GROUP = 'rabbitmq'
 NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
+SCRIPTS_DIR = '/usr/local/bin'
+STATS_CRONFILE = '/etc/cron.d/rabbitmq-stats'
+STATS_DATAFILE = os.path.join(RABBIT_DIR, 'data',
+                  subprocess.check_output(['hostname', '-s']).strip() + '_queue_stats.dat')
 
 
 @hooks.hook('install')
@@ -472,6 +478,17 @@ def update_nrpe_checks():
         rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts',
                            'check_rabbitmq.py'),
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
+        rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts',
+                           'check_rabbitmq_queues.py'),
+              os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq_queues.py'))
+    if config('stats_cron_schedule'):
+        script = os.path.join(SCRIPTS_DIR, 'collect_rabbitmq_stats.sh')
+        cronjob = "{} root {}\n".format(config('stats_cron_schedule'), script)
+        rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts',
+                           'collect_rabbitmq_stats.sh'), script)
+        write_file(STATS_CRONFILE, cronjob)
+    elif os.path.isfile(STATS_CRONFILE):
+        os.remove(STATS_CRONFILE)
 
     # Find out if nrpe set nagios_hostname
     hostname = nrpe.get_nagios_hostname()
@@ -494,6 +511,17 @@ def update_nrpe_checks():
         check_cmd='{}/check_rabbitmq.py --user {} --password {} --vhost {}'
                   ''.format(NAGIOS_PLUGINS, user, password, vhost)
     )
+    if config('queue_thresholds'):
+        cmd = ""
+        # If value of queue_thresholds is incorrect we want the hook to fail
+        for item in yaml.safe_load(config('queue_thresholds')):
+            cmd += ' -c "{}" "{}" {} {}'.format(*item)
+        nrpe_compat.add_check(
+            shortname=rabbit.RABBIT_USER + '_queue',
+            description='Check RabbitMQ Queues',
+            check_cmd='{}/check_rabbitmq_queues.py{} {}'.format(
+                        NAGIOS_PLUGINS, cmd, STATS_DATAFILE)
+        )
     nrpe_compat.write()
 
 
