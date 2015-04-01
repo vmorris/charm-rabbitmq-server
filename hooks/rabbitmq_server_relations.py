@@ -321,11 +321,6 @@ def update_cookie():
     service_restart('rabbitmq-server')
 
 
-@hooks.hook('cluster-relation-broken')
-def cluster_broken():
-    rabbit.break_cluster()
-
-
 @hooks.hook('ha-relation-joined')
 def ha_joined():
     corosync_bindiface = config('ha-bindiface')
@@ -492,8 +487,7 @@ def update_nrpe_checks():
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
-    password = rabbit.get_rabbit_password(username=user,
-                                          local=True)
+    password = rabbit.get_rabbit_password(user)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
