@@ -168,13 +168,13 @@ options:
       your network interface.
   stats_cron_schedule:
       type: string
-      default: ""
+      default: '*/5 * * * *'
       description: |
         Cron schedule used to generate rabbitmq stats. If unset
         no stats will be generated
   queue_thresholds:
       type: string
-      default: ""
+      default: "[['\\*', '\\*', 100, 200]]"
       description: |
         List of RabbitMQ queue size check thresholds. Interpreted as YAML
         in format [<vhost>, <queue>, <warn>, <crit>]
