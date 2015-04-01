@@ -166,3 +166,17 @@ options:
       order for this charm to function correctly, the privacy extension must be
       disabled and a non-temporary address must be configured/available on
       your network interface.
+  stats_cron_schedule:
+      type: string
+      default: ""
+      description: |
+        Cron schedule used to generate rabbitmq stats. If unset
+        no stats will be generated
+  queue_thresholds:
+      type: string
+      default: ""
+      description: |
+        List of RabbitMQ queue size check thresholds. Interpreted as YAML
+        in format [<vhost>, <queue>, <warn>, <crit>]
+        - ['/', 'queue1', 10, 20]
+        - ['/', 'queue2', 200, 300]
