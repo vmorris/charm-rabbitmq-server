@@ -520,7 +520,8 @@ def upgrade_charm():
             log('upgrade_charm: Migrating stored passwd'
                 ' from %s to %s.' % (s, d))
             shutil.move(s, d)
-    rabbit.migrate_passwords_to_peer_relation()
+    if is_elected_leader('res_rabbitmq_vip'):
+        rabbit.migrate_passwords_to_peer_relation()
 
     # explicitly update buggy file name naigos.passwd
     old = os.path.join('var/lib/rabbitmq', 'naigos.passwd')
