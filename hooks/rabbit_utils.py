@@ -466,11 +466,10 @@ def get_rabbit_password_on_disk(username, password=None, local=False):
     ''' Retrieve, generate or store a rabbit password for
     the provided username on disk'''
     if local:
-        _password_file = _local_named_passwd.format(
-            service_name(), username)
+        _passwd_file = _local_named_passwd.format(service_name(), username)
     else:
-        _passwd_file = _named_passwd.format(
-            service_name(), username)
+        _passwd_file = _named_passwd.format(service_name(), username)
+
     _password = None
     if os.path.exists(_passwd_file):
         with open(_passwd_file, 'r') as passwd:
@@ -482,6 +481,7 @@ def get_rabbit_password_on_disk(username, password=None, local=False):
         _password = password or pwgen(length=64)
         write_file(_passwd_file, _password, owner=RABBIT_USER,
                    group=RABBIT_USER, perms=0o660)
+
     return _password
 
 
