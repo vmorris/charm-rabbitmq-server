@@ -47,7 +47,6 @@ from charmhelpers.core.hookenv import (
     related_units,
     service_name,
     local_unit,
-    relations_of_type,
     config,
     unit_get,
     is_relation_made,
@@ -62,7 +61,7 @@ from charmhelpers.core.host import (
     service_stop,
     service_restart,
 )
-from charmhelpers.contrib.charmsupport.nrpe import NRPE
+from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.ssl.service import ServiceCA
 
 from charmhelpers.contrib.peerstorage import (
@@ -322,11 +321,6 @@ def update_cookie():
     service_restart('rabbitmq-server')
 
 
-@hooks.hook('cluster-relation-broken')
-def cluster_broken():
-    rabbit.break_cluster()
-
-
 @hooks.hook('ha-relation-joined')
 def ha_joined():
     corosync_bindiface = config('ha-bindiface')
@@ -486,30 +480,20 @@ def update_nrpe_checks():
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
 
     # Find out if nrpe set nagios_hostname
-    hostname = None
-    host_context = None
-    for rel in relations_of_type('nrpe-external-master'):
-        if 'nagios_hostname' in rel:
-            hostname = rel['nagios_hostname']
-            host_context = rel['nagios_host_context']
-            break
+    hostname = nrpe.get_nagios_hostname()
+    myunit = nrpe.get_nagios_unit_name()
+
     # create unique user and vhost for each unit
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
-    password = rabbit.get_rabbit_password(username=user,
-                                          local=True)
-
-    if host_context:
-        myunit = "%s:%s" % (host_context, local_unit())
-    else:
-        myunit = local_unit()
+    password = rabbit.get_rabbit_password(user)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
     rabbit.grant_permissions(user, vhost)
 
-    nrpe_compat = NRPE(hostname=hostname)
+    nrpe_compat = nrpe.NRPE(hostname=hostname)
     nrpe_compat.add_check(
         shortname=rabbit.RABBIT_USER,
         description='Check RabbitMQ {%s}' % myunit,
