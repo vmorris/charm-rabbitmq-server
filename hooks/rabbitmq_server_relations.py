@@ -487,7 +487,7 @@ def update_nrpe_checks():
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
-    password = rabbit.get_rabbit_password_on_disk(user)
+    password = rabbit.get_rabbit_password(user, local=True)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
