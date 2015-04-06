@@ -47,7 +47,6 @@ from charmhelpers.core.hookenv import (
     related_units,
     service_name,
     local_unit,
-    relations_of_type,
     config,
     unit_get,
     is_relation_made,
@@ -86,7 +85,9 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 SCRIPTS_DIR = '/usr/local/bin'
 STATS_CRONFILE = '/etc/cron.d/rabbitmq-stats'
 STATS_DATAFILE = os.path.join(RABBIT_DIR, 'data',
-                  subprocess.check_output(['hostname', '-s']).strip() + '_queue_stats.dat')
+                              subprocess.check_output(
+                                  ['hostname', '-s']).strip() +
+                              '_queue_stats.dat')
 
 
 @hooks.hook('install')
