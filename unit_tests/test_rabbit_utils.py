@@ -5,6 +5,7 @@ import tempfile
 import sys
 
 sys.modules['MySQLdb'] = mock.Mock()
+mock.patch("charmhelpers.core.hookenv.log")
 import rabbit_utils
 
 

@@ -3,6 +3,7 @@ from testtools import TestCase
 from mock import patch, MagicMock
 
 os.environ['JUJU_UNIT_NAME'] = 'UNIT_TEST/0'
+patch("charmhelpers.core.hookenv.log")
 import rabbitmq_server_relations
 
 
