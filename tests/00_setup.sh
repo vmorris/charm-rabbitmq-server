@@ -16,6 +16,6 @@ fi
 sudo apt-get install -y python python-pika python3-requests python3-setuptools
 
 # Set http proxy if amulet is using one.
-[[ -n "$AMULET_HTTP_PROXY" ]] && export http_proxy="$AMULET_HTTP_PROXY" && https_proxy="$AMULET_HTTP_PROXY"
+[[ -n "$AMULET_HTTP_PROXY" ]] && export http_proxy="$AMULET_HTTP_PROXY" && export https_proxy="$AMULET_HTTP_PROXY"
 
 sudo easy_install3 python3-pika
