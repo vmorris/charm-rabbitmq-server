@@ -8,7 +8,7 @@ options:
     type: string
     default: "off"
     description: |
-      Enable SSL connections on rabbitmq, valid values are 'off', 'on', 'only'. If ssl_key, 
+      Enable SSL connections on rabbitmq, valid values are 'off', 'on', 'only'. If ssl_key,
       ssl_cert, ssl_ca are provided then then those values will be used. Otherwise
       the service will act as its own certificate authority and pass its ca cert to clients.
       For HA or clustered rabbits ssl key/cert must be provided.
@@ -92,6 +92,12 @@ options:
     description: |
       When set to true the 'ha-mode: all' policy is applied to all the exchages
       that match the expression '^(?!amq\.).*'
+  cluster-partition-handling:
+    type: string
+    default: ignore
+    description: |
+      How to respond to cluster partitions.
+      See http://www.rabbitmq.com/partitions.html for further details.
   rbd-size:
     type: string
     default: 5G
