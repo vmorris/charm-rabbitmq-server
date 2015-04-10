@@ -5,25 +5,36 @@ from charmhelpers.core.hookenv import (
     relation_ids,
     relation_set,
     relation_get,
+    log,
+    WARNING,
+    local_unit,
 )
 
 import base64
-import os
 
 
 def get_ssl_mode():
     ssl_mode = config('ssl')
     external_ca = False
     # Legacy config boolean option
-    ssl_on = config('ssl_enabled')
-    if ssl_mode == 'off' and ssl_on is False:
-        ssl_mode = 'off'
-    elif ssl_mode == 'off' and ssl_on:
+    ssl_enabled = config('ssl_enabled')
+
+    if ssl_enabled:
+        log("Deprecated ssl_enabled config option is True -\
+        this should be set to False and 'ssl' config set to 'on' instead.",
+            level=WARNING)
         ssl_mode = 'on'
+    elif ssl_mode == 'on':
+        ssl_mode = 'on'
+    else:
+        ssl_mode = 'off'
+
     ssl_key = config('ssl_key')
     ssl_cert = config('ssl_cert')
+
     if all((ssl_key, ssl_cert)):
         external_ca = True
+
     return ssl_mode, external_ca
 
 
@@ -46,7 +57,7 @@ def configure_client_ssl(relation_data):
 def reconfigure_client_ssl(ssl_enabled=False):
     ssl_config_keys = set(('ssl_key', 'ssl_cert', 'ssl_ca'))
     for rid in relation_ids('amqp'):
-        rdata = relation_get(rid=rid, unit=os.environ['JUJU_UNIT_NAME'])
+        rdata = relation_get(rid=rid, unit=local_unit())
         if not ssl_enabled and ssl_config_keys.intersection(rdata):
             # No clean way to remove entirely, but blank them.
             relation_set(relation_id=rid, ssl_key='', ssl_cert='', ssl_ca='')
