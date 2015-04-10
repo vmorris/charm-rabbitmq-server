@@ -25,7 +25,7 @@ except:
     raise 
 
 rabbit_unit = d.sentry.unit['rabbitmq-server/0'] 
-output, code = rabbit_unit.run("grep autoheal /etc/rabbitmq/rabbitmq.conf") 
+output, code = rabbit_unit.run("grep autoheal /etc/rabbitmq/rabbitmq.config") 
 
 if code != 0 or output == "":
-    amulet.raise_status(amulet.FAIL, msg=message)
+    amulet.raise_status(amulet.FAIL, msg="didn't find autoheal")
