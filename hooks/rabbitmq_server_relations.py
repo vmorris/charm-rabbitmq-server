@@ -51,7 +51,8 @@ from charmhelpers.core.hookenv import (
     unit_get,
     is_relation_made,
     Hooks,
-    UnregisteredHookError
+    UnregisteredHookError,
+    charm_dir
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
@@ -85,9 +86,8 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 SCRIPTS_DIR = '/usr/local/bin'
 STATS_CRONFILE = '/etc/cron.d/rabbitmq-stats'
 STATS_DATAFILE = os.path.join(RABBIT_DIR, 'data',
-                              subprocess.check_output(
-                                  ['hostname', '-s']).strip() +
-                              '_queue_stats.dat')
+                              '{}_queue_stats.dat'.format(
+                              socket.gethostname()))
 
 
 @hooks.hook('install')
@@ -472,7 +472,7 @@ def update_nrpe_checks():
     if config('stats_cron_schedule'):
         script = os.path.join(SCRIPTS_DIR, 'collect_rabbitmq_stats.sh')
         cronjob = "{} root {}\n".format(config('stats_cron_schedule'), script)
-        rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts',
+        rsync(os.path.join(charm_dir(), 'scripts',
                            'collect_rabbitmq_stats.sh'), script)
         write_file(STATS_CRONFILE, cronjob)
     elif os.path.isfile(STATS_CRONFILE):

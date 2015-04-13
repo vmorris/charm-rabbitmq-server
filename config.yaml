@@ -180,3 +180,4 @@ options:
         in format [<vhost>, <queue>, <warn>, <crit>]
         - ['/', 'queue1', 10, 20]
         - ['/', 'queue2', 200, 300]
+        Wildcards '*' are accepted to monitor all vhosts and/or queues
