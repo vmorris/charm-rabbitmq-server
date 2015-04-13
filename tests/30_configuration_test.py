@@ -7,16 +7,24 @@ import os
 import requests
 import socket
 import ssl
+from charmhelpers.contrib.ssl.service import ServiceCA
 
 # The number of seconds to wait for the environment to setup.
 seconds = 900
 # Get the directory in this way to load the files from the tests directory.
 path = os.path.abspath(os.path.dirname(__file__))
-key_path = os.path.join(path, 'rabbit-server-privkey.pem')
+
+# Initialize the SSL certificates to use for the test
+ca_path = '/tmp/rabbit-server-ca'
+ca = ServiceCA('rabbit-server-ca', ca_path)
+ca.init()
+ca.get_or_create_cert('rabbitmq-server')
+
+key_path = os.path.join(ca_path, 'certs', 'rabbitmq-server.key')
 # Read the private key file.
 with open(key_path) as f:
     privateKey = f.read()
-cert_path = os.path.join(path, 'rabbit-server-cert.pem')
+cert_path = os.path.join(ca_path, 'certs', 'rabbitmq-server.crt')
 # Read the certificate file.
 with open(cert_path) as f:
     certificate = f.read()
@@ -116,7 +124,7 @@ rabbit_host = rabbit_unit.info['public-address']
 ssl_port = rabbit_configuration['ssl_port']
 
 # Get the path to the certificate authority file.
-ca_cert_path = os.path.join(path, 'rabbit-server-cacert.pem')
+ca_cert_path = os.path.join(ca_path, 'cacert.pem')
 
 try:
     # Create a normal socket.
