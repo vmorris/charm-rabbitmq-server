@@ -94,11 +94,8 @@ class RabbitMQSSLContext(object):
         ssl_port = config('ssl_port')
 
         # If external managed certs then we need all the fields.
-        if (
-                ssl_mode in ('on', 'only') and
-                any((ssl_key, ssl_cert)) and
-                not all((ssl_key, ssl_cert))
-        ):
+        if (ssl_mode in ('on', 'only') and any((ssl_key, ssl_cert)) and
+                not all((ssl_key, ssl_cert))):
             log('If ssl_key or ssl_cert are specified both are required.',
                 level=ERROR)
             sys.exit(1)
