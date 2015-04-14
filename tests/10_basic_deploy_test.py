@@ -6,34 +6,18 @@ import amulet
 import os
 import socket
 import ssl
-from charmhelpers.contrib.ssl.service import ServiceCA
+import ssl_deployment as rmq_ssl
 
 # The number of seconds to wait for the environment to setup.
 seconds = 900
 # Get the directory in this way to load the files from the tests directory.
 path = os.path.abspath(os.path.dirname(__file__))
 
-# Initialize the SSL certificates to use for the test
-ca_path = '/tmp/rabbit-server-ca'
-ca = ServiceCA('rabbit-server-ca', ca_path)
-ca.init()
-ca.get_or_create_cert('rabbitmq-server')
-
-key_path = os.path.join(ca_path, 'certs', 'rabbitmq-server.key')
-# Read the private key file.
-with open(key_path) as f:
-    privateKey = f.read()
-# Read the certificate file.
-cert_path = os.path.join(ca_path, 'certs', 'rabbitmq-server.crt')
-with open(cert_path) as f:
-    certificate = f.read()
-
-
 # Create a dictionary for the rabbitmq configuration.
 rabbitmq_configuration = {
     'ssl_enabled': True,
-    'ssl_key': privateKey,
-    'ssl_cert': certificate,
+    'ssl_key': rmq_ssl.get_key(),
+    'ssl_cert': rmq_ssl.get_cert(),
     'ssl_port': 5671
 }
 
@@ -81,16 +65,13 @@ else:
 # Get the port for ssl_port instance.
 server_port = rabbitmq_configuration['ssl_port']
 
-# Get the path to the certificate authority file.
-ca_cert_path = os.path.join(ca_path, 'cacert.pem')
-
 print('Testing ssl connection to rabbitmq-server.')
 try:
     # Create a normal socket.
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Require a certificate from the server, since a self-signed certificate
     # was used, the ca_certs must be the server certificate file itself.
-    ssl_sock = ssl.wrap_socket(s, ca_certs=ca_cert_path,
+    ssl_sock = ssl.wrap_socket(s, ca_certs=rmq_ssl.ca_cert_path(),
                                cert_reqs=ssl.CERT_REQUIRED)
     # Connect to the rabbitmq server using ssl.
     ssl_sock.connect((server_address, server_port))
