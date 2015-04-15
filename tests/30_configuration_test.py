@@ -4,7 +4,6 @@
 
 import amulet
 import os
-import requests
 import socket
 import ssl
 from deploy_common import CA
@@ -40,7 +39,7 @@ try:
     # Execute the deployer with the current mapping.
     d.setup(timeout=seconds)
     # Wait for the relation to finish the transations.
-    #d.sentry.wait(seconds)
+    d.sentry.wait(seconds)
 except amulet.helpers.TimeoutError:
     message = 'The environment did not setup in %d seconds.' % seconds
     # The SKIP status enables skip or fail the test based on configuration.
@@ -50,7 +49,7 @@ except:
 
 rabbit_unit = d.sentry.unit['rabbitmq-server/0']
 ###############################################################################
-## Verify that the rabbit service is running on the deployed server.
+# Verify that the rabbit service is running on the deployed server.
 ###############################################################################
 # Create the command that checks if the rabbitmq-server service is running.
 command = 'rabbitmqctl status'
@@ -66,7 +65,7 @@ else:
     print('The rabbitmq-server is running.')
 
 ###############################################################################
-## Verify the configuration values.
+# Verify the configuration values.
 ###############################################################################
 # Get the contents of the private key from the rabbitmq-server
 contents = rabbit_unit.file_contents('/etc/rabbitmq/rabbit-server-privkey.pem')
@@ -90,25 +89,7 @@ else:
 rabbit_host = rabbit_unit.info['public-address']
 
 ###############################################################################
-## Verify the management plugin is running and responding on correct port.
-## According to this: http://www.rabbitmq.com/access-control.html
-## The guest account can only log in from local host.
-## Since this test runs on a different system there is no way to test
-## the management plugin.
-###############################################################################
-# Create a url for the rabbitmq server's managment plugin (uses 55672).
-#management_url = 'http://{0}:55672'.format(rabbit_host)
-#print(management_url)
-# Get the management url with the authentication for guest.
-#r = requests.get(management_url, auth=('guest', 'guest'))
-# Raise an exception if response is not 200 OK.
-#r.raise_for_status()
-#print(str(r))
-#print('Successfully authenticated to the management console at %s' %
-#      management_url)
-
-###############################################################################
-## Verify that SSL is set up on the non-default port.
+# Verify that SSL is set up on the non-default port.
 ###############################################################################
 # Get the port for ssl_port instance.
 ssl_port = rabbit_configuration['ssl_port']

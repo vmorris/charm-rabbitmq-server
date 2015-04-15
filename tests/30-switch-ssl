@@ -3,7 +3,6 @@
 import amulet
 import pika
 import time
-import datetime
 
 d = amulet.Deployment(series='trusty')
 
@@ -29,12 +28,9 @@ host = server.info['public-address']
 
 
 # Connects without ssl
-print("Running tests with SSL disabled...")
 try:
-    print("Attempting to connect to {}...".format(host))
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=host,
                                                                    ssl=False))
-    print("Successfully connected.")
 except Exception as e:
     amulet.raise_status(
         amulet.FAIL,
@@ -43,11 +39,9 @@ except Exception as e:
 
 # Doesn't connect with ssl
 try:
-    print("Attempting to connect securely...")
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=host,
                                                                    ssl=True))
 except Exception as e:
-    print("Successfully did NOT connect.")
     pass
 else:
     amulet.raise_status(
@@ -55,26 +49,21 @@ else:
         'SSL enabled when it shouldn\'t.'
     )
 
-print("Setting ssl=on...")
 d.configure('rabbitmq-server', {
     'ssl': 'on'
 })
-
-# Requires rabbit to come back up, let's give it a few seconds
-time.sleep(10)
 
 # There's a race for changing the configuration of a deployment.
 # The configure from the juju client side happens fairly quickly, and the
 # sentry.wait() can fire before the config-changed hooks do, which causes
 # the wait to end... 
+time.sleep(10)
 d.sentry.wait()
 
 # Connects without ssl
 try:
-    print("Attempting to connect insecurely with ssl=on...")
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=host,
                                                                    ssl=False))
-    print("Successfully connected.")
 except Exception as e:
     amulet.raise_status(
         amulet.FAIL,
@@ -83,34 +72,32 @@ except Exception as e:
 
 # Connects with ssl
 try:
-    print("Attempting to connect securely with ssl=on...")
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=host,
                                                                    port=5671,
                                                                    ssl=True))
-    print("Successfully connected.")
 except Exception as e:
-    st = str(datetime.datetime.now())
     amulet.raise_status(
         amulet.FAIL,
-        "{} Secure connection fails with ssl=on: {}".format(st, str(e))
+        "Secure connection fails with ssl=on"
     )
 
-print("Setting ssl=only...")
 d.configure('rabbitmq-server', {
     'ssl': 'only'
 })
 
+# There's a race for changing the configuration of a deployment.
+# The configure from the juju client side happens fairly quickly, and the
+# sentry.wait() can fire before the config-changed hooks do, which causes
+# the wait to end... 
 time.sleep(10)
 d.sentry.wait()
 
 
 # Doesn't connect without ssl
 try:
-    print("Attmpting to connect insecurely with ssl=only...")
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=host,
                                                                    ssl=False))
 except Exception as e:
-    print("Successfully did NOT connect")
     pass
 else:
     amulet.raise_status(
@@ -121,6 +108,7 @@ else:
 # Connects with ssl
 try:
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=host,
+                                                                   port=5671,
                                                                    ssl=True))
 except Exception as e:
     amulet.raise_status(
