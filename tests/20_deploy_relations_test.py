@@ -8,7 +8,7 @@ import subprocess
 import time
 
 # The number of seconds to wait for the environment to setup.
-seconds = 900
+seconds = 2700
 # The number of units to scale rabbitmq-server to.
 scale = 2
 # The port that amqp traffic is sent on.
@@ -45,15 +45,52 @@ if not os.path.isfile(python2):
     error_message = 'Error, python version 2 is required for this test.'
     amulet.raise_status(amulet.FAIL, msg=error_message)
 
-d = amulet.Deployment(series='trusty')
+series = 'trusty'
+d = amulet.Deployment(series=series)
 # Add rabbitmq-server to the deployment.
 d.add('rabbitmq-server', units=scale)
-# Add the ceph charm to the deployment.
-d.add('ceph')
-# Add cinder to the deployment to test the AMQP relation.
-d.add('cinder')
-# Add hacluster to the deployment to test the ha relation.
-d.add('hacluster')
+
+# TODO(billy-olsen) - Rework this following set of code to be more in-line
+# with how the other openstack services are done. For now, we want to test
+# the current branch with the appropriate branches of related charms in
+# order to test /next with /next branches and /trunk with /trunk branches.
+stable = False
+
+
+def determine_charm_branches(services):
+    if stable:
+        for svc in services:
+            temp = 'lp:charms/{}'
+            svc['location'] = temp.format(svc['name'])
+    else:
+        for svc in services:
+            temp = 'lp:~openstack-charmers/charms/{}/{}/next'
+            svc['location'] = temp.format(series, svc['name'])
+
+    return services
+
+
+def add_services(services):
+    """
+    Adds services to the deployment. The input is a list of dicts with
+    the key of 'name' name for the service name. The branch location
+    will be determined automatically.
+    """
+    services = determine_charm_branches(services)
+
+    for svc in services:
+        d.add(svc['name'], charm=svc['location'])
+
+
+services_to_add = [
+    {'name': 'ceph'},
+    {'name': 'cinder'},
+    {'name': 'hacluster'},
+]
+
+# Add the services to the deployment
+add_services(services_to_add)
+
 # The ceph charm requires configuration to deploy successfully.
 d.configure('ceph', ceph_configuration)
 # Configure the cinder charm.

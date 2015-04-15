@@ -7,15 +7,17 @@ import os
 import requests
 import socket
 import ssl
-import ssl_deployment as rmq_ssl
+from deploy_common import CA
 
 # The number of seconds to wait for the environment to setup.
-seconds = 900
+seconds = 2700
 # Get the directory in this way to load the files from the tests directory.
 path = os.path.abspath(os.path.dirname(__file__))
 
-privateKey = rmq_ssl.get_key()
-certificate = rmq_ssl.get_cert()
+ca = CA()
+
+privateKey = ca.get_key()
+certificate = ca.get_cert()
 
 # Create a dictionary of all the configuration values.
 rabbit_configuration = {
@@ -116,7 +118,7 @@ try:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Require a certificate from the server, since a self-signed certificate
     # was used, the ca_certs must be the server certificate file itself.
-    ssl_sock = ssl.wrap_socket(s, ca_certs=rmq_ssl.ca_cert_path(),
+    ssl_sock = ssl.wrap_socket(s, ca_certs=ca.ca_cert_path(),
                                cert_reqs=ssl.CERT_REQUIRED)
     # Connect to the rabbitmq server using ssl.
     ssl_sock.connect((rabbit_host, ssl_port))

@@ -3,9 +3,9 @@
 import amulet
 import pika
 
-d = amulet.Deployment()
+d = amulet.Deployment(series='trusty')
 
-d.add('rabbitmq-server', charm='cs:trusty/rabbitmq-server')
+d.add('rabbitmq-server')
 d.configure('rabbitmq-server', {
     "source": "deb http://www.rabbitmq.com/debian/ testing main",
     "key": """-----BEGIN PGP PUBLIC KEY BLOCK-----
