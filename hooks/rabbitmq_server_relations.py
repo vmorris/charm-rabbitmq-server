@@ -86,8 +86,8 @@ NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
 SCRIPTS_DIR = '/usr/local/bin'
 STATS_CRONFILE = '/etc/cron.d/rabbitmq-stats'
 STATS_DATAFILE = os.path.join(RABBIT_DIR, 'data',
-                              '{}_queue_stats.dat'.format(
-                              socket.gethostname()))
+                              '{}_queue_stats.dat'
+                              ''.format(socket.gethostname()))
 
 
 @hooks.hook('install')
