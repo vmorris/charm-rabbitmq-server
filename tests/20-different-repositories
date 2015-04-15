@@ -12,11 +12,11 @@ import time
 # The settings of these proxy variables should only survive the current
 # lifetime of the bootstrapped environment and will be torn down for the
 # next test.
-if os.environ['AMULET_HTTP_PROXY']:
+if os.environ.get('AMULET_HTTP_PROXY', None):
     proxy_setting = 'http-proxy={}'.format(os.environ['AMULET_HTTP_PROXY'])
     subprocess.call(['juju', 'set-env', proxy_setting])
 
-if os.environ['AMULET_HTTPS_PROXY']:
+if os.environ.get('AMULET_HTTPS_PROXY', None):
     proxy_setting = 'https-proxy={}'.format(os.environ['AMULET_HTTPS_PROXY'])
     subprocess.call(['juju', 'set-env', proxy_setting])
 
