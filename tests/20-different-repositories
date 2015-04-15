@@ -1,7 +1,25 @@
 #!/usr/bin/python3
 
 import amulet
+import os
 import pika
+import subprocess
+import time
+
+# The juju environment should be bootstrapped at this point, but depending
+# on the test environment an http proxy may be necessary. Check to see if
+# one is configured via the environment variable and set it if it is.
+# The settings of these proxy variables should only survive the current
+# lifetime of the bootstrapped environment and will be torn down for the
+# next test.
+if os.environ['AMULET_HTTP_PROXY']:
+    proxy_setting = 'http-proxy={}'.format(os.environ['AMULET_HTTP_PROXY'])
+    subprocess.call(['juju', 'set-env', proxy_setting])
+
+if os.environ['AMULET_HTTPS_PROXY']:
+    proxy_setting = 'https-proxy={}'.format(os.environ['AMULET_HTTPS_PROXY'])
+    subprocess.call(['juju', 'set-env', proxy_setting])
+
 
 d = amulet.Deployment(series='trusty')
 
@@ -37,7 +55,8 @@ pqQ5UJlqbB5FGLnwJ0773WzgRdxIwSIxkFhL/Mq4agf4an8151kqcZCISQQYEQIA
 CQUCRo5D+wIbDAAKCRD3uM6mBW6OVhLmAKCYY152B/10n7aUNKejs92NsNAnPACf
 ZwbDOKBXGfkCPuRx5j/AGneASNU=
 =Ry+c
------END PGP PUBLIC KEY BLOCK-----"""
+-----END PGP PUBLIC KEY BLOCK-----""",
+    "management_plugin": True,
 })
 d.expose('rabbitmq-server')
 
@@ -57,6 +76,14 @@ except:
 
 server = d.sentry.unit['rabbitmq-server/0']
 host = server.info['public-address']
+
+# TODO(wolsen) It looks like in rabbitmq version 3.3.0 the guest count was
+# disabled by default and therefore we need to do the following bit of code
+# in order to allow guest access for the test to succeed.
+server.run('echo "[{rabbit, [{loopback_users, []}]}]." > '
+           '/etc/rabbitmq/rabbitmq.config')
+server.run('service rabbitmq-server restart')
+
 
 try:
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=host))

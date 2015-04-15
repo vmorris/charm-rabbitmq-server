@@ -16,7 +16,8 @@ clean:
 	.venv/bin/pip install -I -r test-requirements.txt
 
 lint: .venv
-	@.venv/bin/flake8 --exclude hooks/charmhelpers hooks unit_tests
+	@.venv/bin/flake8 --exclude hooks/charmhelpers,tests/charmhelpers hooks \
+        unit_tests tests
 	@charm proof
 
 bin/charm_helpers_sync.py:

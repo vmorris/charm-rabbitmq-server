@@ -141,7 +141,7 @@ for n in range(scale):
 # Iterate over every rabbitmq-unit to get the different relations.
 for rabbit_unit in rabbit_units:
     ###########################################################################
-    ## Test Relations
+    # Test Relations
     ###########################################################################
     # Verify the ceph relation was created for the rabbit unit.
     rabbit_relation = rabbit_unit.relation('ceph', 'ceph:client')
@@ -169,7 +169,7 @@ for rabbit_unit in rabbit_units:
         print(key, value)
 
     ###########################################################################
-    ## Test AMQP
+    # Test AMQP
     ###########################################################################
 
     # The AMQP python library is only available for python2 at this time.
@@ -204,7 +204,7 @@ for rabbit_unit in rabbit_units:
     counter += 1
 
     ###########################################################################
-    ## Verify that the rabbitmq cluster status is correct.
+    # Verify that the rabbitmq cluster status is correct.
     ###########################################################################
     # Create the command that checks if the rabbitmq-server service is running.
     command = 'rabbitmqctl cluster_status'
@@ -220,7 +220,7 @@ for rabbit_unit in rabbit_units:
         print('The rabbitmq-server cluster status is OK.')
 
 ###############################################################################
-## Test the AMQP messages can be sent from and read from another.
+# Test the AMQP messages can be sent from and read from another.
 ###############################################################################
 # Get the public address for rabbitmq-server instance 0.
 send_address = rabbit_units[0].info['public-address']

@@ -50,5 +50,3 @@ class CA(object):
         Returns the certificate authority certificate path.
         """
         return os.path.join(self.CA_PATH, 'cacert.pem')
-
-

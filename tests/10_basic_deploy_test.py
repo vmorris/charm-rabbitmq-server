@@ -43,7 +43,7 @@ except:
 print('The rabbitmq-server has been successfully deployed.')
 
 ###############################################################################
-## Verify that the rabbit service is running on the deployed server.
+# Verify that the rabbit service is running on the deployed server.
 ###############################################################################
 rabbitmq_sentry = d.sentry.unit['rabbitmq-server/0']
 # Get the public address for rabbitmq-server instance.
@@ -62,7 +62,7 @@ else:
     print('The rabbitmq-server is running on %s' % server_address)
 
 ###############################################################################
-## Test the ssl certificate.
+# Test the ssl certificate.
 ###############################################################################
 # Get the port for ssl_port instance.
 server_port = rabbitmq_configuration['ssl_port']
