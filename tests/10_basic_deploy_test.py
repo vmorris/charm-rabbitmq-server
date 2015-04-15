@@ -6,18 +6,20 @@ import amulet
 import os
 import socket
 import ssl
-import ssl_deployment as rmq_ssl
+from deploy_common import CA
 
 # The number of seconds to wait for the environment to setup.
 seconds = 900
 # Get the directory in this way to load the files from the tests directory.
 path = os.path.abspath(os.path.dirname(__file__))
 
+ca = CA()
+
 # Create a dictionary for the rabbitmq configuration.
 rabbitmq_configuration = {
     'ssl_enabled': True,
-    'ssl_key': rmq_ssl.get_key(),
-    'ssl_cert': rmq_ssl.get_cert(),
+    'ssl_key': ca.get_key(),
+    'ssl_cert': ca.get_cert(),
     'ssl_port': 5671
 }
 
@@ -71,7 +73,7 @@ try:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Require a certificate from the server, since a self-signed certificate
     # was used, the ca_certs must be the server certificate file itself.
-    ssl_sock = ssl.wrap_socket(s, ca_certs=rmq_ssl.ca_cert_path(),
+    ssl_sock = ssl.wrap_socket(s, ca_certs=ca.ca_cert_path(),
                                cert_reqs=ssl.CERT_REQUIRED)
     # Connect to the rabbitmq server using ssl.
     ssl_sock.connect((server_address, server_port))
