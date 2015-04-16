@@ -103,11 +103,13 @@ class ServiceCA(object):
         """
         if not exists(path_join(self.ca_dir, 'ca.cnf')):
             with open(path_join(self.ca_dir, 'ca.cnf'), 'w') as fh:
-                fh.write(CA_CONF_TEMPLATE % (self.get_conf_variables())),
+                fh.write(
+                    CA_CONF_TEMPLATE % (self.get_conf_variables()))
 
         if not exists(path_join(self.ca_dir, 'signing.cnf')):
             with open(path_join(self.ca_dir, 'signing.cnf'), 'w') as fh:
-                fh.write(SIGNING_CONF_TEMPLATE % (self.get_conf_variables()))
+                fh.write(
+                    SIGNING_CONF_TEMPLATE % (self.get_conf_variables()))
 
         if exists(self.ca_cert) or exists(self.ca_key):
             raise RuntimeError("Initialized called when CA already exists")
