@@ -91,23 +91,23 @@ class ServiceCA(object):
                 os.mkdir(sd)
 
         if not exists(path_join(ca_dir, 'serial')):
-            with open(path_join(ca_dir, 'serial'), 'wb') as fh:
+            with open(path_join(ca_dir, 'serial'), 'w') as fh:
                 fh.write('02\n')
 
         if not exists(path_join(ca_dir, 'index.txt')):
-            with open(path_join(ca_dir, 'index.txt'), 'wb') as fh:
+            with open(path_join(ca_dir, 'index.txt'), 'w') as fh:
                 fh.write('')
 
     def _init_ca(self):
         """Generate the root ca's cert and key.
         """
         if not exists(path_join(self.ca_dir, 'ca.cnf')):
-            with open(path_join(self.ca_dir, 'ca.cnf'), 'wb') as fh:
+            with open(path_join(self.ca_dir, 'ca.cnf'), 'w') as fh:
                 fh.write(
                     CA_CONF_TEMPLATE % (self.get_conf_variables()))
 
         if not exists(path_join(self.ca_dir, 'signing.cnf')):
-            with open(path_join(self.ca_dir, 'signing.cnf'), 'wb') as fh:
+            with open(path_join(self.ca_dir, 'signing.cnf'), 'w') as fh:
                 fh.write(
                     SIGNING_CONF_TEMPLATE % (self.get_conf_variables()))
 
