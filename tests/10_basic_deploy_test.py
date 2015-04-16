@@ -6,26 +6,20 @@ import amulet
 import os
 import socket
 import ssl
+from deploy_common import CA
 
 # The number of seconds to wait for the environment to setup.
 seconds = 900
 # Get the directory in this way to load the files from the tests directory.
 path = os.path.abspath(os.path.dirname(__file__))
 
-key_path = os.path.join(path, 'rabbit-server-privkey.pem')
-# Read the private key file.
-with open(key_path) as f:
-    privateKey = f.read()
-# Read the certificate file.
-cert_path = os.path.join(path, 'rabbit-server-cert.pem')
-with open(cert_path) as f:
-    certificate = f.read()
+ca = CA()
 
 # Create a dictionary for the rabbitmq configuration.
 rabbitmq_configuration = {
     'ssl_enabled': True,
-    'ssl_key': privateKey,
-    'ssl_cert': certificate,
+    'ssl_key': ca.get_key(),
+    'ssl_cert': ca.get_cert(),
     'ssl_port': 5671
 }
 
@@ -49,7 +43,7 @@ except:
 print('The rabbitmq-server has been successfully deployed.')
 
 ###############################################################################
-## Verify that the rabbit service is running on the deployed server.
+# Verify that the rabbit service is running on the deployed server.
 ###############################################################################
 rabbitmq_sentry = d.sentry.unit['rabbitmq-server/0']
 # Get the public address for rabbitmq-server instance.
@@ -68,13 +62,10 @@ else:
     print('The rabbitmq-server is running on %s' % server_address)
 
 ###############################################################################
-## Test the ssl certificate.
+# Test the ssl certificate.
 ###############################################################################
 # Get the port for ssl_port instance.
 server_port = rabbitmq_configuration['ssl_port']
-
-# Get the path to the certificate authority file.
-ca_cert_path = os.path.join(path, 'rabbit-server-cacert.pem')
 
 print('Testing ssl connection to rabbitmq-server.')
 try:
@@ -82,7 +73,7 @@ try:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Require a certificate from the server, since a self-signed certificate
     # was used, the ca_certs must be the server certificate file itself.
-    ssl_sock = ssl.wrap_socket(s, ca_certs=ca_cert_path,
+    ssl_sock = ssl.wrap_socket(s, ca_certs=ca.ca_cert_path(),
                                cert_reqs=ssl.CERT_REQUIRED)
     # Connect to the rabbitmq server using ssl.
     ssl_sock.connect((server_address, server_port))

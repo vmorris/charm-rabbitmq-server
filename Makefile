@@ -16,7 +16,8 @@ clean:
 	.venv/bin/pip install -I -r test-requirements.txt
 
 lint: .venv
-	@.venv/bin/flake8 --exclude hooks/charmhelpers hooks unit_tests
+	@.venv/bin/flake8 --exclude hooks/charmhelpers,tests/charmhelpers hooks \
+        unit_tests tests
 	@charm proof
 
 bin/charm_helpers_sync.py:
@@ -26,6 +27,7 @@ bin/charm_helpers_sync.py:
 
 sync: bin/charm_helpers_sync.py
 	@$(PYTHON) bin/charm_helpers_sync.py -c charm-helpers.yaml
+	@$(PYTHON) bin/charm_helpers_sync.py -c charm-helpers-tests.yaml
 
 publish: lint
 	bzr push lp:charms/rabbitmq-server
