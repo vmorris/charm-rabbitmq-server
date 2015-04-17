@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import base64
+
 import os
 import shutil
 import sys
@@ -8,6 +8,8 @@ import glob
 import socket
 
 import rabbit_utils as rabbit
+import ssl_utils
+
 from lib.utils import (
     chown, chmod,
     is_newer,
@@ -60,7 +62,6 @@ from charmhelpers.core.host import (
     service_restart,
 )
 from charmhelpers.contrib.charmsupport import nrpe
-from charmhelpers.contrib.ssl.service import ServiceCA
 
 from charmhelpers.contrib.peerstorage import (
     peer_echo,
@@ -175,7 +176,7 @@ def amqp_changed(relation_id=None, remote_unit=None):
             get_address_in_network(config('access-network'),
                                    unit_get('private-address'))
 
-    configure_client_ssl(relation_settings)
+    ssl_utils.configure_client_ssl(relation_settings)
 
     if is_clustered():
         relation_settings['clustered'] = 'true'
@@ -512,103 +513,10 @@ def upgrade_charm():
 MAN_PLUGIN = 'rabbitmq_management'
 
 
-def configure_client_ssl(relation_data):
-    """Configure client with ssl
-    """
-    ssl_mode, external_ca = _get_ssl_mode()
-    if ssl_mode == 'off':
-        return
-    relation_data['ssl_port'] = config('ssl_port')
-    if external_ca:
-        if config('ssl_ca'):
-            relation_data['ssl_ca'] = base64.b64encode(
-                config('ssl_ca'))
-        return
-    ca = ServiceCA.get_ca()
-    relation_data['ssl_ca'] = base64.b64encode(ca.get_ca_bundle())
-
-
-def _get_ssl_mode():
-    ssl_mode = config('ssl')
-    external_ca = False
-    # Legacy config boolean option
-    ssl_on = config('ssl_enabled')
-    if ssl_mode == 'off' and ssl_on is False:
-        ssl_mode = 'off'
-    elif ssl_mode == 'off' and ssl_on:
-        ssl_mode = 'on'
-    ssl_key = config('ssl_key')
-    ssl_cert = config('ssl_cert')
-    if all((ssl_key, ssl_cert)):
-        external_ca = True
-    return ssl_mode, external_ca
-
-
-def _convert_from_base64(v):
-    # Rabbit originally supported pem encoded key/cert in config, play
-    # nice on upgrades as we now expect base64 encoded key/cert/ca.
-    if not v:
-        return v
-    if v.startswith('-----BEGIN'):
-        return v
-    try:
-        return base64.b64decode(v)
-    except TypeError:
-        return v
-
-
-def reconfigure_client_ssl(ssl_enabled=False):
-    ssl_config_keys = set(('ssl_key', 'ssl_cert', 'ssl_ca'))
-    for rid in relation_ids('amqp'):
-        rdata = relation_get(rid=rid, unit=os.environ['JUJU_UNIT_NAME'])
-        if not ssl_enabled and ssl_config_keys.intersection(rdata):
-            # No clean way to remove entirely, but blank them.
-            relation_set(relation_id=rid, ssl_key='', ssl_cert='', ssl_ca='')
-        elif ssl_enabled and not ssl_config_keys.intersection(rdata):
-            configure_client_ssl(rdata)
-            relation_set(relation_id=rid, **rdata)
-
-
-def configure_rabbit_ssl():
-    """
-    The legacy config support adds some additional complications.
-
-    ssl_enabled = True, ssl = off -> ssl enabled
-    ssl_enabled = False, ssl = on -> ssl enabled
-    """
-    ssl_mode, external_ca = _get_ssl_mode()
-
-    if ssl_mode == 'off':
-        if os.path.exists(rabbit.RABBITMQ_CONF):
-            os.remove(rabbit.RABBITMQ_CONF)
-        close_port(config('ssl_port'))
-        reconfigure_client_ssl()
-        return
-    ssl_key = _convert_from_base64(config('ssl_key'))
-    ssl_cert = _convert_from_base64(config('ssl_cert'))
-    ssl_ca = _convert_from_base64(config('ssl_ca'))
-    ssl_port = config('ssl_port')
-
-    # If external managed certs then we need all the fields.
-    if (ssl_mode in ('on', 'only') and any((ssl_key, ssl_cert)) and
-            not all((ssl_key, ssl_cert))):
-        log('If ssl_key or ssl_cert are specified both are required.',
-            level=ERROR)
-        sys.exit(1)
-
-    if not external_ca:
-        ssl_cert, ssl_key, ssl_ca = ServiceCA.get_service_cert()
-
-    rabbit.enable_ssl(
-        ssl_key, ssl_cert, ssl_port, ssl_ca,
-        ssl_only=(ssl_mode == "only"), ssl_client=False)
-    reconfigure_client_ssl(True)
-    open_port(ssl_port)
-
-
 @hooks.hook('config-changed')
 @restart_on_change(rabbit.restart_map())
 def config_changed():
+
     if config('prefer-ipv6'):
         rabbit.assert_charm_supports_ipv6()
 
@@ -638,9 +546,9 @@ def config_changed():
         rabbit.disable_plugin(MAN_PLUGIN)
         close_port(55672)
 
-    configure_rabbit_ssl()
-
     rabbit.set_all_mirroring_queues(config('mirroring-queues'))
+    rabbit.ConfigRenderer(
+        rabbit.CONFIG_FILES).write_all()
 
     if is_relation_made("ha"):
         ha_is_active_active = config("ha-vip-only")

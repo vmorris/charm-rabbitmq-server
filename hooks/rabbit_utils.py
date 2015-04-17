@@ -1,12 +1,17 @@
 import os
-import pwd
-import grp
 import re
 import socket
 import sys
 import subprocess
 import glob
 import tempfile
+
+from rabbitmq_context import (
+    RabbitMQSSLContext,
+    RabbitMQClusterContext
+)
+
+from charmhelpers.core.templating import render
 
 from charmhelpers.contrib.openstack.utils import (
     get_hostname,
@@ -29,8 +34,6 @@ from charmhelpers.core.host import (
     lsb_release,
     cmp_pkgrevno
 )
-
-from charmhelpers.core.templating import render
 
 from charmhelpers.contrib.peerstorage import (
     peer_store,
@@ -57,7 +60,10 @@ _named_passwd = '/var/lib/charm/{}/{}.passwd'
 # the charm doesn't concern itself with template specifics etc.
 CONFIG_FILES = OrderedDict([
     (RABBITMQ_CONF, {
-        'hook_contexts': None,
+        'hook_contexts': [
+            RabbitMQSSLContext(),
+            RabbitMQClusterContext(),
+        ],
         'services': ['rabbitmq-server']
     }),
     (ENV_CONF, {
@@ -69,6 +75,32 @@ CONFIG_FILES = OrderedDict([
         'services': ['rabbitmq-server']
     }),
 ])
+
+
+class ConfigRenderer():
+
+    def __init__(self, config):
+        self.config_data = {}
+
+        for config_path, data in config.items():
+            if 'hook_contexts' in data and data['hook_contexts']:
+                ctxt = {}
+                for svc_context in data['hook_contexts']:
+                    ctxt.update(svc_context())
+                self.config_data[config_path] = ctxt
+
+    def write(self, config_path):
+        data = self.config_data.get(config_path, None)
+        if data:
+            log("writing config file: %s , data: %s" % (config_path,
+                str(data)), level='DEBUG')
+
+            render(os.path.basename(config_path), config_path,
+                   data, perms=0o644)
+
+    def write_all(self):
+        for service in self.config_data.keys():
+            self.write(service)
 
 
 class RabbitmqError(Exception):
@@ -389,40 +421,6 @@ def enable_plugin(plugin):
 
 def disable_plugin(plugin):
     _manage_plugin(plugin, 'disable')
-
-ssl_key_file = "/etc/rabbitmq/rabbit-server-privkey.pem"
-ssl_cert_file = "/etc/rabbitmq/rabbit-server-cert.pem"
-ssl_ca_file = "/etc/rabbitmq/rabbit-server-ca.pem"
-
-
-def enable_ssl(ssl_key, ssl_cert, ssl_port,
-               ssl_ca=None, ssl_only=False, ssl_client=None):
-    uid = pwd.getpwnam("root").pw_uid
-    gid = grp.getgrnam("rabbitmq").gr_gid
-
-    for contents, path in (
-            (ssl_key, ssl_key_file),
-            (ssl_cert, ssl_cert_file),
-            (ssl_ca, ssl_ca_file)):
-        if not contents:
-            continue
-        with open(path, 'w') as fh:
-            fh.write(contents)
-        os.chmod(path, 0o640)
-        os.chown(path, uid, gid)
-
-    data = {
-        "ssl_port": ssl_port,
-        "ssl_cert_file": ssl_cert_file,
-        "ssl_key_file": ssl_key_file,
-        "ssl_client": ssl_client,
-        "ssl_ca_file": "",
-        "ssl_only": ssl_only}
-
-    if ssl_ca:
-        data["ssl_ca_file"] = ssl_ca_file
-
-    render(os.path.basename(RABBITMQ_CONF), RABBITMQ_CONF, data, perms=0o644)
 
 
 def execute(cmd, die=False, echo=False):
