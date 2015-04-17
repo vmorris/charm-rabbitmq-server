@@ -166,3 +166,9 @@ options:
       order for this charm to function correctly, the privacy extension must be
       disabled and a non-temporary address must be configured/available on
       your network interface.
+  min-cluster-size:
+    type: int
+    default:
+    description: |
+      Minimum number of units expected to exist before charm will attempt to
+      form a cluster.

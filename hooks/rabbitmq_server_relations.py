@@ -276,6 +276,18 @@ def cluster_changed():
         if rabbit.cluster_with():
             # resync nrpe user after clustering
             update_nrpe_checks()
+
+    min_size = config('min-cluster-size')
+    if min_size:
+        size = 0
+        for rid in relation_ids('cluster'):
+            size = len(related_units(rid))
+
+        if min_size != size:
+            log("Not enough units to form cluster (required=%s, got=%s)" %
+                (min_size, size), level=INFO)
+            return
+
     # If cluster has changed peer db may have changed so run amqp_changed
     # to sync any changes
     for rid in relation_ids('amqp'):
