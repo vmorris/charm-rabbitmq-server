@@ -194,6 +194,26 @@ def amqp_changed(relation_id=None, remote_unit=None):
                        relation_settings=relation_settings)
 
 
+def is_sufficient_peers():
+    """If min-cluster-size has been provided, check that we have sufficient
+    number of peers to proceed with creating rabbitmq cluster.
+    """
+    min_size = config('min-cluster-size')
+    if min_size:
+        size = 0
+        for rid in relation_ids('cluster'):
+            size = len(related_units(rid))
+
+        # Include this unit
+        size += 1
+        if min_size > size:
+            log("Insufficient number of peer units to form cluster "
+                "(expected=%s, got=%s)" % (min_size, size), level=INFO)
+            return False
+
+    return True
+
+
 @hooks.hook('cluster-relation-joined')
 def cluster_joined(relation_id=None):
     if config('prefer-ipv6'):
@@ -240,8 +260,13 @@ def cluster_joined(relation_id=None):
         log('erlang cookie missing from %s' % rabbit.COOKIE_PATH,
             level=ERROR)
         return
-    cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
-    peer_store('cookie', cookie)
+
+    if not is_sufficient_peers():
+        return
+
+    if is_elected_leader('res_rabbitmq_vip'):
+        cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
+        peer_store('cookie', cookie)
 
 
 @hooks.hook('cluster-relation-changed')
@@ -262,6 +287,11 @@ def cluster_changed():
     whitelist = [a for a in rdata.keys() if a not in blacklist]
     peer_echo(includes=whitelist)
 
+    if not is_sufficient_peers():
+        # Stop rabbit until leader has finished configuring
+        service_stop('rabbitmq-server')
+        return
+
     # sync the cookie with peers if necessary
     update_cookie()
 
@@ -276,17 +306,6 @@ def cluster_changed():
         if rabbit.cluster_with():
             # resync nrpe user after clustering
             update_nrpe_checks()
-
-    min_size = config('min-cluster-size')
-    if min_size:
-        size = 0
-        for rid in relation_ids('cluster'):
-            size = len(related_units(rid))
-
-        if min_size != size:
-            log("Not enough units to form cluster (required=%s, got=%s)" %
-                (min_size, size), level=INFO)
-            return
 
     # If cluster has changed peer db may have changed so run amqp_changed
     # to sync any changes
