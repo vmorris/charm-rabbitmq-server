@@ -39,4 +39,4 @@ unit_test: .venv
 
 functional_test:
 	@echo Starting amulet tests...
-	@juju test -v -p AMULET_HTTP_PROXY --timeout 900
+	@juju test -v -p AMULET_HTTP_PROXY,OS_USERNAME,OS_TENANT_NAME,OS_REGION_NAME,OS_PASSWORD,OS_AUTH_URL --timeout 900
