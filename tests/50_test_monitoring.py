@@ -3,22 +3,10 @@
 # This Amulet test performs a basic deploy and checks if rabbitmq is running.
 
 import amulet
-import os
 import time
 
 # The number of seconds to wait for the environment to setup.
 seconds = 900
-# Get the directory in this way to load the files from the tests directory.
-path = os.path.abspath(os.path.dirname(__file__))
-
-key_path = os.path.join(path, 'rabbit-server-privkey.pem')
-# Read the private key file.
-with open(key_path) as f:
-    privateKey = f.read()
-# Read the certificate file.
-cert_path = os.path.join(path, 'rabbit-server-cert.pem')
-with open(cert_path) as f:
-    certificate = f.read()
 
 # Create a dictionary for the rabbitmq configuration.
 rabbitmq_configuration = {
