@@ -171,4 +171,4 @@ options:
     default:
     description: |
       Minimum number of units expected to exist before charm will attempt to
-      form a cluster.
+      form a rabbitmq cluster.
