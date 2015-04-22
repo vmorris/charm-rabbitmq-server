@@ -6,7 +6,15 @@ import sys
 import subprocess
 import glob
 import socket
-import yaml
+
+try:
+    import yaml  # flake8: noqa
+except ImportError:
+    if sys.version_info.major == 2:
+        subprocess.check_call(['apt-get', 'install', '-y', 'python-yaml'])
+    else:
+        subprocess.check_call(['apt-get', 'install', '-y', 'python3-yaml'])
+    import yaml  # flake8: noqa
 
 import rabbit_utils as rabbit
 from lib.utils import (
