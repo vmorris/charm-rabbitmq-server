@@ -1,0 +1,5 @@
+destination: tests/charmhelpers
+branch: lp:charm-helpers
+include:
+    - core
+    - contrib.ssl

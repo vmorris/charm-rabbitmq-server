@@ -4,22 +4,19 @@
 
 import amulet
 import os
-import requests
 import socket
 import ssl
+from deploy_common import CA
 
 # The number of seconds to wait for the environment to setup.
-seconds = 900
+seconds = 2700
 # Get the directory in this way to load the files from the tests directory.
 path = os.path.abspath(os.path.dirname(__file__))
-key_path = os.path.join(path, 'rabbit-server-privkey.pem')
-# Read the private key file.
-with open(key_path) as f:
-    privateKey = f.read()
-cert_path = os.path.join(path, 'rabbit-server-cert.pem')
-# Read the certificate file.
-with open(cert_path) as f:
-    certificate = f.read()
+
+ca = CA()
+
+privateKey = ca.get_key()
+certificate = ca.get_cert()
 
 # Create a dictionary of all the configuration values.
 rabbit_configuration = {
@@ -27,7 +24,7 @@ rabbit_configuration = {
     'ssl_enabled': True,
     'ssl_port': 5999,
     'ssl_key': privateKey,
-    'ssl_cert': certificate
+    'ssl_cert': certificate,
 }
 
 d = amulet.Deployment(series='trusty')
@@ -42,7 +39,7 @@ try:
     # Execute the deployer with the current mapping.
     d.setup(timeout=seconds)
     # Wait for the relation to finish the transations.
-    #d.sentry.wait(seconds)
+    d.sentry.wait(seconds)
 except amulet.helpers.TimeoutError:
     message = 'The environment did not setup in %d seconds.' % seconds
     # The SKIP status enables skip or fail the test based on configuration.
@@ -52,7 +49,7 @@ except:
 
 rabbit_unit = d.sentry.unit['rabbitmq-server/0']
 ###############################################################################
-## Verify that the rabbit service is running on the deployed server.
+# Verify that the rabbit service is running on the deployed server.
 ###############################################################################
 # Create the command that checks if the rabbitmq-server service is running.
 command = 'rabbitmqctl status'
@@ -68,7 +65,7 @@ else:
     print('The rabbitmq-server is running.')
 
 ###############################################################################
-## Verify the configuration values.
+# Verify the configuration values.
 ###############################################################################
 # Get the contents of the private key from the rabbitmq-server
 contents = rabbit_unit.file_contents('/etc/rabbitmq/rabbit-server-privkey.pem')
@@ -92,38 +89,17 @@ else:
 rabbit_host = rabbit_unit.info['public-address']
 
 ###############################################################################
-## Verify the management plugin is running and responding on correct port.
-## According to this: http://www.rabbitmq.com/access-control.html
-## The guest account can only log in from local host.
-## Since this test runs on a different system there is no way to test
-## the management plugin.
-###############################################################################
-# Create a url for the rabbitmq server's managment plugin (uses 55672).
-#management_url = 'http://{0}:55672'.format(rabbit_host)
-#print(management_url)
-# Get the management url with the authentication for guest.
-#r = requests.get(management_url, auth=('guest', 'guest'))
-# Raise an exception if response is not 200 OK.
-#r.raise_for_status()
-#print(str(r))
-#print('Successfully authenticated to the management console at %s' %
-#      management_url)
-
-###############################################################################
-## Verify that SSL is set up on the non-default port.
+# Verify that SSL is set up on the non-default port.
 ###############################################################################
 # Get the port for ssl_port instance.
 ssl_port = rabbit_configuration['ssl_port']
-
-# Get the path to the certificate authority file.
-ca_cert_path = os.path.join(path, 'rabbit-server-cacert.pem')
 
 try:
     # Create a normal socket.
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Require a certificate from the server, since a self-signed certificate
     # was used, the ca_certs must be the server certificate file itself.
-    ssl_sock = ssl.wrap_socket(s, ca_certs=ca_cert_path,
+    ssl_sock = ssl.wrap_socket(s, ca_certs=ca.ca_cert_path(),
                                cert_reqs=ssl.CERT_REQUIRED)
     # Connect to the rabbitmq server using ssl.
     ssl_sock.connect((rabbit_host, ssl_port))

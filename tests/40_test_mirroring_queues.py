@@ -10,14 +10,15 @@ import telnetlib
 
 
 # The number of seconds to wait for the environment to setup.
-seconds = 1200
+seconds = 2700
 
 d = amulet.Deployment(series="trusty")
 # Add the rabbitmq-server charm to the deployment.
 d.add('rabbitmq-server', units=2)
 
 # Create a configuration.
-configuration = {'mirroring-queues': True}
+configuration = {'mirroring-queues': True,
+                 'management_plugin': True}
 d.configure('rabbitmq-server', configuration)
 d.expose('rabbitmq-server')
 
@@ -81,4 +82,4 @@ else:
 # check the management plugin is running
 mgmt_port = "15672"
 print('Checking management port')
-telnetlib.Telnet(rabbit_addr1, mgmt_port)
+telnetlib.Telnet(rabbit_addr2, mgmt_port)
