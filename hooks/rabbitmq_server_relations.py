@@ -7,6 +7,15 @@ import subprocess
 import glob
 import socket
 
+try:
+    import yaml  # flake8: noqa
+except ImportError:
+    if sys.version_info.major == 2:
+        subprocess.check_call(['apt-get', 'install', '-y', 'python-yaml'])
+    else:
+        subprocess.check_call(['apt-get', 'install', '-y', 'python3-yaml'])
+    import yaml  # flake8: noqa
+
 import rabbit_utils as rabbit
 from lib.utils import (
     chown, chmod,
@@ -52,7 +61,8 @@ from charmhelpers.core.hookenv import (
     is_relation_made,
     Hooks,
     UnregisteredHookError,
-    is_leader
+    is_leader,
+    charm_dir,
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
@@ -60,6 +70,7 @@ from charmhelpers.core.host import (
     rsync,
     service_stop,
     service_restart,
+    write_file,
 )
 from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.ssl.service import ServiceCA
@@ -82,6 +93,11 @@ RABBIT_DIR = '/var/lib/rabbitmq'
 RABBIT_USER = 'rabbitmq'
 RABBIT_GROUP = 'rabbitmq'
 NAGIOS_PLUGINS = '/usr/local/lib/nagios/plugins'
+SCRIPTS_DIR = '/usr/local/bin'
+STATS_CRONFILE = '/etc/cron.d/rabbitmq-stats'
+STATS_DATAFILE = os.path.join(RABBIT_DIR, 'data',
+                              '{}_queue_stats.dat'
+                              ''.format(socket.gethostname()))
 
 
 @hooks.hook('install')
@@ -229,6 +245,26 @@ def amqp_changed(relation_id=None, remote_unit=None):
                        relation_settings=relation_settings)
 
 
+def is_sufficient_peers():
+    """If min-cluster-size has been provided, check that we have sufficient
+    number of peers to proceed with creating rabbitmq cluster.
+    """
+    min_size = config('min-cluster-size')
+    if min_size:
+        size = 0
+        for rid in relation_ids('cluster'):
+            size = len(related_units(rid))
+
+        # Include this unit
+        size += 1
+        if min_size > size:
+            log("Insufficient number of peer units to form cluster "
+                "(expected=%s, got=%s)" % (min_size, size), level=INFO)
+            return False
+
+    return True
+
+
 @hooks.hook('cluster-relation-joined')
 def cluster_joined(relation_id=None):
     if config('prefer-ipv6'):
@@ -256,8 +292,13 @@ def cluster_joined(relation_id=None):
         log('erlang cookie missing from %s' % rabbit.COOKIE_PATH,
             level=ERROR)
         return
-    cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
-    peer_store('cookie', cookie)
+
+    if not is_sufficient_peers():
+        return
+
+    if is_elected_leader('res_rabbitmq_vip'):
+        cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
+        peer_store('cookie', cookie)
 
 
 @hooks.hook('cluster-relation-changed')
@@ -279,6 +320,11 @@ def cluster_changed():
     whitelist = [a for a in rdata.keys() if a not in blacklist]
     peer_echo(includes=whitelist)
 
+    if not is_sufficient_peers():
+        # Stop rabbit until leader has finished configuring
+        service_stop('rabbitmq-server')
+        return
+
     # sync the cookie with peers if necessary
     update_cookie()
 
@@ -292,9 +338,11 @@ def cluster_changed():
     try:
         if not is_leader():
             rabbit.cluster_with()
+            update_nrpe_checks()
     except NotImplementedError:
         if is_newer():
             rabbit.cluster_with()
+            update_nrpe_checks()
 
     # If cluster has changed peer db may have changed so run amqp_changed
     # to sync any changes
@@ -478,6 +526,17 @@ def update_nrpe_checks():
         rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts',
                            'check_rabbitmq.py'),
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
+        rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts',
+                           'check_rabbitmq_queues.py'),
+              os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq_queues.py'))
+    if config('stats_cron_schedule'):
+        script = os.path.join(SCRIPTS_DIR, 'collect_rabbitmq_stats.sh')
+        cronjob = "{} root {}\n".format(config('stats_cron_schedule'), script)
+        rsync(os.path.join(charm_dir(), 'scripts',
+                           'collect_rabbitmq_stats.sh'), script)
+        write_file(STATS_CRONFILE, cronjob)
+    elif os.path.isfile(STATS_CRONFILE):
+        os.remove(STATS_CRONFILE)
 
     # Find out if nrpe set nagios_hostname
     hostname = nrpe.get_nagios_hostname()
@@ -500,6 +559,17 @@ def update_nrpe_checks():
         check_cmd='{}/check_rabbitmq.py --user {} --password {} --vhost {}'
                   ''.format(NAGIOS_PLUGINS, user, password, vhost)
     )
+    if config('queue_thresholds'):
+        cmd = ""
+        # If value of queue_thresholds is incorrect we want the hook to fail
+        for item in yaml.safe_load(config('queue_thresholds')):
+            cmd += ' -c "{}" "{}" {} {}'.format(*item)
+        nrpe_compat.add_check(
+            shortname=rabbit.RABBIT_USER + '_queue',
+            description='Check RabbitMQ Queues',
+            check_cmd='{}/check_rabbitmq_queues.py{} {}'.format(
+                        NAGIOS_PLUGINS, cmd, STATS_DATAFILE)
+        )
     nrpe_compat.write()
 
 
