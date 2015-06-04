@@ -1,5 +1,5 @@
 destination: hooks/charmhelpers
-branch: lp:~le-charmers/charm-helpers/leadership-election
+branch: lp:charm-helpers
 include:
     - fetch
     - core
