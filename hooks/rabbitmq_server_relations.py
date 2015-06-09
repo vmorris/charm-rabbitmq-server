@@ -50,6 +50,7 @@ from charmhelpers.core.hookenv import (
     ERROR,
     INFO,
     relation_get,
+    relation_clear,
     relation_set,
     relation_ids,
     related_units,
@@ -60,7 +61,8 @@ from charmhelpers.core.hookenv import (
     is_relation_made,
     Hooks,
     UnregisteredHookError,
-    charm_dir
+    is_leader,
+    charm_dir,
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
@@ -104,6 +106,36 @@ def install():
     # NOTE(jamespage) install actually happens in config_changed hook
 
 
+def get_local_nodename():
+    '''Resolve local nodename into something that's universally addressable'''
+    ip_addr = get_host_ip(unit_get('private-address'))
+    try:
+        nodename = get_hostname(ip_addr, fqdn=False)
+    except:
+        log('Cannot resolve hostname for %s using DNS servers' % ip_addr,
+            level='WARNING')
+        log('Falling back to use socket.gethostname()',
+            level='WARNING')
+        # If the private-address is not resolvable using DNS
+        # then use the current hostname
+        nodename = socket.gethostname()
+    return nodename
+
+
+def configure_nodename():
+    '''Set RABBITMQ_NODENAME to something that's resolvable by my peers'''
+    nodename = get_local_nodename()
+    if (nodename and
+            rabbit.get_node_name() != 'rabbit@%s' % nodename):
+        log('forcing nodename=%s' % nodename, level=INFO)
+        # would like to have used the restart_on_change decorator, but
+        # need to stop it under current nodename prior to updating env
+        service_stop('rabbitmq-server')
+        rabbit.update_rmq_env_conf(hostname='rabbit@%s' % nodename,
+                                   ipv6=config('prefer-ipv6'))
+        service_restart('rabbitmq-server')
+
+
 def configure_amqp(username, vhost, admin=False):
     # get and update service password
     password = rabbit.get_rabbit_password(username)
@@ -130,6 +162,9 @@ def amqp_changed(relation_id=None, remote_unit=None):
         host_addr = unit_get('private-address')
 
     if not is_elected_leader('res_rabbitmq_vip'):
+        # NOTE(jamespage) clear relation to deal with data being
+        #                 removed from peer storage
+        relation_clear(relation_id)
         # Each unit needs to set the db information otherwise if the unit
         # with the info dies the settings die with it Bug# 1355848
         exc_list = ['hostname', 'private-address']
@@ -244,33 +279,14 @@ def cluster_joined(relation_id=None):
             'rabbitmq cluster config.')
         return
 
-    # Set RABBITMQ_NODENAME to something that's resolvable by my peers
-    # get_host_ip() is called to sanitize private-address in case it
-    # doesn't return an IP address
-    ip_addr = get_host_ip(unit_get('private-address'))
     try:
-        nodename = get_hostname(ip_addr, fqdn=False)
-    except:
-        log('Cannot resolve hostname for %s using DNS servers' % ip_addr,
-            level='WARNING')
-        log('Falling back to use socket.gethostname()',
-            level='WARNING')
-        # If the private-address is not resolvable using DNS
-        # then use the current hostname
-        nodename = socket.gethostname()
-
-    if nodename and rabbit.get_node_name() != nodename:
-        log('forcing nodename=%s' % nodename)
-        # would like to have used the restart_on_change decorator, but
-        # need to stop it under current nodename prior to updating env
-        service_stop('rabbitmq-server')
-        rabbit.update_rmq_env_conf(hostname='rabbit@%s' % nodename,
-                                   ipv6=config('prefer-ipv6'))
-        service_restart('rabbitmq-server')
-
-    if is_newer():
-        log('cluster_joined: Relation greater.')
-        return
+        if not is_leader():
+            log('Not the leader, deferring cookie propagation to leader')
+            return
+    except NotImplementedError:
+        if is_newer():
+            log('cluster_joined: Relation greater.')
+            return
 
     if not os.path.isfile(rabbit.COOKIE_PATH):
         log('erlang cookie missing from %s' % rabbit.COOKIE_PATH,
@@ -287,11 +303,12 @@ def cluster_joined(relation_id=None):
 
 @hooks.hook('cluster-relation-changed')
 def cluster_changed():
-    rdata = relation_get()
-    if 'cookie' not in rdata:
+    cookie = peer_retrieve('cookie')
+    if not cookie:
         log('cluster_joined: cookie not yet set.', level=INFO)
         return
 
+    rdata = relation_get()
     if config('prefer-ipv6') and rdata.get('hostname'):
         private_address = rdata['private-address']
         hostname = rdata['hostname']
@@ -317,10 +334,14 @@ def cluster_changed():
             'rabbitmq cluster config.', level=INFO)
         return
 
-    # cluster with node
-    if is_newer():
-        if rabbit.cluster_with():
-            # resync nrpe user after clustering
+    # cluster with node?
+    try:
+        if not is_leader():
+            rabbit.cluster_with()
+            update_nrpe_checks()
+    except NotImplementedError:
+        if is_newer():
+            rabbit.cluster_with()
             update_nrpe_checks()
 
     # If cluster has changed peer db may have changed so run amqp_changed
@@ -525,7 +546,7 @@ def update_nrpe_checks():
     current_unit = local_unit().replace('/', '-')
     user = 'nagios-%s' % current_unit
     vhost = 'nagios-%s' % current_unit
-    password = rabbit.get_rabbit_password(user)
+    password = rabbit.get_rabbit_password(user, local=True)
 
     rabbit.create_vhost(vhost)
     rabbit.create_user(user, password)
@@ -569,7 +590,8 @@ def upgrade_charm():
             log('upgrade_charm: Migrating stored passwd'
                 ' from %s to %s.' % (s, d))
             shutil.move(s, d)
-    rabbit.migrate_passwords_to_peer_relation()
+    if is_elected_leader('res_rabbitmq_vip'):
+        rabbit.migrate_passwords_to_peer_relation()
 
     # explicitly update buggy file name naigos.passwd
     old = os.path.join('var/lib/rabbitmq', 'naigos.passwd')
@@ -697,8 +719,8 @@ def config_changed():
     chown(RABBIT_DIR, rabbit.RABBIT_USER, rabbit.RABBIT_USER)
     chmod(RABBIT_DIR, 0o775)
 
-    if config('prefer-ipv6'):
-        rabbit.update_rmq_env_conf(ipv6=config('prefer-ipv6'))
+    rabbit.update_rmq_env_conf(hostname='rabbit@%s' % get_local_nodename(),
+                               ipv6=config('prefer-ipv6'))
 
     if config('management_plugin') is True:
         rabbit.enable_plugin(MAN_PLUGIN)
@@ -728,6 +750,15 @@ def config_changed():
     # NOTE(jamespage)
     # trigger amqp_changed to pickup and changes to network
     # configuration via the access-network config option.
+    for rid in relation_ids('amqp'):
+        for unit in related_units(rid):
+            amqp_changed(relation_id=rid, remote_unit=unit)
+
+
+@hooks.hook('leader-settings-changed')
+def leader_settings_changed():
+    # If leader has changed and access credentials, ripple these
+    # out from all units
     for rid in relation_ids('amqp'):
         for unit in related_units(rid):
             amqp_changed(relation_id=rid, remote_unit=unit)

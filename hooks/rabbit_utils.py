@@ -51,6 +51,8 @@ LIB_PATH = '/var/lib/rabbitmq/'
 HOSTS_FILE = '/etc/hosts'
 
 _named_passwd = '/var/lib/charm/{}/{}.passwd'
+_local_named_passwd = '/var/lib/charm/{}/{}.local_passwd'
+
 
 # hook_contexts are used as a convenient mechanism to render templates
 # logically, consider building a hook_context for template rendering so
@@ -460,10 +462,14 @@ def execute(cmd, die=False, echo=False):
     return (stdout, stderr, rc)
 
 
-def get_rabbit_password_on_disk(username, password=None):
+def get_rabbit_password_on_disk(username, password=None, local=False):
     ''' Retrieve, generate or store a rabbit password for
     the provided username on disk'''
-    _passwd_file = _named_passwd.format(service_name(), username)
+    if local:
+        _passwd_file = _local_named_passwd.format(service_name(), username)
+    else:
+        _passwd_file = _named_passwd.format(service_name(), username)
+
     _password = None
     if os.path.exists(_passwd_file):
         with open(_passwd_file, 'r') as passwd:
@@ -475,6 +481,7 @@ def get_rabbit_password_on_disk(username, password=None):
         _password = password or pwgen(length=64)
         write_file(_passwd_file, _password, owner=RABBIT_USER,
                    group=RABBIT_USER, perms=0o660)
+
     return _password
 
 
@@ -492,20 +499,23 @@ def migrate_passwords_to_peer_relation():
             pass
 
 
-def get_rabbit_password(username, password=None):
+def get_rabbit_password(username, password=None, local=False):
     ''' Retrieve, generate or store a rabbit password for
     the provided username using peer relation cluster'''
-    migrate_passwords_to_peer_relation()
-    _key = '{}.passwd'.format(username)
-    try:
-        _password = peer_retrieve(_key)
-        if _password is None:
-            _password = password or pwgen(length=64)
-            peer_store(_key, _password)
-    except ValueError:
-        # cluster relation is not yet started, use on-disk
-        _password = get_rabbit_password_on_disk(username, password)
-    return _password
+    if local:
+        return get_rabbit_password_on_disk(username, password, local)
+    else:
+        migrate_passwords_to_peer_relation()
+        _key = '{}.passwd'.format(username)
+        try:
+            _password = peer_retrieve(_key)
+            if _password is None:
+                _password = password or pwgen(length=64)
+                peer_store(_key, _password)
+        except ValueError:
+            # cluster relation is not yet started, use on-disk
+            _password = get_rabbit_password_on_disk(username, password)
+        return _password
 
 
 def bind_ipv6_interface():
