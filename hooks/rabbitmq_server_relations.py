@@ -279,6 +279,8 @@ def cluster_joined(relation_id=None):
             'rabbitmq cluster config.')
         return
 
+    configure_nodename()
+
     try:
         if not is_leader():
             log('Not the leader, deferring cookie propagation to leader')
