@@ -63,6 +63,7 @@ from charmhelpers.core.hookenv import (
     UnregisteredHookError,
     is_leader,
     charm_dir,
+    in_relation_hook,
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
@@ -310,12 +311,22 @@ def cluster_joined(relation_id=None):
 
 @hooks.hook('cluster-relation-changed')
 def cluster_changed():
-    cookie = peer_retrieve('cookie')
+    if relation_ids('cluster'):
+        cookie = peer_retrieve('cookie')
+    else:
+        cookie = None
     if not cookie:
         log('cluster_joined: cookie not yet set.', level=INFO)
         return
 
-    rdata = relation_get()
+    # If called from leader-settings-changed we are not in a hook env
+    if not in_relation_hook():
+        for rid in relation_ids('cluster'):
+           for unit in related_units(rid):
+               rdata = relation_get(rid=rid, unit=unit)
+    else:
+        rdata = relation_get()
+
     if config('prefer-ipv6') and rdata.get('hostname'):
         private_address = rdata['private-address']
         hostname = rdata['hostname']
@@ -329,6 +340,7 @@ def cluster_changed():
 
     if not is_sufficient_peers():
         # Stop rabbit until leader has finished configuring
+        log('Not enough peers, stopping until leader is configured')
         service_stop('rabbitmq-server')
         return
 
@@ -765,6 +777,7 @@ def config_changed():
 def leader_settings_changed():
     # If leader has changed and access credentials, ripple these
     # out from all units
+    cluster_changed()
     for rid in relation_ids('amqp'):
         for unit in related_units(rid):
             amqp_changed(relation_id=rid, remote_unit=unit)
