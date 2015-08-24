@@ -27,6 +27,7 @@ from charmhelpers.core.hookenv import (
     leader_get as _leader_get,
     leader_set,
     is_leader,
+    related_units,
 )
 
 
@@ -164,8 +165,19 @@ def peer_retrieve(key, relation_name='cluster'):
     cluster_rels = relation_ids(relation_name)
     if len(cluster_rels) > 0:
         cluster_rid = cluster_rels[0]
-        return relation_get(attribute=key, rid=cluster_rid,
-                            unit=local_unit())
+        # Without native juju leadership election we do not
+        # which related unit is the "leader", so check them all
+        if relation_name == 'cluster':
+            for unit in related_units(cluster_rid):
+                result = relation_get(attribute=key, rid=cluster_rid,
+                                      unit=unit) 
+                if result:
+                    break
+        
+            return result
+        else:
+            return relation_get(attribute=key, rid=cluster_rid,
+                                unit=local_unit())
     else:
         raise ValueError('Unable to detect'
                          'peer relation {}'.format(relation_name))
