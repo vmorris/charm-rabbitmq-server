@@ -170,10 +170,9 @@ def peer_retrieve(key, relation_name='cluster'):
         if relation_name == 'cluster':
             for unit in related_units(cluster_rid):
                 result = relation_get(attribute=key, rid=cluster_rid,
-                                      unit=unit) 
+                                      unit=unit)
                 if result:
                     break
-        
             return result
         else:
             return relation_get(attribute=key, rid=cluster_rid,
