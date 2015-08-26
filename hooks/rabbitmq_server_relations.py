@@ -316,11 +316,11 @@ def cluster_changed():
         return
 
     rdata = relation_get()
-    if config('prefer-ipv6') and rdata.get('hostname'):
-        private_address = rdata['private-address']
-        hostname = rdata['hostname']
-        if hostname:
-            rabbit.update_hosts_file({private_address: hostname})
+    hostname = rdata.get('hostname', None)
+    private_address = rdata.get('private-address', None)
+
+    if hostname and private_address:
+        rabbit.update_hosts_file({private_address: hostname})
 
     # sync passwords
     blacklist = ['hostname', 'private-address', 'public-address']
