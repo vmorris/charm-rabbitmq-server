@@ -272,11 +272,13 @@ def is_sufficient_peers():
 
 @hooks.hook('cluster-relation-joined')
 def cluster_joined(relation_id=None):
-    if config('prefer-ipv6'):
-        relation_settings = {'hostname': socket.gethostname(),
-                             'private-address': get_ipv6_addr()[0]}
-        relation_set(relation_id=relation_id,
-                     relation_settings=relation_settings)
+    relation_settings = {
+        'hostname': get_local_hostname(),
+        'private-address': get_ipv6_addr()[0]
+    }
+
+    relation_set(relation_id=relation_id,
+                 relation_settings=relation_settings)
 
     if is_relation_made('ha') and \
             config('ha-vip-only') is False:
