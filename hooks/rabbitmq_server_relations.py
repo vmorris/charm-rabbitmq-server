@@ -273,7 +273,7 @@ def is_sufficient_peers():
 @hooks.hook('cluster-relation-joined')
 def cluster_joined(relation_id=None):
     relation_settings = {
-        'hostname': get_local_hostname(),
+        'hostname': get_local_nodename(),
     }
 
     if config('prefer-ipv6'):
