@@ -274,8 +274,13 @@ def is_sufficient_peers():
 def cluster_joined(relation_id=None):
     relation_settings = {
         'hostname': get_local_hostname(),
-        'private-address': get_ipv6_addr()[0]
     }
+
+    if config('prefer-ipv6'):
+        relation_settings['private-address'] = get_ipv6_addr()[0]
+    else:
+        relation_settings['private-address'] = get_host_ip(
+            unit_get('private-address'))
 
     relation_set(relation_id=relation_id,
                  relation_settings=relation_settings)
