@@ -19,8 +19,11 @@ export PATH=${PATH}:/sbin/
 
 if [ -f /var/lib/rabbitmq/pids ]; then
     RABBIT_PID=$(grep "{rabbit\@${HOSTNAME}," /var/lib/rabbitmq/pids | sed -e 's!^.*,\([0-9]*\).*!\1!')
-elif [ -f /var/run/rabbitmq/pid ]; then 
+elif [ -f /var/run/rabbitmq/pid ]; then
     RABBIT_PID=$(cat /var/run/rabbitmq/pid)
+elif [ -f /var/lib/rabbitmq/mnesia/rabbit\@${HOSTNAME}.pid ]; then
+    # Vivid and later
+    RABBIT_PID=$(cat /var/lib/rabbitmq/mnesia/rabbit\@${HOSTNAME}.pid)
 else
     echo "No PID file found"
     exit 3
