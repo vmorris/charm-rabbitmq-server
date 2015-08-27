@@ -23,7 +23,7 @@ elif [ -f /var/run/rabbitmq/pid ]; then
     RABBIT_PID=$(cat /var/run/rabbitmq/pid)
 elif [ -f /var/lib/rabbitmq/mnesia/rabbit\@${HOSTNAME}.pid ]; then
     # Vivid and later
-    RABBIT_PID=$(cat cat /var/lib/rabbitmq/mnesia/rabbit\@${HOSTNAME}.pid)
+    RABBIT_PID=$(cat /var/lib/rabbitmq/mnesia/rabbit\@${HOSTNAME}.pid)
 else
     echo "No PID file found"
     exit 3
