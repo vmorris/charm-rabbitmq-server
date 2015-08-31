@@ -272,11 +272,18 @@ def is_sufficient_peers():
 
 @hooks.hook('cluster-relation-joined')
 def cluster_joined(relation_id=None):
+    relation_settings = {
+        'hostname': get_local_nodename(),
+    }
+
     if config('prefer-ipv6'):
-        relation_settings = {'hostname': socket.gethostname(),
-                             'private-address': get_ipv6_addr()[0]}
-        relation_set(relation_id=relation_id,
-                     relation_settings=relation_settings)
+        relation_settings['private-address'] = get_ipv6_addr()[0]
+    else:
+        relation_settings['private-address'] = get_host_ip(
+            unit_get('private-address'))
+
+    relation_set(relation_id=relation_id,
+                 relation_settings=relation_settings)
 
     if is_relation_made('ha') and \
             config('ha-vip-only') is False:
@@ -316,11 +323,11 @@ def cluster_changed():
         return
 
     rdata = relation_get()
-    if config('prefer-ipv6') and rdata.get('hostname'):
-        private_address = rdata['private-address']
-        hostname = rdata['hostname']
-        if hostname:
-            rabbit.update_hosts_file({private_address: hostname})
+    hostname = rdata.get('hostname', None)
+    private_address = rdata.get('private-address', None)
+
+    if hostname and private_address:
+        rabbit.update_hosts_file({private_address: hostname})
 
     # sync passwords
     blacklist = ['hostname', 'private-address', 'public-address']
