@@ -2,7 +2,6 @@ import os
 import pwd
 import grp
 import re
-import socket
 import sys
 import subprocess
 import glob
