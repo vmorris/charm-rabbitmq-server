@@ -321,9 +321,11 @@ def cluster_changed():
 
     # If called from leader-settings-changed we are not in a hook env
     if not in_relation_hook():
-        for rid in relation_ids('cluster'):
-           for unit in related_units(rid):
-               rdata = relation_get(rid=rid, unit=unit)
+        rid = relation_ids('cluster')[0]
+        for unit in related_units(rid):
+            rdata = relation_get(rid=rid, unit=unit)
+            if rdata:
+                break;
     else:
         rdata = relation_get()
 
@@ -340,7 +342,8 @@ def cluster_changed():
 
     if not is_sufficient_peers():
         # Stop rabbit until leader has finished configuring
-        log('Not enough peers, stopping until leader is configured')
+        log('Not enough peers, stopping until leader is configured',
+            level=INFO)
         service_stop('rabbitmq-server')
         return
 
