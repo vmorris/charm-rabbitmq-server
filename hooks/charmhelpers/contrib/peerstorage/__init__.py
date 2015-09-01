@@ -27,8 +27,6 @@ from charmhelpers.core.hookenv import (
     leader_get as _leader_get,
     leader_set,
     is_leader,
-    remote_unit,
-    relation_type,
 )
 
 
@@ -164,17 +162,10 @@ def relation_get(attribute=None, unit=None, rid=None):
 def peer_retrieve(key, relation_name='cluster'):
     """Retrieve a named key from peer relation `relation_name`."""
     cluster_rels = relation_ids(relation_name)
-    # Remote unit if we are in a native cluster relation hook
-    if relation_type() == 'cluster':
-        unit = remote_unit()
-    # Local unit if we are in a non-cluster relation hook
-    # The remote unit is not a part of the cluster relation
-    else:
-        unit = local_unit()
     if len(cluster_rels) > 0:
         cluster_rid = cluster_rels[0]
         return relation_get(attribute=key, rid=cluster_rid,
-                            unit=unit)
+                            unit=local_unit())
     else:
         raise ValueError('Unable to detect'
                          'peer relation {}'.format(relation_name))
