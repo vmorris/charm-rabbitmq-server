@@ -299,7 +299,12 @@ def cluster_with():
             cmd = [RABBITMQ_CTL, 'stop_app']
             subprocess.check_call(cmd)
             cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
-            subprocess.check_call(cmd)
+            try:
+                subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError as e:
+                if not e.returncode == 2 or \
+                        "{ok,already_member}" not in e.output:
+                    raise e
             cmd = [RABBITMQ_CTL, 'start_app']
             subprocess.check_call(cmd)
             log('Host clustered with %s.' % node)
