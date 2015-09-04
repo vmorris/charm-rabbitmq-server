@@ -313,12 +313,13 @@ def cluster_joined(relation_id=None):
 def cluster_changed():
     # If called from leader-settings-changed we are not in a relation
     # hook env
+    rdata = {}
     if not in_relation_hook():
-        rid = relation_ids('cluster')[0]
-        for unit in related_units(rid):
-            rdata = relation_get(rid=rid, unit=unit)
-            if rdata:
-                break;
+        for rid in relation_ids('cluster'):
+            for unit in related_units(rid):
+                rdata = relation_get(rid=rid, unit=unit)
+                if rdata:
+                    break;
     else:
         rdata = relation_get()
 
