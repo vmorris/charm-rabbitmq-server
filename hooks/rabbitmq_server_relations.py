@@ -63,6 +63,7 @@ from charmhelpers.core.hookenv import (
     UnregisteredHookError,
     is_leader,
     charm_dir,
+    in_relation_hook,
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
@@ -310,25 +311,41 @@ def cluster_joined(relation_id=None):
 
 @hooks.hook('cluster-relation-changed')
 def cluster_changed():
-    cookie = peer_retrieve('cookie')
-    if not cookie:
-        log('cluster_joined: cookie not yet set.', level=INFO)
-        return
-
-    rdata = relation_get()
-    if config('prefer-ipv6') and rdata.get('hostname'):
-        private_address = rdata['private-address']
-        hostname = rdata['hostname']
-        if hostname:
-            rabbit.update_hosts_file({private_address: hostname})
+    # If called from leader-settings-changed we are not in a relation
+    # hook env
+    rdata = {}
+    if not in_relation_hook():
+        for rid in relation_ids('cluster'):
+            for unit in related_units(rid):
+                rdata = relation_get(rid=rid, unit=unit)
+                if rdata:
+                    break;
+    else:
+        rdata = relation_get()
 
     # sync passwords
     blacklist = ['hostname', 'private-address', 'public-address']
     whitelist = [a for a in rdata.keys() if a not in blacklist]
     peer_echo(includes=whitelist)
 
+    if relation_ids('cluster'):
+        cookie = peer_retrieve('cookie')
+    else:
+        cookie = None
+    if not cookie:
+        log('cluster_joined: cookie not yet set.', level=INFO)
+        return
+
+    if config('prefer-ipv6') and rdata.get('hostname'):
+        private_address = rdata.get('private-address')
+        hostname = rdata.get('hostname')
+        if hostname:
+            rabbit.update_hosts_file({private_address: hostname})
+
     if not is_sufficient_peers():
         # Stop rabbit until leader has finished configuring
+        log('Not enough peers, stopping until leader is configured',
+            level=INFO)
         service_stop('rabbitmq-server')
         return
 
@@ -765,6 +782,7 @@ def config_changed():
 def leader_settings_changed():
     # If leader has changed and access credentials, ripple these
     # out from all units
+    cluster_changed()
     for rid in relation_ids('amqp'):
         for unit in related_units(rid):
             amqp_changed(relation_id=rid, remote_unit=unit)
