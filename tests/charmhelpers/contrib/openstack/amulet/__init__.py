@@ -13,11 +13,3 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with charm-helpers.  If not, see <http://www.gnu.org/licenses/>.
-
-from . import cmdline
-from charmhelpers.core import hookenv
-
-
-cmdline.subcommand('relation-id')(hookenv.relation_id._wrapped)
-cmdline.subcommand('service-name')(hookenv.service_name)
-cmdline.subcommand('remote-service-name')(hookenv.remote_service_name._wrapped)
