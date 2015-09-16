@@ -2,7 +2,6 @@ import os
 import pwd
 import grp
 import re
-import socket
 import sys
 import subprocess
 import glob
@@ -270,18 +269,13 @@ def cluster_with():
                 address = relation_get('private-address',
                                        rid=r_id, unit=unit)
             if address is not None:
-                try:
-                    node = get_hostname(address, fqdn=False)
-                except:
+                node = get_hostname(address, fqdn=False)
+                if node:
+                    available_nodes.append(node)
+                else:
                     log('Cannot resolve hostname for {} '
-                        'using DNS servers'.format(address), level='WARNING')
-                    log('Falling back to use socket.gethostname()',
+                        'using DNS servers'.format(address),
                         level='WARNING')
-                    # If the private-address is not resolvable using DNS
-                    # then use the current hostname
-                    node = socket.gethostname()
-
-                available_nodes.append(node)
 
     if len(available_nodes) == 0:
         log('No nodes available to cluster with')
