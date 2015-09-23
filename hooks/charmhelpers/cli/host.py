@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # Copyright 2014-2015 Canonical Limited.
 #
 # This file is part of charm-helpers.
@@ -17,26 +14,18 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with charm-helpers.  If not, see <http://www.gnu.org/licenses/>.
 
-import six
+from . import cmdline
+from charmhelpers.core import host
 
 
-def bool_from_string(value):
-    """Interpret string value as boolean.
+@cmdline.subcommand()
+def mounts():
+    "List mounts"
+    return host.mounts()
 
-    Returns True if value translates to True otherwise False.
-    """
-    if isinstance(value, six.string_types):
-        value = six.text_type(value)
-    else:
-        msg = "Unable to interpret non-string value '%s' as boolean" % (value)
-        raise ValueError(msg)
 
-    value = value.strip().lower()
-
-    if value in ['y', 'yes', 'true', 't', 'on']:
-        return True
-    elif value in ['n', 'no', 'false', 'f', 'off']:
-        return False
-
-    msg = "Unable to interpret string value '%s' as boolean" % (value)
-    raise ValueError(msg)
+@cmdline.subcommand_builder('service', description="Control system services")
+def service(subparser):
+    subparser.add_argument("action", help="The action to perform (start, stop, etc...)")
+    subparser.add_argument("service_name", help="Name of the service to control")
+    return host.service
