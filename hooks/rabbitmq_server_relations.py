@@ -101,7 +101,7 @@ STATS_DATAFILE = os.path.join(RABBIT_DIR, 'data',
                               ''.format(socket.gethostname()))
 
 
-@hooks.hook('install')
+@hooks.hook('install.real')
 def install():
     pre_install_hooks()
     # NOTE(jamespage) install actually happens in config_changed hook
