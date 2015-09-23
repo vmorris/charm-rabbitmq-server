@@ -29,14 +29,15 @@ sync: bin/charm_helpers_sync.py
 	@$(PYTHON) bin/charm_helpers_sync.py -c charm-helpers.yaml
 	@$(PYTHON) bin/charm_helpers_sync.py -c charm-helpers-tests.yaml
 
-publish: lint
+publish: lint test
 	bzr push lp:charms/rabbitmq-server
 	bzr push lp:charms/trusty/rabbitmq-server
 
-unit_test: .venv
+test: .venv
 	@echo Starting tests...
-	env CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) .venv/bin/nosetests unit_tests/
+	env CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) .venv/bin/nosetests \
+        --nologcapture --with-coverage unit_tests/
 
 functional_test:
 	@echo Starting amulet tests...
-	@juju test -v -p AMULET_HTTP_PROXY --timeout 900
+	@juju test -v -p AMULET_HTTP_PROXY,AMULET_OS_VIP --timeout 2700

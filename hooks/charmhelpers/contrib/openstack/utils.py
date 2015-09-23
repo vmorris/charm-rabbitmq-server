@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 # Copyright 2014-2015 Canonical Limited.
 #
 # This file is part of charm-helpers.
@@ -24,6 +22,7 @@ import subprocess
 import json
 import os
 import sys
+import re
 
 import six
 import yaml
@@ -53,9 +52,13 @@ from charmhelpers.contrib.network.ip import (
     get_ipv6_addr
 )
 
+from charmhelpers.contrib.python.packages import (
+    pip_create_virtualenv,
+    pip_install,
+)
+
 from charmhelpers.core.host import lsb_release, mounts, umount
 from charmhelpers.fetch import apt_install, apt_cache, install_remote
-from charmhelpers.contrib.python.packages import pip_install
 from charmhelpers.contrib.storage.linux.utils import is_block_device, zap_disk
 from charmhelpers.contrib.storage.linux.loopback import ensure_loopback_device
 
@@ -64,7 +67,6 @@ CLOUD_ARCHIVE_KEY_ID = '5EDB1B62EC4926EA'
 
 DISTRO_PROPOSED = ('deb http://archive.ubuntu.com/ubuntu/ %s-proposed '
                    'restricted main multiverse universe')
-
 
 UBUNTU_OPENSTACK_RELEASE = OrderedDict([
     ('oneiric', 'diablo'),
@@ -75,6 +77,7 @@ UBUNTU_OPENSTACK_RELEASE = OrderedDict([
     ('trusty', 'icehouse'),
     ('utopic', 'juno'),
     ('vivid', 'kilo'),
+    ('wily', 'liberty'),
 ])
 
 
@@ -87,6 +90,7 @@ OPENSTACK_CODENAMES = OrderedDict([
     ('2014.1', 'icehouse'),
     ('2014.2', 'juno'),
     ('2015.1', 'kilo'),
+    ('2015.2', 'liberty'),
 ])
 
 # The ugly duckling
@@ -109,7 +113,36 @@ SWIFT_CODENAMES = OrderedDict([
     ('2.2.0', 'juno'),
     ('2.2.1', 'kilo'),
     ('2.2.2', 'kilo'),
+    ('2.3.0', 'liberty'),
 ])
+
+# >= Liberty version->codename mapping
+PACKAGE_CODENAMES = {
+    'nova-common': OrderedDict([
+        ('12.0.0', 'liberty'),
+    ]),
+    'neutron-common': OrderedDict([
+        ('7.0.0', 'liberty'),
+    ]),
+    'cinder-common': OrderedDict([
+        ('7.0.0', 'liberty'),
+    ]),
+    'keystone': OrderedDict([
+        ('8.0.0', 'liberty'),
+    ]),
+    'horizon-common': OrderedDict([
+        ('8.0.0', 'liberty'),
+    ]),
+    'ceilometer-common': OrderedDict([
+        ('5.0.0', 'liberty'),
+    ]),
+    'heat-common': OrderedDict([
+        ('5.0.0', 'liberty'),
+    ]),
+    'glance-common': OrderedDict([
+        ('11.0.0', 'liberty'),
+    ]),
+}
 
 DEFAULT_LOOPBACK_SIZE = '5G'
 
@@ -160,9 +193,9 @@ def get_os_codename_version(vers):
         error_out(e)
 
 
-def get_os_version_codename(codename):
+def get_os_version_codename(codename, version_map=OPENSTACK_CODENAMES):
     '''Determine OpenStack version number from codename.'''
-    for k, v in six.iteritems(OPENSTACK_CODENAMES):
+    for k, v in six.iteritems(version_map):
         if v == codename:
             return k
     e = 'Could not derive OpenStack version for '\
@@ -194,20 +227,31 @@ def get_os_codename_package(package, fatal=True):
         error_out(e)
 
     vers = apt.upstream_version(pkg.current_ver.ver_str)
+    match = re.match('^(\d+)\.(\d+)\.(\d+)', vers)
+    if match:
+        vers = match.group(0)
 
-    try:
-        if 'swift' in pkg.name:
-            swift_vers = vers[:5]
-            if swift_vers not in SWIFT_CODENAMES:
-                # Deal with 1.10.0 upward
-                swift_vers = vers[:6]
-            return SWIFT_CODENAMES[swift_vers]
-        else:
-            vers = vers[:6]
-            return OPENSTACK_CODENAMES[vers]
-    except KeyError:
-        e = 'Could not determine OpenStack codename for version %s' % vers
-        error_out(e)
+    # >= Liberty independent project versions
+    if (package in PACKAGE_CODENAMES and
+            vers in PACKAGE_CODENAMES[package]):
+        return PACKAGE_CODENAMES[package][vers]
+    else:
+        # < Liberty co-ordinated project versions
+        try:
+            if 'swift' in pkg.name:
+                swift_vers = vers[:5]
+                if swift_vers not in SWIFT_CODENAMES:
+                    # Deal with 1.10.0 upward
+                    swift_vers = vers[:6]
+                return SWIFT_CODENAMES[swift_vers]
+            else:
+                vers = vers[:6]
+                return OPENSTACK_CODENAMES[vers]
+        except KeyError:
+            if not fatal:
+                return None
+            e = 'Could not determine OpenStack codename for version %s' % vers
+            error_out(e)
 
 
 def get_os_version_package(pkg, fatal=True):
@@ -317,6 +361,9 @@ def configure_installation_source(rel):
             'kilo': 'trusty-updates/kilo',
             'kilo/updates': 'trusty-updates/kilo',
             'kilo/proposed': 'trusty-proposed/kilo',
+            'liberty': 'trusty-updates/liberty',
+            'liberty/updates': 'trusty-updates/liberty',
+            'liberty/proposed': 'trusty-proposed/liberty',
         }
 
         try:
@@ -382,7 +429,11 @@ def openstack_upgrade_available(package):
     import apt_pkg as apt
     src = config('openstack-origin')
     cur_vers = get_os_version_package(package)
-    available_vers = get_os_version_install_source(src)
+    if "swift" in package:
+        codename = get_os_codename_install_source(src)
+        available_vers = get_os_version_codename(codename, SWIFT_CODENAMES)
+    else:
+        available_vers = get_os_version_install_source(src)
     apt.init()
     return apt.version_compare(available_vers, cur_vers) == 1
 
@@ -497,11 +548,22 @@ def git_install_requested():
 requirements_dir = None
 
 
-def git_clone_and_install(projects_yaml, core_project):
+def _git_yaml_load(projects_yaml):
+    """
+    Load the specified yaml into a dictionary.
+    """
+    if not projects_yaml:
+        return None
+
+    return yaml.load(projects_yaml)
+
+
+def git_clone_and_install(projects_yaml, core_project, depth=1):
     """
     Clone/install all specified OpenStack repositories.
 
     The expected format of projects_yaml is:
+
         repositories:
           - {name: keystone,
              repository: 'git://git.openstack.org/openstack/keystone.git',
@@ -509,40 +571,54 @@ def git_clone_and_install(projects_yaml, core_project):
           - {name: requirements,
              repository: 'git://git.openstack.org/openstack/requirements.git',
              branch: 'stable/icehouse'}
-        directory: /mnt/openstack-git
-        http_proxy: http://squid.internal:3128
-        https_proxy: https://squid.internal:3128
 
-        The directory, http_proxy, and https_proxy keys are optional.
+        directory: /mnt/openstack-git
+        http_proxy: squid-proxy-url
+        https_proxy: squid-proxy-url
+
+    The directory, http_proxy, and https_proxy keys are optional.
+
     """
     global requirements_dir
     parent_dir = '/mnt/openstack-git'
+    http_proxy = None
 
-    if not projects_yaml:
-        return
-
-    projects = yaml.load(projects_yaml)
+    projects = _git_yaml_load(projects_yaml)
     _git_validate_projects_yaml(projects, core_project)
 
-    if 'http_proxy' in projects.keys():
-        os.environ['http_proxy'] = projects['http_proxy']
+    old_environ = dict(os.environ)
 
+    if 'http_proxy' in projects.keys():
+        http_proxy = projects['http_proxy']
+        os.environ['http_proxy'] = projects['http_proxy']
     if 'https_proxy' in projects.keys():
         os.environ['https_proxy'] = projects['https_proxy']
 
     if 'directory' in projects.keys():
         parent_dir = projects['directory']
 
+    pip_create_virtualenv(os.path.join(parent_dir, 'venv'))
+
+    # Upgrade setuptools and pip from default virtualenv versions. The default
+    # versions in trusty break master OpenStack branch deployments.
+    for p in ['pip', 'setuptools']:
+        pip_install(p, upgrade=True, proxy=http_proxy,
+                    venv=os.path.join(parent_dir, 'venv'))
+
     for p in projects['repositories']:
         repo = p['repository']
         branch = p['branch']
         if p['name'] == 'requirements':
-            repo_dir = _git_clone_and_install_single(repo, branch, parent_dir,
+            repo_dir = _git_clone_and_install_single(repo, branch, depth,
+                                                     parent_dir, http_proxy,
                                                      update_requirements=False)
             requirements_dir = repo_dir
         else:
-            repo_dir = _git_clone_and_install_single(repo, branch, parent_dir,
+            repo_dir = _git_clone_and_install_single(repo, branch, depth,
+                                                     parent_dir, http_proxy,
                                                      update_requirements=True)
+
+    os.environ = old_environ
 
 
 def _git_validate_projects_yaml(projects, core_project):
@@ -571,7 +647,8 @@ def _git_ensure_key_exists(key, keys):
         error_out('openstack-origin-git key \'{}\' is missing'.format(key))
 
 
-def _git_clone_and_install_single(repo, branch, parent_dir, update_requirements):
+def _git_clone_and_install_single(repo, branch, depth, parent_dir, http_proxy,
+                                  update_requirements):
     """
     Clone and install a single git repository.
     """
@@ -584,23 +661,29 @@ def _git_clone_and_install_single(repo, branch, parent_dir, update_requirements)
 
     if not os.path.exists(dest_dir):
         juju_log('Cloning git repo: {}, branch: {}'.format(repo, branch))
-        repo_dir = install_remote(repo, dest=parent_dir, branch=branch)
+        repo_dir = install_remote(repo, dest=parent_dir, branch=branch,
+                                  depth=depth)
     else:
         repo_dir = dest_dir
+
+    venv = os.path.join(parent_dir, 'venv')
 
     if update_requirements:
         if not requirements_dir:
             error_out('requirements repo must be cloned before '
                       'updating from global requirements.')
-        _git_update_requirements(repo_dir, requirements_dir)
+        _git_update_requirements(venv, repo_dir, requirements_dir)
 
     juju_log('Installing git repo from dir: {}'.format(repo_dir))
-    pip_install(repo_dir)
+    if http_proxy:
+        pip_install(repo_dir, proxy=http_proxy, venv=venv)
+    else:
+        pip_install(repo_dir, venv=venv)
 
     return repo_dir
 
 
-def _git_update_requirements(package_dir, reqs_dir):
+def _git_update_requirements(venv, package_dir, reqs_dir):
     """
     Update from global requirements.
 
@@ -609,13 +692,29 @@ def _git_update_requirements(package_dir, reqs_dir):
     """
     orig_dir = os.getcwd()
     os.chdir(reqs_dir)
-    cmd = ['python', 'update.py', package_dir]
+    python = os.path.join(venv, 'bin/python')
+    cmd = [python, 'update.py', package_dir]
     try:
         subprocess.check_call(cmd)
     except subprocess.CalledProcessError:
         package = os.path.basename(package_dir)
-        error_out("Error updating {} from global-requirements.txt".format(package))
+        error_out("Error updating {} from "
+                  "global-requirements.txt".format(package))
     os.chdir(orig_dir)
+
+
+def git_pip_venv_dir(projects_yaml):
+    """
+    Return the pip virtualenv path.
+    """
+    parent_dir = '/mnt/openstack-git'
+
+    projects = _git_yaml_load(projects_yaml)
+
+    if 'directory' in projects.keys():
+        parent_dir = projects['directory']
+
+    return os.path.join(parent_dir, 'venv')
 
 
 def git_src_dir(projects_yaml, project):
@@ -624,10 +723,7 @@ def git_src_dir(projects_yaml, project):
     """
     parent_dir = '/mnt/openstack-git'
 
-    if not projects_yaml:
-        return
-
-    projects = yaml.load(projects_yaml)
+    projects = _git_yaml_load(projects_yaml)
 
     if 'directory' in projects.keys():
         parent_dir = projects['directory']
@@ -635,5 +731,17 @@ def git_src_dir(projects_yaml, project):
     for p in projects['repositories']:
         if p['name'] == project:
             return os.path.join(parent_dir, os.path.basename(p['repository']))
+
+    return None
+
+
+def git_yaml_value(projects_yaml, key):
+    """
+    Return the value in projects_yaml for the specified key.
+    """
+    projects = _git_yaml_load(projects_yaml)
+
+    if key in projects.keys():
+        return projects[key]
 
     return None

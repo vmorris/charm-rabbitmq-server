@@ -1,6 +1,5 @@
 import os
 import re
-import socket
 import sys
 import subprocess
 import glob
@@ -54,6 +53,8 @@ LIB_PATH = '/var/lib/rabbitmq/'
 HOSTS_FILE = '/etc/hosts'
 
 _named_passwd = '/var/lib/charm/{}/{}.passwd'
+_local_named_passwd = '/var/lib/charm/{}/{}.local_passwd'
+
 
 # hook_contexts are used as a convenient mechanism to render templates
 # logically, consider building a hook_context for template rendering so
@@ -300,18 +301,13 @@ def cluster_with():
                 address = relation_get('private-address',
                                        rid=r_id, unit=unit)
             if address is not None:
-                try:
-                    node = get_hostname(address, fqdn=False)
-                except:
+                node = get_hostname(address, fqdn=False)
+                if node:
+                    available_nodes.append(node)
+                else:
                     log('Cannot resolve hostname for {} '
-                        'using DNS servers'.format(address), level='WARNING')
-                    log('Falling back to use socket.gethostname()',
+                        'using DNS servers'.format(address),
                         level='WARNING')
-                    # If the private-address is not resolvable using DNS
-                    # then use the current hostname
-                    node = socket.gethostname()
-
-                available_nodes.append(node)
 
     if len(available_nodes) == 0:
         log('No nodes available to cluster with')
@@ -329,7 +325,12 @@ def cluster_with():
             cmd = [RABBITMQ_CTL, 'stop_app']
             subprocess.check_call(cmd)
             cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
-            subprocess.check_call(cmd)
+            try:
+                subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError as e:
+                if not e.returncode == 2 or \
+                        "{ok,already_member}" not in e.output:
+                    raise e
             cmd = [RABBITMQ_CTL, 'start_app']
             subprocess.check_call(cmd)
             log('Host clustered with %s.' % node)
@@ -458,10 +459,14 @@ def execute(cmd, die=False, echo=False):
     return (stdout, stderr, rc)
 
 
-def get_rabbit_password_on_disk(username, password=None):
+def get_rabbit_password_on_disk(username, password=None, local=False):
     ''' Retrieve, generate or store a rabbit password for
     the provided username on disk'''
-    _passwd_file = _named_passwd.format(service_name(), username)
+    if local:
+        _passwd_file = _local_named_passwd.format(service_name(), username)
+    else:
+        _passwd_file = _named_passwd.format(service_name(), username)
+
     _password = None
     if os.path.exists(_passwd_file):
         with open(_passwd_file, 'r') as passwd:
@@ -473,6 +478,7 @@ def get_rabbit_password_on_disk(username, password=None):
         _password = password or pwgen(length=64)
         write_file(_passwd_file, _password, owner=RABBIT_USER,
                    group=RABBIT_USER, perms=0o660)
+
     return _password
 
 
@@ -490,20 +496,23 @@ def migrate_passwords_to_peer_relation():
             pass
 
 
-def get_rabbit_password(username, password=None):
+def get_rabbit_password(username, password=None, local=False):
     ''' Retrieve, generate or store a rabbit password for
     the provided username using peer relation cluster'''
-    migrate_passwords_to_peer_relation()
-    _key = '{}.passwd'.format(username)
-    try:
-        _password = peer_retrieve(_key)
-        if _password is None:
-            _password = password or pwgen(length=64)
-            peer_store(_key, _password)
-    except ValueError:
-        # cluster relation is not yet started, use on-disk
-        _password = get_rabbit_password_on_disk(username, password)
-    return _password
+    if local:
+        return get_rabbit_password_on_disk(username, password, local)
+    else:
+        migrate_passwords_to_peer_relation()
+        _key = '{}.passwd'.format(username)
+        try:
+            _password = peer_retrieve(_key)
+            if _password is None:
+                _password = password or pwgen(length=64)
+                peer_store(_key, _password)
+        except ValueError:
+            # cluster relation is not yet started, use on-disk
+            _password = get_rabbit_password_on_disk(username, password)
+        return _password
 
 
 def bind_ipv6_interface():
