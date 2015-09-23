@@ -3,9 +3,42 @@ import os
 import unittest
 import tempfile
 import sys
+import collections
 
 import rabbit_utils
 sys.modules['MySQLdb'] = mock.Mock()
+
+
+class ConfigRendererTests(unittest.TestCase):
+
+    class FakeContext(object):
+        def __call__(self, *a, **k):
+            return {}
+
+    config_map = collections.OrderedDict(
+        [('/this/is/a/config', {
+            'hook_contexts': [
+                FakeContext()
+            ]
+        })]
+    )
+
+    def setUp(self):
+        self.renderer = rabbit_utils.ConfigRenderer(
+            self.config_map)
+
+    def test_has_config_data(self):
+        self.assertTrue(
+            '/this/is/a/config' in self.renderer.config_data.keys())
+
+    @mock.patch("rabbit_utils.log")
+    @mock.patch("rabbit_utils.render")
+    def test_write_all(self, log, render):
+        self.renderer.write_all()
+        self.renderer.write('/this/is/a/config')
+
+        render.assert_called_once()
+        log.assert_called_once()
 
 
 class UtilsTests(unittest.TestCase):

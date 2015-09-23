@@ -78,15 +78,23 @@ CONFIG_FILES = OrderedDict([
 ])
 
 
-class ConfigRenderer():
-
+class ConfigRenderer(object):
+    """
+    This class is a generic configuration renderer for
+    a given dict mapping configuration files and hook_contexts.
+    """
     def __init__(self, config):
+        """
+        :param config: see CONFIG_FILES
+        :type config: dict
+        """
         self.config_data = {}
 
         for config_path, data in config.items():
-            if 'hook_contexts' in data and data['hook_contexts']:
+            hook_contexts = data.get('hook_contexts', None)
+            if hook_contexts:
                 ctxt = {}
-                for svc_context in data['hook_contexts']:
+                for svc_context in hook_contexts:
                     ctxt.update(svc_context())
                 self.config_data[config_path] = ctxt
 
@@ -94,12 +102,14 @@ class ConfigRenderer():
         data = self.config_data.get(config_path, None)
         if data:
             log("writing config file: %s , data: %s" % (config_path,
-                str(data)), level='DEBUG')
+                                                        str(data)),
+                level='DEBUG')
 
             render(os.path.basename(config_path), config_path,
                    data, perms=0o644)
 
     def write_all(self):
+        """Write all the defined configuration files"""
         for service in self.config_data.keys():
             self.write(service)
 

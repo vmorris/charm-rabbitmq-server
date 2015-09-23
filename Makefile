@@ -35,7 +35,7 @@ publish: lint test
 
 test: .venv
 	@echo Starting tests...
-	env CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) .venv/bin/nosetests \
+	env CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) .venv/bin/nosetests\
         --nologcapture --with-coverage unit_tests/
 
 functional_test:
