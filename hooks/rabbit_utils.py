@@ -7,7 +7,7 @@ import tempfile
 
 from rabbitmq_context import (
     RabbitMQSSLContext,
-    RabbitMQClusterContext
+    RabbitMQClusterContext,
 )
 
 from charmhelpers.core.templating import render
