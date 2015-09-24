@@ -17,8 +17,8 @@ class TestRabbitMQSSLContext(unittest.TestCase):
             "ssl_mode": "off"
         })
 
-        close_port.assert_called_once()
-        reconfig_ssl.assert_called_once()
+        self.assertTrue(close_port.called)
+        self.assertTrue(reconfig_ssl.called)
 
     @mock.patch("rabbitmq_context.open_port")
     @mock.patch("rabbitmq_context.os.chmod")
@@ -61,8 +61,8 @@ class TestRabbitMQSSLContext(unittest.TestCase):
                     "ssl_mode": "on",
                 })
 
-        reconfig_ssl.assert_called_once()
-        open_port.assert_called_once()
+        self.assertTrue(reconfig_ssl.called)
+        self.assertTrue(open_port.called)
 
 
 class TestRabbitMQClusterContext(unittest.TestCase):
