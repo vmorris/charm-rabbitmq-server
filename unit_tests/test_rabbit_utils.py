@@ -13,7 +13,7 @@ class ConfigRendererTests(unittest.TestCase):
 
     class FakeContext(object):
         def __call__(self, *a, **k):
-            return {}
+            return {'foo': 'bar'}
 
     config_map = collections.OrderedDict(
         [('/this/is/a/config', {
@@ -24,6 +24,7 @@ class ConfigRendererTests(unittest.TestCase):
     )
 
     def setUp(self):
+        super(ConfigRendererTests, self).setUp()
         self.renderer = rabbit_utils.ConfigRenderer(
             self.config_map)
 
@@ -35,10 +36,9 @@ class ConfigRendererTests(unittest.TestCase):
     @mock.patch("rabbit_utils.render")
     def test_write_all(self, log, render):
         self.renderer.write_all()
-        self.renderer.write('/this/is/a/config')
 
-        render.assert_called_once()
-        log.assert_called_once()
+        self.assertTrue(render.called)
+        self.assertTrue(log.called)
 
 
 class UtilsTests(unittest.TestCase):
