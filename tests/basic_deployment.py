@@ -490,3 +490,29 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
                 amulet.raise_status(amulet.FAIL, msg=ret)
 
         u.log.info('OK\n')
+
+    def test_415_cluster_partitioning(self):
+        """
+        Test if the cluster-partition-handling configuration is applied
+        correctly.
+        """
+        sentry_units = self._get_rmq_sentry_units()
+
+        configuration = {'cluster-partition-handling': "autoheal"}
+        self.d.configure('rabbitmq-server', configuration)
+
+        # Wait for configuration to be effectively applied
+        time.sleep(10)
+
+        u.log.debug('Checking if cluster-partition-handling has'
+                    ' been correclty applied...')
+        for sentry_unit in sentry_units:
+            cmds = [
+                "grep autoheal /etc/rabbitmq/rabbitmq.config"
+            ]
+
+            ret = u.check_commands_on_units(cmds, [sentry_unit])
+            if ret:
+                amulet.raise_status(amulet.FAIL, msg=ret)
+
+        u.log.info('OK\n')

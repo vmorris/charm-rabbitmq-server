@@ -8,7 +8,7 @@ options:
     type: string
     default: "off"
     description: |
-      Enable SSL connections on rabbitmq, valid values are 'off', 'on', 'only'. If ssl_key, 
+      Enable SSL connections on rabbitmq, valid values are 'off', 'on', 'only'. If ssl_key,
       ssl_cert, ssl_ca are provided then then those values will be used. Otherwise
       the service will act as its own certificate authority and pass its ca cert to clients.
       For HA or clustered rabbits ssl key/cert must be provided.
@@ -92,6 +92,28 @@ options:
     description: |
       When set to true the 'ha-mode: all' policy is applied to all the exchages
       that match the expression '^(?!amq\.).*'
+  cluster-partition-handling:
+    type: string
+    default: ignore
+    description: |
+      RabbitMQ offers three ways to deal with network partitions automatically.
+      Available modes:
+
+      ignore - Your network is reliable. All your nodes are in a rack,
+      connected with a switch, and that switch is also the route to the outside world.
+      You don't want to run any risk of any of your cluster shutting down if any other part of it fails
+      (or you have a two node cluster).
+
+      pause_minority - Your network is maybe less reliable. You have clustered across 3 AZs in EC2,
+      and you assume that only one AZ will fail at once.
+      In that scenario you want the remaining two AZs to continue working and the nodes from the failed AZ
+      to rejoin automatically and without fuss when the AZ comes back.
+
+      autoheal - Your network may not be reliable.
+      You are more concerned with continuity of service than with data integrity.
+      You may have a two node cluster.
+
+      For more information see http://www.rabbitmq.com/partitions.html.
   rbd-size:
     type: string
     default: 5G
