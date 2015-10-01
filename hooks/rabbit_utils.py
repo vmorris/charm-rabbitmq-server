@@ -23,7 +23,9 @@ from charmhelpers.core.hookenv import (
     related_units,
     log, ERROR,
     INFO,
-    service_name
+    service_name,
+    status_set,
+    cached
 )
 
 from charmhelpers.core.host import (
@@ -284,19 +286,8 @@ def cluster_with():
         cluster_cmd = 'join_cluster'
     else:
         cluster_cmd = 'cluster'
-    out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
-    log('cluster status is %s' % str(out))
 
-    # check if node is already clustered
-    total_nodes = 1
-    running_nodes = []
-    m = re.search("\{running_nodes,\[(.*?)\]\}", out.strip(), re.DOTALL)
-    if m is not None:
-        running_nodes = m.group(1).split(',')
-        running_nodes = [x.replace("'", '') for x in running_nodes]
-        total_nodes = len(running_nodes)
-
-    if total_nodes > 1:
+    if clustered():
         log('Node is already clustered, skipping')
         return False
 
@@ -324,10 +315,11 @@ def cluster_with():
         return False
 
     # iterate over all the nodes, join to the first available
+    active_nodes = running_nodes()
     num_tries = 0
     for node in available_nodes:
         log('Clustering with remote rabbit host (%s).' % node)
-        if node in running_nodes:
+        if node in active_nodes:
             log('Host already clustered with %s.' % node)
             return False
 
@@ -600,3 +592,49 @@ def services():
     for v in restart_map().values():
         _services = _services + v
     return list(set(_services))
+
+
+@cached
+def running_nodes():
+    ''' Determine the current set of running rabbitmq-units in the cluster '''
+    out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
+
+    running_nodes = []
+    m = re.search("\{running_nodes,\[(.*?)\]\}", out.strip(), re.DOTALL)
+    if m is not None:
+        running_nodes = m.group(1).split(',')
+        running_nodes = [x.replace("'", '') for x in running_nodes]
+
+    return running_nodes
+
+
+@cached
+def clustered():
+    ''' Determine whether local rabbitmq-server is clustered '''
+    if len(running_nodes()) > 1:
+        return True
+    else:
+        return False
+
+
+def assess_status():
+    ''' Assess the status for the current running unit '''
+    # Clustering Check
+    clustered = False
+    peer_id = relation_ids('cluster')
+    if peer_id and len(related_units(peer_id)):
+        if clustered():
+            clustered = True
+        else:
+            status_set('waiting', 'Unit has peers, but RabbitMQ not clustered')
+            return
+    # General status check
+    status_cmd = ['rabbitmqctl', 'status']
+    ret = subprocess.call(status_cmd)
+    if ret > 0:
+        status_set('blocked', 'RabbitMQ server is not running')
+    else:
+        if clustered:
+            status_set('active', 'Unit is ready and clustered')
+        else:
+            status_set('active', 'Unit is ready')
