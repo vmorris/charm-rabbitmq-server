@@ -716,5 +716,6 @@ def pre_install_hooks():
 if __name__ == '__main__':
     try:
         hooks.execute(sys.argv)
+        rabbit.assess_status()
     except UnregisteredHookError as e:
         log('Unknown hook {} - skipping.'.format(e))
