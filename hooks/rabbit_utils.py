@@ -633,12 +633,9 @@ def assess_status():
     #       any checks
     if os.path.exists('/usr/sbin/rabbitmqctl'):
         # Clustering Check
-        clustered = False
         peer_ids = relation_ids('cluster')
         if peer_ids and len(related_units(peer_ids[0])):
-            if clustered():
-                clustered = True
-            else:
+            if not clustered():
                 status_set('waiting', 'Unit has peers, but RabbitMQ not clustered')
                 return
         # General status check
@@ -647,7 +644,7 @@ def assess_status():
         if ret > 0:
             status_set('blocked', 'RabbitMQ server is not running')
         else:
-            if clustered:
+            if clustered():
                 status_set('active', 'Unit is ready and clustered')
             else:
                 status_set('active', 'Unit is ready')
