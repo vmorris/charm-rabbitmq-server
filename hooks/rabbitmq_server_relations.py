@@ -391,7 +391,6 @@ def update_cookie(leaders_cookie=None):
 
     log('Synchronizing erlang cookie from peer.', level=INFO)
     service_stop('rabbitmq-server')
-    mkdir(os.path.dirname(rabbit.COOKIE_PATH))
     with open(rabbit.COOKIE_PATH, 'wb') as out:
         out.write(cookie)
     service_restart('rabbitmq-server')
@@ -692,6 +691,9 @@ def config_changed():
 
 @hooks.hook('leader-settings-changed')
 def leader_settings_changed():
+    if not os.path.exists(rabbit.RABBITMQ_CTL):
+        log('Deferring cookie configuration, RabbitMQ not yet installed')
+        return
     # Get cookie from leader, update cookie locally and
     # force cluster-relation-changed hooks to run on peers
     cookie = leader_get(attribute='cookie')
