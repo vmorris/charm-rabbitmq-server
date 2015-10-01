@@ -613,7 +613,7 @@ def running_nodes():
     m = re.search("\{running_nodes,\[(.*?)\]\}", out.strip(), re.DOTALL)
     if m is not None:
         running_nodes = m.group(1).split(',')
-        running_nodes = [x.replace("'", '') for x in running_nodes]
+        running_nodes = [x.replace("'", '').strip() for x in running_nodes]
 
     return running_nodes
 
@@ -631,12 +631,13 @@ def assess_status():
     ''' Assess the status for the current running unit '''
     # NOTE: ensure rabbitmq is actually installed before doing
     #       any checks
-    if os.path.exists('/usr/sbin/rabbitmqctl'):
+    if os.path.exists(RABBITMQ_CTL):
         # Clustering Check
         peer_ids = relation_ids('cluster')
         if peer_ids and len(related_units(peer_ids[0])):
             if not clustered():
-                status_set('waiting', 'Unit has peers, but RabbitMQ not clustered')
+                status_set('waiting',
+                           'Unit has peers, but RabbitMQ not clustered')
                 return
         # General status check
         status_cmd = ['rabbitmqctl', 'status']
