@@ -65,6 +65,7 @@ from charmhelpers.core.hookenv import (
     UnregisteredHookError,
     is_leader,
     charm_dir,
+    status_set,
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
@@ -644,6 +645,7 @@ def config_changed():
         '/etc/default/rabbitmq-server')
     # Install packages to ensure any changes to source
     # result in an upgrade if applicable.
+    status_set('maintenance', 'Installing/upgrading RabbitMQ packages')
     apt_install(rabbit.PACKAGES, fatal=True)
 
     open_port(5672)
