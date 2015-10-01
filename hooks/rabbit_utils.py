@@ -274,9 +274,9 @@ def set_all_mirroring_queues(enable):
         return
 
     if enable:
-        status_set('maintenance', 'Enabling queue mirroring')
+        status_set('active', 'Enabling queue mirroring')
     else:
-        status_set('maintenance', 'Disabling queue mirroring')
+        status_set('active', 'Disabling queue mirroring')
 
     for vhost in list_vhosts():
         if enable:
