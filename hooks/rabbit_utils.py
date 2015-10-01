@@ -268,6 +268,11 @@ def set_all_mirroring_queues(enable):
              "2012/11/19/breaking-things-with-rabbitmq-3-0"), level='INFO')
         return
 
+    if enable:
+        status_set('maintenance', 'Enabling queue mirroring')
+    else:
+        status_set('maintenance', 'Disabling queue mirroring')
+
     for vhost in list_vhosts():
         if enable:
             set_ha_mode(vhost, 'all')
