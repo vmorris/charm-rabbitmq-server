@@ -621,8 +621,8 @@ def assess_status():
     ''' Assess the status for the current running unit '''
     # Clustering Check
     clustered = False
-    peer_id = relation_ids('cluster')
-    if peer_id and len(related_units(peer_id)):
+    peer_ids = relation_ids('cluster')
+    if peer_ids and len(related_units(peer_ids[0])):
         if clustered():
             clustered = True
         else:
