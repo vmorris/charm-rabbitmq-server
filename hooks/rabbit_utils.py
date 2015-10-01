@@ -196,8 +196,8 @@ def set_policy(vhost, policy_name, match, value):
 
 
 @cached
-def caching_cmp_pkgrevno(*args):
-    return cmp_pkgrevno(args)
+def caching_cmp_pkgrevno(package, revno, pkgcache=None):
+    return cmp_pkgrevno(package, revno, pkgcache)
 
 
 def set_ha_mode(vhost, mode, params=None, sync_mode='automatic'):
