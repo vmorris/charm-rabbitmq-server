@@ -195,6 +195,11 @@ def set_policy(vhost, policy_name, match, value):
     subprocess.check_call(cmd)
 
 
+@cached
+def caching_cmp_pkgrevno(*args):
+    return cmp_pkgrevno(args)
+
+
 def set_ha_mode(vhost, mode, params=None, sync_mode='automatic'):
     """Valid mode values:
 
@@ -214,7 +219,7 @@ def set_ha_mode(vhost, mode, params=None, sync_mode='automatic'):
                       http://www.rabbitmq.com./ha.html#eager-synchronisation
     """
 
-    if cmp_pkgrevno('rabbitmq-server', '3.0.0') < 0:
+    if caching_cmp_pkgrevno('rabbitmq-server', '3.0.0') < 0:
         log(("Mirroring queues cannot be enabled, only supported "
              "in rabbitmq-server >= 3.0"), level='WARN')
         log(("More information at http://www.rabbitmq.com/blog/"
