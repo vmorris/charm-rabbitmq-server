@@ -74,6 +74,7 @@ from charmhelpers.core.host import (
     service_stop,
     service_restart,
     write_file,
+    mkdir,
 )
 from charmhelpers.contrib.charmsupport import nrpe
 
@@ -390,6 +391,7 @@ def update_cookie(leaders_cookie=None):
 
     log('Synchronizing erlang cookie from peer.', level=INFO)
     service_stop('rabbitmq-server')
+    mkdir(os.path.dirname(rabbit.COOKIE_PATH))
     with open(rabbit.COOKIE_PATH, 'wb') as out:
         out.write(cookie)
     service_restart('rabbitmq-server')
