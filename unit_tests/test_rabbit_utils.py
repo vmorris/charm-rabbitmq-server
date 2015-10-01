@@ -4,8 +4,19 @@ import unittest
 import tempfile
 import sys
 import collections
+from functools import wraps
 
-import rabbit_utils
+
+with mock.patch('charmhelpers.core.hookenv.cached') as cached:
+    def passthrough(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+        wrapper._wrapped = func
+        return wrapper
+    cached.side_effect = passthrough
+    import rabbit_utils
+
 sys.modules['MySQLdb'] = mock.Mock()
 
 
@@ -39,6 +50,23 @@ class ConfigRendererTests(unittest.TestCase):
 
         self.assertTrue(render.called)
         self.assertTrue(log.called)
+
+
+RABBITMQCTL_CLUSTERSTATUS_RUNNING = """Cluster status of node 'rabbit@juju-devel3-machine-19' ...
+[{nodes,[{disc,['rabbit@juju-devel3-machine-14',
+                'rabbit@juju-devel3-machine-19']}]},
+ {running_nodes,['rabbit@juju-devel3-machine-14',
+                 'rabbit@juju-devel3-machine-19']},
+ {cluster_name,<<"rabbit@juju-devel3-machine-14.openstacklocal">>},
+ {partitions,[]}]
+ """
+
+RABBITMQCTL_CLUSTERSTATUS_SOLO = """Cluster status of node 'rabbit@juju-devel3-machine-14' ...
+[{nodes,[{disc,['rabbit@juju-devel3-machine-14']}]},
+ {running_nodes,['rabbit@juju-devel3-machine-14']},
+ {cluster_name,<<"rabbit@juju-devel3-machine-14.openstacklocal">>},
+ {partitions,[]}]
+ """
 
 
 class UtilsTests(unittest.TestCase):
@@ -102,3 +130,30 @@ class UtilsTests(unittest.TestCase):
         self.assertEqual(lines[0], "#somedata\n")
         self.assertEqual(lines[1], "%s %s\n" % (map.items()[0]))
         self.assertEqual(lines[4], "%s %s\n" % (map.items()[3]))
+
+    @mock.patch('rabbit_utils.running_nodes')
+    def test_not_clustered(self, mock_running_nodes):
+        mock_running_nodes.return_value = []
+        self.assertFalse(rabbit_utils.clustered())
+
+    @mock.patch('rabbit_utils.running_nodes')
+    def test_clustered(self, mock_running_nodes):
+        mock_running_nodes.return_value = ['a', 'b']
+        self.assertTrue(rabbit_utils.clustered())
+
+    @mock.patch('rabbit_utils.subprocess')
+    def test_running_nodes(self, mock_subprocess):
+        '''Ensure cluster_status can be parsed for a clustered deployment'''
+        mock_subprocess.check_output.return_value = \
+            RABBITMQCTL_CLUSTERSTATUS_RUNNING
+        self.assertEqual(rabbit_utils.running_nodes(),
+                         ['rabbit@juju-devel3-machine-14',
+                          'rabbit@juju-devel3-machine-19'])
+
+    @mock.patch('rabbit_utils.subprocess')
+    def test_running_nodes_solo(self, mock_subprocess):
+        '''Ensure cluster_status can be parsed for a single unit deployment'''
+        mock_subprocess.check_output.return_value = \
+            RABBITMQCTL_CLUSTERSTATUS_SOLO
+        self.assertEqual(rabbit_utils.running_nodes(),
+                         ['rabbit@juju-devel3-machine-14'])
