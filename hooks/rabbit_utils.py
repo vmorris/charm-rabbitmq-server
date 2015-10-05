@@ -23,7 +23,9 @@ from charmhelpers.core.hookenv import (
     related_units,
     log, ERROR,
     INFO,
-    service_name
+    service_name,
+    status_set,
+    cached
 )
 
 from charmhelpers.core.host import (
@@ -193,6 +195,11 @@ def set_policy(vhost, policy_name, match, value):
     subprocess.check_call(cmd)
 
 
+@cached
+def caching_cmp_pkgrevno(package, revno, pkgcache=None):
+    return cmp_pkgrevno(package, revno, pkgcache)
+
+
 def set_ha_mode(vhost, mode, params=None, sync_mode='automatic'):
     """Valid mode values:
 
@@ -212,7 +219,7 @@ def set_ha_mode(vhost, mode, params=None, sync_mode='automatic'):
                       http://www.rabbitmq.com./ha.html#eager-synchronisation
     """
 
-    if cmp_pkgrevno('rabbitmq-server', '3.0.0') < 0:
+    if caching_cmp_pkgrevno('rabbitmq-server', '3.0.0') < 0:
         log(("Mirroring queues cannot be enabled, only supported "
              "in rabbitmq-server >= 3.0"), level='WARN')
         log(("More information at http://www.rabbitmq.com/blog/"
@@ -266,6 +273,11 @@ def set_all_mirroring_queues(enable):
              "2012/11/19/breaking-things-with-rabbitmq-3-0"), level='INFO')
         return
 
+    if enable:
+        status_set('active', 'Enabling queue mirroring')
+    else:
+        status_set('active', 'Disabling queue mirroring')
+
     for vhost in list_vhosts():
         if enable:
             set_ha_mode(vhost, 'all')
@@ -284,19 +296,8 @@ def cluster_with():
         cluster_cmd = 'join_cluster'
     else:
         cluster_cmd = 'cluster'
-    out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
-    log('cluster status is %s' % str(out))
 
-    # check if node is already clustered
-    total_nodes = 1
-    running_nodes = []
-    m = re.search("\{running_nodes,\[(.*?)\]\}", out.strip(), re.DOTALL)
-    if m is not None:
-        running_nodes = m.group(1).split(',')
-        running_nodes = [x.replace("'", '') for x in running_nodes]
-        total_nodes = len(running_nodes)
-
-    if total_nodes > 1:
+    if clustered():
         log('Node is already clustered, skipping')
         return False
 
@@ -324,10 +325,11 @@ def cluster_with():
         return False
 
     # iterate over all the nodes, join to the first available
+    active_nodes = running_nodes()
     num_tries = 0
     for node in available_nodes:
         log('Clustering with remote rabbit host (%s).' % node)
-        if node in running_nodes:
+        if node in active_nodes:
             log('Host already clustered with %s.' % node)
             return False
 
@@ -600,3 +602,52 @@ def services():
     for v in restart_map().values():
         _services = _services + v
     return list(set(_services))
+
+
+@cached
+def running_nodes():
+    ''' Determine the current set of running rabbitmq-units in the cluster '''
+    out = subprocess.check_output([RABBITMQ_CTL, 'cluster_status'])
+
+    running_nodes = []
+    m = re.search("\{running_nodes,\[(.*?)\]\}", out.strip(), re.DOTALL)
+    if m is not None:
+        running_nodes = m.group(1).split(',')
+        running_nodes = [x.replace("'", '').strip() for x in running_nodes]
+
+    return running_nodes
+
+
+@cached
+def clustered():
+    ''' Determine whether local rabbitmq-server is clustered '''
+    if len(running_nodes()) > 1:
+        return True
+    else:
+        return False
+
+
+def assess_status():
+    ''' Assess the status for the current running unit '''
+    # NOTE: ensure rabbitmq is actually installed before doing
+    #       any checks
+    if os.path.exists(RABBITMQ_CTL):
+        # Clustering Check
+        peer_ids = relation_ids('cluster')
+        if peer_ids and len(related_units(peer_ids[0])):
+            if not clustered():
+                status_set('waiting',
+                           'Unit has peers, but RabbitMQ not clustered')
+                return
+        # General status check
+        status_cmd = ['rabbitmqctl', 'status']
+        ret = subprocess.call(status_cmd)
+        if ret > 0:
+            status_set('blocked', 'RabbitMQ server is not running')
+        else:
+            if clustered():
+                status_set('active', 'Unit is ready and clustered')
+            else:
+                status_set('active', 'Unit is ready')
+    else:
+        status_set('waiting', 'RabbitMQ is not yet installed')
