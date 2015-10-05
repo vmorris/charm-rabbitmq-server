@@ -65,6 +65,7 @@ from charmhelpers.core.hookenv import (
     UnregisteredHookError,
     is_leader,
     charm_dir,
+    status_set,
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
@@ -73,6 +74,7 @@ from charmhelpers.core.host import (
     service_stop,
     service_restart,
     write_file,
+    mkdir,
 )
 from charmhelpers.contrib.charmsupport import nrpe
 
@@ -644,6 +646,7 @@ def config_changed():
         '/etc/default/rabbitmq-server')
     # Install packages to ensure any changes to source
     # result in an upgrade if applicable.
+    status_set('maintenance', 'Installing/upgrading RabbitMQ packages')
     apt_install(rabbit.PACKAGES, fatal=True)
 
     open_port(5672)
@@ -688,6 +691,9 @@ def config_changed():
 
 @hooks.hook('leader-settings-changed')
 def leader_settings_changed():
+    if not os.path.exists(rabbit.RABBITMQ_CTL):
+        log('Deferring cookie configuration, RabbitMQ not yet installed')
+        return
     # Get cookie from leader, update cookie locally and
     # force cluster-relation-changed hooks to run on peers
     cookie = leader_get(attribute='cookie')
@@ -716,5 +722,6 @@ def pre_install_hooks():
 if __name__ == '__main__':
     try:
         hooks.execute(sys.argv)
+        rabbit.assess_status()
     except UnregisteredHookError as e:
         log('Unknown hook {} - skipping.'.format(e))
