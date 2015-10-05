@@ -74,7 +74,6 @@ from charmhelpers.core.host import (
     service_stop,
     service_restart,
     write_file,
-    mkdir,
 )
 from charmhelpers.contrib.charmsupport import nrpe
 
@@ -260,16 +259,21 @@ def is_sufficient_peers():
     """
     min_size = config('min-cluster-size')
     if min_size:
-        size = 0
-        for rid in relation_ids('cluster'):
-            size = len(related_units(rid))
+        # Ignore min-cluster-size if juju has leadership election
+        try: 
+            is_leader()
+            return True
+        except NotImplementedError:
+            size = 0
+            for rid in relation_ids('cluster'):
+                size = len(related_units(rid))
 
-        # Include this unit
-        size += 1
-        if min_size > size:
-            log("Insufficient number of peer units to form cluster "
-                "(expected=%s, got=%s)" % (min_size, size), level=INFO)
-            return False
+            # Include this unit
+            size += 1
+            if min_size > size:
+                log("Insufficient number of peer units to form cluster "
+                    "(expected=%s, got=%s)" % (min_size, size), level=INFO)
+                return False
 
     return True
 
