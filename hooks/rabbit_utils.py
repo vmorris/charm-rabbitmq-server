@@ -25,7 +25,8 @@ from charmhelpers.core.hookenv import (
     INFO,
     service_name,
     status_set,
-    cached
+    cached,
+    unit_private_ip,
 )
 
 from charmhelpers.core.host import (
@@ -302,60 +303,35 @@ def cluster_with():
         return False
 
     # check all peers and try to cluster with them
-    available_nodes = []
-    for r_id in relation_ids('cluster'):
-        for unit in related_units(r_id):
-            if config('prefer-ipv6'):
-                address = relation_get('hostname',
-                                       rid=r_id, unit=unit)
-            else:
-                address = relation_get('private-address',
-                                       rid=r_id, unit=unit)
-            if address is not None:
-                node = get_hostname(address, fqdn=False)
-                if node:
-                    available_nodes.append(node)
-                else:
-                    log('Cannot resolve hostname for {} '
-                        'using DNS servers'.format(address),
-                        level='WARNING')
-
-    if len(available_nodes) == 0:
+    if len(available_nodes()) == 0:
         log('No nodes available to cluster with')
         return False
 
     # iterate over all the nodes, join to the first available
-    active_nodes = running_nodes()
     num_tries = 0
-    for node in available_nodes:
-        log('Clustering with remote rabbit host (%s).' % node)
-        if node in active_nodes:
+    for node in available_nodes():
+        if node in running_nodes():
             log('Host already clustered with %s.' % node)
-            return False
+            continue
+        log('Clustering with remote rabbit host (%s).' % node)
 
         try:
             cmd = [RABBITMQ_CTL, 'stop_app']
             subprocess.check_call(cmd)
-            cmd = [RABBITMQ_CTL, cluster_cmd, 'rabbit@%s' % node]
-            try:
-                subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-            except subprocess.CalledProcessError as e:
-                if not e.returncode == 2 or \
-                        "{ok,already_member}" not in e.output:
-                    raise e
+            cmd = [RABBITMQ_CTL, cluster_cmd, node]
+            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
             cmd = [RABBITMQ_CTL, 'start_app']
             subprocess.check_call(cmd)
             log('Host clustered with %s.' % node)
-            return True
-        except:
-            log('Failed to cluster with %s.' % node)
+        except subprocess.CalledProcessError as e:
+            log('Failed to cluster with %s. Exception: %s' % (node, e))
+            cmd = [RABBITMQ_CTL, 'start_app']
+            subprocess.check_call(cmd)
         # continue to the next node
         num_tries += 1
         if num_tries > config('max-cluster-tries'):
             log('Max tries number exhausted, exiting', level=ERROR)
             raise
-
-    return False
 
 
 def break_cluster():
@@ -619,12 +595,43 @@ def running_nodes():
 
 
 @cached
+def available_nodes():
+    ''' Provide list of expected nodes in the cluster '''
+    nodes = []
+    for r_id in relation_ids('cluster'):
+        for unit in related_units(r_id):
+            if config('prefer-ipv6'):
+                address = relation_get('hostname',
+                                       rid=r_id, unit=unit)
+            else:
+                address = relation_get('private-address',
+                                       rid=r_id, unit=unit)
+            if address is not None:
+                node = get_node_hostname(address)
+                if node:
+                    nodes.append("rabbit@" + node)
+
+    return nodes
+
+
+def get_node_hostname(address):
+    ''' Resolve IP address to hostname for nodes '''
+    node = get_hostname(address, fqdn=False)
+    if node:
+        return node
+    else:
+        log('Cannot resolve hostname for {} using DNS servers'.format(address),
+            level='WARNING')
+        return None
+
+
+@cached
 def clustered():
     ''' Determine whether local rabbitmq-server is clustered '''
-    if len(running_nodes()) > 1:
-        return True
-    else:
-        return False
+    local_node = "rabbit@" + get_node_hostname(unit_private_ip())
+    nodes = available_nodes()
+    nodes.append(local_node)
+    return sorted(nodes) == sorted(running_nodes())
 
 
 def assess_status():
