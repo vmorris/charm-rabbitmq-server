@@ -302,12 +302,11 @@ def cluster_with():
         log('Node is already clustered, skipping')
         return False
 
-    # check all peers and try to cluster with them
+    # check the leader and try to cluster with it
     if len(leader_node()) == 0:
         log('No nodes available to cluster with')
         return False
 
-    # iterate over all the nodes, join to the first available
     num_tries = 0
     for node in leader_node():
         if node in running_nodes():
