@@ -611,6 +611,8 @@ def leader_node():
     leader_node_ip = peer_retrieve('leader_node_ip')
     if leader_node_ip:
         return ["rabbit@" + get_node_hostname(leader_node_ip)]
+    else:
+        return []
 
 
 def get_node_hostname(address):
