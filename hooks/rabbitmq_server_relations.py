@@ -349,10 +349,8 @@ def cluster_changed():
             rabbit.update_hosts_file({private_address: hostname})
 
     if not is_sufficient_peers():
-        # Stop rabbit until leader has finished configuring
-        log('Not enough peers, stopping until leader is configured',
+        log('Not enough peers, waiting until leader is configured',
             level=INFO)
-        service_stop('rabbitmq-server')
         return
 
     # sync the cookie with peers if necessary
