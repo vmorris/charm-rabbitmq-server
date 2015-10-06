@@ -131,29 +131,14 @@ class UtilsTests(unittest.TestCase):
         self.assertEqual(lines[1], "%s %s\n" % (map.items()[0]))
         self.assertEqual(lines[4], "%s %s\n" % (map.items()[3]))
 
-    @mock.patch('rabbit_utils.unit_private_ip')
-    @mock.patch('rabbit_utils.get_node_hostname')
-    @mock.patch('rabbit_utils.available_nodes')
     @mock.patch('rabbit_utils.running_nodes')
-    def test_not_clustered(self, mock_running_nodes, mock_available_nodes,
-                           mock_get_node_hostname,
-                           mock_unit_private_ip):
-        mock_get_node_hostname.return_value = 'host-c'
-        mock_available_nodes.return_value = ['rabbit@host-a', 'rabbit@host-b']
-        mock_running_nodes.return_value = ['rabbit@host-c']
+    def test_not_clustered(self, mock_running_nodes):
+        mock_running_nodes.return_value = []
         self.assertFalse(rabbit_utils.clustered())
 
-    @mock.patch('rabbit_utils.unit_private_ip')
-    @mock.patch('rabbit_utils.get_node_hostname')
-    @mock.patch('rabbit_utils.available_nodes')
     @mock.patch('rabbit_utils.running_nodes')
-    def test_clustered(self, mock_running_nodes, mock_available_nodes,
-                       mock_get_node_hostname,
-                       mock_unit_private_ip):
-        mock_get_node_hostname.return_value = 'host-c'
-        mock_available_nodes.return_value = ['rabbit@host-a', 'rabbit@host-b']
-        mock_running_nodes.return_value = ['rabbit@host-a', 'rabbit@host-b',
-                                           'rabbit@host-c']
+    def test_clustered(self, mock_running_nodes):
+        mock_running_nodes.return_value = ['a', 'b']
         self.assertTrue(rabbit_utils.clustered())
 
     @mock.patch('rabbit_utils.subprocess')

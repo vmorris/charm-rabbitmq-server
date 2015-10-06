@@ -66,6 +66,7 @@ from charmhelpers.core.hookenv import (
     is_leader,
     charm_dir,
     status_set,
+    unit_private_ip,
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
@@ -322,6 +323,7 @@ def cluster_joined(relation_id=None):
         log('Leader peer_storing cookie', level=INFO)
         cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
         peer_store('cookie', cookie)
+        peer_store('leader_node_ip', unit_private_ip())
 
 
 @hooks.hook('cluster-relation-changed')
