@@ -66,6 +66,7 @@ from charmhelpers.core.hookenv import (
     is_leader,
     charm_dir,
     status_set,
+    unit_private_ip,
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
@@ -74,7 +75,6 @@ from charmhelpers.core.host import (
     service_stop,
     service_restart,
     write_file,
-    mkdir,
 )
 from charmhelpers.contrib.charmsupport import nrpe
 
@@ -260,16 +260,21 @@ def is_sufficient_peers():
     """
     min_size = config('min-cluster-size')
     if min_size:
-        size = 0
-        for rid in relation_ids('cluster'):
-            size = len(related_units(rid))
+        # Ignore min-cluster-size if juju has leadership election
+        try: 
+            is_leader()
+            return True
+        except NotImplementedError:
+            size = 0
+            for rid in relation_ids('cluster'):
+                size = len(related_units(rid))
 
-        # Include this unit
-        size += 1
-        if min_size > size:
-            log("Insufficient number of peer units to form cluster "
-                "(expected=%s, got=%s)" % (min_size, size), level=INFO)
-            return False
+            # Include this unit
+            size += 1
+            if min_size > size:
+                log("Insufficient number of peer units to form cluster "
+                    "(expected=%s, got=%s)" % (min_size, size), level=INFO)
+                return False
 
     return True
 
@@ -318,6 +323,7 @@ def cluster_joined(relation_id=None):
         log('Leader peer_storing cookie', level=INFO)
         cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
         peer_store('cookie', cookie)
+        peer_store('leader_node_ip', unit_private_ip())
 
 
 @hooks.hook('cluster-relation-changed')
@@ -343,10 +349,8 @@ def cluster_changed():
             rabbit.update_hosts_file({private_address: hostname})
 
     if not is_sufficient_peers():
-        # Stop rabbit until leader has finished configuring
-        log('Not enough peers, stopping until leader is configured',
+        log('Not enough peers, waiting until leader is configured',
             level=INFO)
-        service_stop('rabbitmq-server')
         return
 
     # sync the cookie with peers if necessary
