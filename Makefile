@@ -26,7 +26,7 @@ bin/charm_helpers_sync.py:
         > bin/charm_helpers_sync.py
 
 sync: bin/charm_helpers_sync.py
-	@$(PYTHON) bin/charm_helpers_sync.py -c charm-helpers.yaml
+	@$(PYTHON) bin/charm_helpers_sync.py -c charm-helpers-hooks.yaml
 	@$(PYTHON) bin/charm_helpers_sync.py -c charm-helpers-tests.yaml
 
 publish: lint test
@@ -36,7 +36,7 @@ publish: lint test
 test: .venv
 	@echo Starting tests...
 	env CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) .venv/bin/nosetests \
-        --nologcapture --with-coverage unit_tests/
+        -v --nologcapture --with-coverage unit_tests/
 
 functional_test:
 	@echo Starting amulet tests...
