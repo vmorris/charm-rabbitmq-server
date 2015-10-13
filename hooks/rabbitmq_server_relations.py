@@ -261,10 +261,12 @@ def is_sufficient_peers():
     min_size = config('min-cluster-size')
     if min_size:
         # Ignore min-cluster-size if juju has leadership election
-        try: 
+        try:
             is_leader()
+            log("Ignoring min-cluster-size in favour of Juju leader election")
             return True
         except NotImplementedError:
+            log("Leader election is not available, using min-cluster-size")
             size = 0
             for rid in relation_ids('cluster'):
                 size = len(related_units(rid))
