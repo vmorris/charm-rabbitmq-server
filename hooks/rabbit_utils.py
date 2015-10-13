@@ -312,13 +312,13 @@ def cluster_with():
         if node in running_nodes():
             log('Host already clustered with %s.' % node)
             return False
-        log('Clustering with remote rabbit host (%s).' % node)
         # NOTE: The primary problem rabbitmq has clustering is when
         # more than one node attempts to cluster at the same time.
         # The asynchronous nature of hook firing nearly guarantees
         # this. Using random time wait is a hack until we can
         # implement charmhelpers.coordinator.
         time.sleep(random.random()*100)
+        log('Clustering with remote rabbit host (%s).' % node)
         try:
             cmd = [RABBITMQ_CTL, 'stop_app']
             subprocess.check_call(cmd)
