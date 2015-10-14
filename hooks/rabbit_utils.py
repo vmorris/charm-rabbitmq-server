@@ -34,7 +34,8 @@ from charmhelpers.core.host import (
     mkdir,
     write_file,
     lsb_release,
-    cmp_pkgrevno
+    cmp_pkgrevno,
+    path_hash,
 )
 
 from charmhelpers.contrib.peerstorage import (
@@ -661,3 +662,43 @@ def assess_status():
                 status_set('active', 'Unit is ready')
     else:
         status_set('waiting', 'RabbitMQ is not yet installed')
+
+
+def restart_on_change(restart_map, stopstart=False):
+    """Restart services based on configuration files changing
+
+    This function is used a decorator, for example::
+
+        @restart_on_change({
+            '/etc/ceph/ceph.conf': [ 'cinder-api', 'cinder-volume' ]
+            '/etc/apache/sites-enabled/*': [ 'apache2' ]
+            })
+        def config_changed():
+            pass  # your code here
+
+    In this example, the cinder-api and cinder-volume services
+    would be restarted if /etc/ceph/ceph.conf is changed by the
+    ceph_client_changed function. The apache2 service would be
+    restarted if any file matching the pattern got changed, created
+    or removed. Standard wildcards are supported, see documentation
+    for the 'glob' module for more information.
+    """
+    def wrap(f):
+        def wrapped_f(*args, **kwargs):
+            checksums = {path: path_hash(path) for path in restart_map}
+            f(*args, **kwargs)
+            restarts = []
+            for path in restart_map:
+                if path_hash(path) != checksums[path]:
+                    restarts += restart_map[path]
+            services_list = list(OrderedDict.fromkeys(restarts))
+            time.sleep(random.random()*100)
+            if not stopstart:
+                for svc_name in services_list:
+                    service('restart', svc_name)
+            else:
+                for action in ['stop', 'start']:
+                    for svc_name in services_list:
+                        service(action, svc_name)
+        return wrapped_f
+    return wrap

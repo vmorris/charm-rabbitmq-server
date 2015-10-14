@@ -70,7 +70,6 @@ from charmhelpers.core.hookenv import (
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
-    restart_on_change,
     rsync,
     service_stop,
     service_restart,
@@ -637,7 +636,7 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 
 @hooks.hook('config-changed')
-@restart_on_change(rabbit.restart_map())
+@rabbit.restart_on_change(rabbit.restart_map())
 def config_changed():
 
     if config('prefer-ipv6'):
