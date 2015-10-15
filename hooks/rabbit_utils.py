@@ -36,6 +36,7 @@ from charmhelpers.core.host import (
     lsb_release,
     cmp_pkgrevno,
     path_hash,
+    service as system_service,
 )
 
 from charmhelpers.contrib.peerstorage import (
@@ -285,11 +286,6 @@ def set_all_mirroring_queues(enable):
             set_ha_mode(vhost, 'all')
         else:
             clear_ha_mode(vhost, force=True)
-
-
-def service(action):
-    cmd = ['service', 'rabbitmq-server', action]
-    subprocess.check_call(cmd)
 
 
 def cluster_with():
@@ -695,10 +691,10 @@ def restart_on_change(restart_map, stopstart=False):
             time.sleep(random.random()*100)
             if not stopstart:
                 for svc_name in services_list:
-                    service('restart', svc_name)
+                    system_service('restart', svc_name)
             else:
                 for action in ['stop', 'start']:
                     for svc_name in services_list:
-                        service(action, svc_name)
+                        system_service(action, svc_name)
         return wrapped_f
     return wrap
