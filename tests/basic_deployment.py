@@ -120,6 +120,7 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
             u.configure_rmq_ssl_on(sentry_units, self.d, port=port)
         else:
             u.configure_rmq_ssl_off(sentry_units, self.d)
+        self.d.sentry.wait()
 
         # Publish and get amqp messages in all possible unit combinations.
         # Qty of checks == (qty of units) ^ 2
@@ -151,7 +152,7 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
                                                port=port)
 
                 # Wait a bit before checking for message
-                time.sleep(2)
+                time.sleep(10)
 
                 # Get amqp message
                 u.log.debug('Get message from:   {} '
@@ -410,6 +411,7 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
         u.log.debug('Enabling management_plugin charm config option...')
         config = {'management_plugin': 'True'}
         self.d.configure('rabbitmq-server', config)
+        self.d.sentry.wait()
 
         # Check tcp connect to management plugin port
         max_wait = 120
@@ -430,6 +432,7 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
         u.log.debug('Disabling management_plugin charm config option...')
         config = {'management_plugin': 'False'}
         self.d.configure('rabbitmq-server', config)
+        self.d.sentry.wait()
 
         # Negative check - tcp connect to management plugin port
         u.log.info('Expect tcp connect fail since charm config '
@@ -500,6 +503,7 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
 
         configuration = {'cluster-partition-handling': "autoheal"}
         self.d.configure('rabbitmq-server', configuration)
+        self.d.sentry.wait()
 
         # Wait for configuration to be effectively applied
         time.sleep(10)
