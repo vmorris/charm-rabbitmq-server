@@ -28,7 +28,6 @@ from charmhelpers.contrib.hahelpers.cluster import (
     is_elected_leader
 )
 from charmhelpers.contrib.openstack.utils import (
-    get_hostname,
     get_host_ip
 )
 
@@ -109,27 +108,9 @@ def install():
     # NOTE(jamespage) install actually happens in config_changed hook
 
 
-def get_local_nodename():
-    '''Resolve local nodename into something that's universally addressable'''
-    ip_addr = get_host_ip(unit_get('private-address'))
-    log('getting local nodename for ip address: %s' % ip_addr, level=INFO)
-    try:
-        nodename = get_hostname(ip_addr, fqdn=False)
-    except:
-        log('Cannot resolve hostname for %s using DNS servers' % ip_addr,
-            level='WARNING')
-        log('Falling back to use socket.gethostname()',
-            level='WARNING')
-        # If the private-address is not resolvable using DNS
-        # then use the current hostname
-        nodename = socket.gethostname()
-    log('local nodename: %s' % nodename, level=INFO)
-    return nodename
-
-
 def configure_nodename():
     '''Set RABBITMQ_NODENAME to something that's resolvable by my peers'''
-    nodename = get_local_nodename()
+    nodename = rabbit.get_local_nodename()
     log('configuring nodename', level=INFO)
     if (nodename and
             rabbit.get_node_name() != 'rabbit@%s' % nodename):
@@ -142,6 +123,7 @@ def configure_nodename():
                                    ipv6=config('prefer-ipv6'))
         log('Starting rabbitmq-server.')
         service_restart('rabbitmq-server')
+        rabbit.wait_app()
 
 
 def configure_amqp(username, vhost, admin=False):
@@ -258,32 +240,43 @@ def is_sufficient_peers():
     number of peers to proceed with creating rabbitmq cluster.
     """
     min_size = config('min-cluster-size')
+    leader_election_available = True
+    try:
+        is_leader()
+    except NotImplementedError:
+        leader_election_available = False
+
     if min_size:
-        # Ignore min-cluster-size if juju has leadership election
-        try:
-            is_leader()
-            log("Ignoring min-cluster-size in favour of Juju leader election")
-            return True
-        except NotImplementedError:
-            log("Leader election is not available, using min-cluster-size")
+        # Use min-cluster-size if we don't have Juju leader election.
+        if not leader_election_available:
+            log("Waiting for minimum of %d peer units since there's no Juju "
+                "leader election" % (min_size))
             size = 0
             for rid in relation_ids('cluster'):
                 size = len(related_units(rid))
 
             # Include this unit
             size += 1
-            if min_size > size:
+            if size < min_size:
                 log("Insufficient number of peer units to form cluster "
                     "(expected=%s, got=%s)" % (min_size, size), level=INFO)
                 return False
-
-    return True
+        else:
+            log("Ignoring min-cluster-size in favour of Juju leader election")
+            return True
+    elif leader_election_available:
+        log("min-cluster-size is not defined, using juju leader-election.")
+        return True
+    else:
+        log("min-cluster-size is not defined and juju leader election is not "
+            "available!", level="WARNING")
+        return False
 
 
 @hooks.hook('cluster-relation-joined')
 def cluster_joined(relation_id=None):
     relation_settings = {
-        'hostname': get_local_nodename(),
+        'hostname': rabbit.get_local_nodename(),
     }
 
     if config('prefer-ipv6'):
@@ -394,11 +387,11 @@ def update_cookie(leaders_cookie=None):
         log('Cookie already synchronized with peer.')
         return
 
-    log('Synchronizing erlang cookie from peer.', level=INFO)
     service_stop('rabbitmq-server')
     with open(rabbit.COOKIE_PATH, 'wb') as out:
         out.write(cookie)
     service_restart('rabbitmq-server')
+    rabbit.wait_app()
 
 
 @hooks.hook('ha-relation-joined')

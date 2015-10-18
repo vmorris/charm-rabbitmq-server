@@ -6,6 +6,7 @@ import glob
 import tempfile
 import random
 import time
+import socket
 
 from rabbitmq_context import (
     RabbitMQSSLContext,
@@ -16,17 +17,18 @@ from charmhelpers.core.templating import render
 
 from charmhelpers.contrib.openstack.utils import (
     get_hostname,
+    get_host_ip,
 )
 
 from charmhelpers.core.hookenv import (
-    config,
     relation_ids,
     related_units,
     log, ERROR,
     INFO,
     service_name,
     status_set,
-    cached
+    cached,
+    unit_get,
 )
 
 from charmhelpers.core.host import (
@@ -198,6 +200,23 @@ def set_policy(vhost, policy_name, match, value):
     subprocess.check_call(cmd)
 
 
+def wait_app():
+    run_dir = '/var/run/rabbitmq/'
+    if os.path.isdir(run_dir):
+        pid_file = run_dir + 'pid'
+    else:
+        pid_file = '/var/lib/rabbitmq/mnesia/rabbit@' \
+                   + get_local_nodename() + '.pid'
+    cmd = [RABBITMQ_CTL, 'wait', pid_file]
+    status_set('maintenance', 'Waiting for rabbitmq app to start: {}'
+               ''.format(pid_file))
+    try:
+        subprocess.check_call(cmd)
+        log('Confirmed rabbitmq app is running')
+    except:
+        status_set('blocked', 'Rabbitmq failed to start')
+
+
 @cached
 def caching_cmp_pkgrevno(package, revno, pkgcache=None):
     return cmp_pkgrevno(package, revno, pkgcache)
@@ -300,12 +319,8 @@ def cluster_with():
         return False
 
     # check the leader and try to cluster with it
-    if len(leader_node()) == 0:
-        log('No nodes available to cluster with')
-        return False
-
-    num_tries = 0
-    for node in leader_node():
+    node = leader_node()
+    if node:
         if node in running_nodes():
             log('Host already clustered with %s.' % node)
             return False
@@ -314,8 +329,11 @@ def cluster_with():
         # The asynchronous nature of hook firing nearly guarantees
         # this. Using random time wait is a hack until we can
         # implement charmhelpers.coordinator.
-        time.sleep(random.random()*100)
-        log('Clustering with remote rabbit host (%s).' % node)
+        status_set('maintenance',
+                   'Random wait for join_cluster to avoid collisions')
+        time.sleep(random.random() * 100)
+        status_set('maintenance',
+                   'Clustering with remote rabbit host (%s).' % node)
         try:
             cmd = [RABBITMQ_CTL, 'stop_app']
             subprocess.check_call(cmd)
@@ -323,18 +341,18 @@ def cluster_with():
             subprocess.check_output(cmd, stderr=subprocess.STDOUT)
             cmd = [RABBITMQ_CTL, 'start_app']
             subprocess.check_call(cmd)
+            wait_app()
             log('Host clustered with %s.' % node)
             return True
         except subprocess.CalledProcessError as e:
-            log('Failed to cluster with %s. Exception: %s'
-                % (node, e))
+            status_set('Failed to cluster with %s. Exception: %s'
+                       % (node, e))
             cmd = [RABBITMQ_CTL, 'start_app']
             subprocess.check_call(cmd)
-        # continue to the next node
-        num_tries += 1
-        if num_tries > config('max-cluster-tries'):
-            log('Max tries number exhausted, exiting', level=ERROR)
-            raise
+            wait_app()
+    else:
+        log('Leader not available for clustering')
+        return False
 
     return False
 
@@ -347,6 +365,7 @@ def break_cluster():
         subprocess.check_call(cmd)
         cmd = [RABBITMQ_CTL, 'start_app']
         subprocess.check_call(cmd)
+        wait_app()
         log('Cluster successfully broken.')
     except:
         # error, no nodes available for clustering
@@ -606,20 +625,29 @@ def leader_node():
     # to avoid split-brain clusters.
     leader_node_ip = peer_retrieve('leader_node_ip')
     if leader_node_ip:
-        return ["rabbit@" + get_node_hostname(leader_node_ip)]
-    else:
-        return []
+        return "rabbit@" + get_node_hostname(leader_node_ip)
 
 
-def get_node_hostname(address):
-    ''' Resolve IP address to hostname for nodes '''
-    node = get_hostname(address, fqdn=False)
-    if node:
-        return node
-    else:
-        log('Cannot resolve hostname for {} using DNS servers'.format(address),
+def get_node_hostname(ip_addr):
+    ''' Resolve IP address to hostname '''
+    try:
+        nodename = get_hostname(ip_addr, fqdn=False)
+    except:
+        log('Cannot resolve hostname for %s using DNS servers' % ip_addr,
             level='WARNING')
-        return None
+        log('Falling back to use socket.gethostname()',
+            level='WARNING')
+        # If the private-address is not resolvable using DNS
+        # then use the current hostname
+        nodename = socket.gethostname()
+    log('local nodename: %s' % nodename, level=INFO)
+    return nodename
+
+
+def get_local_nodename():
+    '''Resolve local nodename into something that's universally addressable'''
+    ip_addr = get_host_ip(unit_get('private-address'))
+    log('getting local nodename for ip address: %s' % ip_addr, level=INFO)
 
 
 @cached
@@ -688,13 +716,17 @@ def restart_on_change(restart_map, stopstart=False):
                 if path_hash(path) != checksums[path]:
                     restarts += restart_map[path]
             services_list = list(OrderedDict.fromkeys(restarts))
-            time.sleep(random.random()*100)
+            status_set('maintenance',
+                       'Random wait for restart to avoid collisions')
+            time.sleep(random.random() * 100)
             if not stopstart:
                 for svc_name in services_list:
                     system_service('restart', svc_name)
+                    wait_app()
             else:
                 for action in ['stop', 'start']:
                     for svc_name in services_list:
                         system_service(action, svc_name)
+                        wait_app()
         return wrapped_f
     return wrap
