@@ -648,6 +648,7 @@ def get_local_nodename():
     '''Resolve local nodename into something that's universally addressable'''
     ip_addr = get_host_ip(unit_get('private-address'))
     log('getting local nodename for ip address: %s' % ip_addr, level=INFO)
+    return get_node_hostname(ip_addr)
 
 
 @cached
