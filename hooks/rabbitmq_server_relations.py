@@ -261,16 +261,17 @@ def is_sufficient_peers():
                 log("Insufficient number of peer units to form cluster "
                     "(expected=%s, got=%s)" % (min_size, size), level=INFO)
                 return False
+            else:
+                return True
         else:
             log("Ignoring min-cluster-size in favour of Juju leader election")
             return True
     elif leader_election_available:
         log("min-cluster-size is not defined, using juju leader-election.")
-        return True
     else:
         log("min-cluster-size is not defined and juju leader election is not "
             "available!", level="WARNING")
-        return False
+    return True
 
 
 @hooks.hook('cluster-relation-joined')
