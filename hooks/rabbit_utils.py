@@ -151,8 +151,7 @@ def vhost_exists(vhost):
 def create_vhost(vhost):
     if vhost_exists(vhost):
         return
-    cmd = [RABBITMQ_CTL, 'add_vhost', vhost]
-    subprocess.check_call(cmd)
+    rabbitmqctl('add_vhost', vhost)
     log('Created new vhost (%s).' % vhost)
 
 
@@ -171,50 +170,30 @@ def create_user(user, password, admin=False):
     exists, is_admin = user_exists(user)
 
     if not exists:
-        cmd = [RABBITMQ_CTL, 'add_user', user, password]
-        subprocess.check_call(cmd)
-        log('Created new user (%s).' % user)
+        log('Creating new user (%s).' % user)
+        rabbitmqctl('add_user', user, password)
 
     if admin == is_admin:
         return
 
     if admin:
-        cmd = [RABBITMQ_CTL, 'set_user_tags', user, 'administrator']
         log('Granting user (%s) admin access.' % user)
+        rabbitmqctl('set_user_tags', user, 'administrator')
     else:
-        cmd = [RABBITMQ_CTL, 'set_user_tags', user]
         log('Revoking user (%s) admin access.' % user)
-    subprocess.check_call(cmd)
+        rabbitmqctl('set_user_tags', user)
 
 
 def grant_permissions(user, vhost):
-    cmd = [RABBITMQ_CTL, 'set_permissions', '-p',
-           vhost, user, '.*', '.*', '.*']
-    subprocess.check_call(cmd)
+    log("Granting permissions", level='DEBUG')
+    rabbitmqctl('set_permissions', '-p',
+                vhost, user, '.*', '.*', '.*')
 
 
 def set_policy(vhost, policy_name, match, value):
-    cmd = [RABBITMQ_CTL, 'set_policy', '-p', vhost,
-           policy_name, match, value]
-    log("setting policy: %s" % str(cmd), level='DEBUG')
-    subprocess.check_call(cmd)
-
-
-def wait_app():
-    run_dir = '/var/run/rabbitmq/'
-    if os.path.isdir(run_dir):
-        pid_file = run_dir + 'pid'
-    else:
-        pid_file = '/var/lib/rabbitmq/mnesia/rabbit@' \
-                   + get_local_nodename() + '.pid'
-    cmd = [RABBITMQ_CTL, 'wait', pid_file]
-    status_set('maintenance', 'Waiting for rabbitmq app to start: {}'
-               ''.format(pid_file))
-    try:
-        subprocess.check_call(cmd)
-        log('Confirmed rabbitmq app is running')
-    except:
-        status_set('blocked', 'Rabbitmq failed to start')
+    log("setting policy", level='DEBUG')
+    rabbitmqctl('set_policy', '-p', vhost,
+                policy_name, match, value)
 
 
 @cached
@@ -276,8 +255,7 @@ def clear_ha_mode(vhost, name='HA', force=False):
 
     log("Clearing '%s' policy from vhost '%s'" % (name, vhost), level='INFO')
     try:
-        subprocess.check_call([RABBITMQ_CTL, 'clear_policy', '-p', vhost,
-                               name])
+        rabbitmqctl('clear_policy', '-p', vhost, name)
     except subprocess.CalledProcessError as ex:
         if not force:
             raise ex
@@ -307,12 +285,68 @@ def set_all_mirroring_queues(enable):
             clear_ha_mode(vhost, force=True)
 
 
-def cluster_with():
-    log('Clustering with new node')
+def rabbitmqctl(action, *args):
+    ''' Run rabbitmqctl with action and args. This function uses
+        subprocess.check_call. For uses that need check_output
+        use a direct subproecess call
+     '''
+    cmd = [RABBITMQ_CTL, action]
+    for arg in args:
+        cmd.append(arg)
+    log("Running {}".format(cmd), 'DEBUG')
+    subprocess.check_call(cmd)
+
+
+def wait_app():
+    ''' Wait until rabbitmq has fully started '''
+    run_dir = '/var/run/rabbitmq/'
+    if os.path.isdir(run_dir):
+        pid_file = run_dir + 'pid'
+    else:
+        pid_file = '/var/lib/rabbitmq/mnesia/rabbit@' \
+                   + get_local_nodename() + '.pid'
+    status_set('maintenance', 'Waiting for rabbitmq app to start: {}'
+               ''.format(pid_file))
+    try:
+        rabbitmqctl('wait', pid_file)
+        log('Confirmed rabbitmq app is running')
+        return True
+    except:
+        status_set('blocked', 'Rabbitmq failed to start')
+        try:
+            status_cmd = ['rabbitmqctl', 'status']
+            log(subprocess.check_output(status_cmd), 'DEBUG')
+        except:
+            pass
+        return False
+
+
+def start_app():
+    ''' Start the rabbitmq app and wait until it is fully started '''
+    status_set('maintenance', 'Starting rabbitmq applilcation')
+    rabbitmqctl('start_app')
+    wait_app()
+
+
+def join_cluster(node):
+    ''' Join cluster with node '''
     if cmp_pkgrevno('rabbitmq-server', '3.0.1') >= 0:
         cluster_cmd = 'join_cluster'
     else:
         cluster_cmd = 'cluster'
+    status_set('maintenance',
+               'Clustering with remote rabbit host (%s).' % node)
+    rabbitmqctl('stop_app')
+    # Intentionally using check_output so we can see rabbitmqctl error
+    # message if it fails
+    cmd = [RABBITMQ_CTL, cluster_cmd, node]
+    subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+    start_app()
+    log('Host clustered with %s.' % node, 'INFO')
+
+
+def cluster_with():
+    log('Clustering with new node')
 
     if clustered():
         log('Node is already clustered, skipping')
@@ -332,26 +366,15 @@ def cluster_with():
         status_set('maintenance',
                    'Random wait for join_cluster to avoid collisions')
         time.sleep(random.random() * 100)
-        status_set('maintenance',
-                   'Clustering with remote rabbit host (%s).' % node)
         try:
-            cmd = [RABBITMQ_CTL, 'stop_app']
-            subprocess.check_call(cmd)
-            cmd = [RABBITMQ_CTL, cluster_cmd, node]
-            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-            cmd = [RABBITMQ_CTL, 'start_app']
-            subprocess.check_call(cmd)
-            wait_app()
-            log('Host clustered with %s.' % node)
+            join_cluster(node)
             return True
         except subprocess.CalledProcessError as e:
-            status_set('Failed to cluster with %s. Exception: %s'
+            status_set('blocked', 'Failed to cluster with %s. Exception: %s'
                        % (node, e))
-            cmd = [RABBITMQ_CTL, 'start_app']
-            subprocess.check_call(cmd)
-            wait_app()
+            start_app()
     else:
-        log('Leader not available for clustering')
+        status_set('waiting', 'Leader not available for clustering')
         return False
 
     return False
@@ -359,13 +382,9 @@ def cluster_with():
 
 def break_cluster():
     try:
-        cmd = [RABBITMQ_CTL, 'stop_app']
-        subprocess.check_call(cmd)
-        cmd = [RABBITMQ_CTL, 'reset']
-        subprocess.check_call(cmd)
-        cmd = [RABBITMQ_CTL, 'start_app']
-        subprocess.check_call(cmd)
-        wait_app()
+        rabbitmqctl('stop_app')
+        rabbitmqctl('reset')
+        start_app()
         log('Cluster successfully broken.')
     except:
         # error, no nodes available for clustering
@@ -676,11 +695,8 @@ def assess_status():
                            'Unit has peers, but RabbitMQ not clustered')
                 return
         # General status check
-        status_cmd = ['rabbitmqctl', 'status']
-        ret = subprocess.call(status_cmd)
-        if ret > 0:
-            status_set('blocked', 'RabbitMQ server is not running')
-        else:
+        ret = wait_app()
+        if ret:
             if clustered():
                 status_set('active', 'Unit is ready and clustered')
             else:
