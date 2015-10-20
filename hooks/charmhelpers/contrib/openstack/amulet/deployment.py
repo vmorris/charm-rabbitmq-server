@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with charm-helpers.  If not, see <http://www.gnu.org/licenses/>.
 
+import re
 import six
 from collections import OrderedDict
 from charmhelpers.contrib.amulet.deployment import (
@@ -44,20 +45,31 @@ class OpenStackAmuletDeployment(AmuletDeployment):
            Determine if the local branch being tested is derived from its
            stable or next (dev) branch, and based on this, use the corresonding
            stable or next branches for the other_services."""
+
+        # Charms outside the lp:~openstack-charmers namespace
         base_charms = ['mysql', 'mongodb', 'nrpe']
+
+        # Force these charms to current series even when using an older series.
+        # ie. Use trusty/nrpe even when series is precise, as the P charm
+        # does not possess the necessary external master config and hooks.
+        force_series_current = ['nrpe']
 
         if self.series in ['precise', 'trusty']:
             base_series = self.series
         else:
             base_series = self.current_next
 
-        if self.stable:
-            for svc in other_services:
+        for svc in other_services:
+            if svc['name'] in force_series_current:
+                base_series = self.current_next
+            # If a location has been explicitly set, use it
+            if svc.get('location'):
+                continue
+            if self.stable:
                 temp = 'lp:charms/{}/{}'
                 svc['location'] = temp.format(base_series,
                                               svc['name'])
-        else:
-            for svc in other_services:
+            else:
                 if svc['name'] in base_charms:
                     temp = 'lp:charms/{}/{}'
                     svc['location'] = temp.format(base_series,
@@ -66,6 +78,7 @@ class OpenStackAmuletDeployment(AmuletDeployment):
                     temp = 'lp:~openstack-charmers/charms/{}/{}/next'
                     svc['location'] = temp.format(self.current_next,
                                                   svc['name'])
+
         return other_services
 
     def _add_services(self, this_service, other_services):
@@ -77,21 +90,23 @@ class OpenStackAmuletDeployment(AmuletDeployment):
 
         services = other_services
         services.append(this_service)
+
+        # Charms which should use the source config option
         use_source = ['mysql', 'mongodb', 'rabbitmq-server', 'ceph',
                       'ceph-osd', 'ceph-radosgw']
-        # Most OpenStack subordinate charms do not expose an origin option
-        # as that is controlled by the principle.
-        ignore = ['cinder-ceph', 'hacluster', 'neutron-openvswitch', 'nrpe']
+
+        # Charms which can not use openstack-origin, ie. many subordinates
+        no_origin = ['cinder-ceph', 'hacluster', 'neutron-openvswitch', 'nrpe']
 
         if self.openstack:
             for svc in services:
-                if svc['name'] not in use_source + ignore:
+                if svc['name'] not in use_source + no_origin:
                     config = {'openstack-origin': self.openstack}
                     self.d.configure(svc['name'], config)
 
         if self.source:
             for svc in services:
-                if svc['name'] in use_source and svc['name'] not in ignore:
+                if svc['name'] in use_source and svc['name'] not in no_origin:
                     config = {'source': self.source}
                     self.d.configure(svc['name'], config)
 
@@ -99,6 +114,45 @@ class OpenStackAmuletDeployment(AmuletDeployment):
         """Configure all of the services."""
         for service, config in six.iteritems(configs):
             self.d.configure(service, config)
+
+    def _auto_wait_for_status(self, message=None, exclude_services=None,
+                              timeout=1800):
+        """Wait for all units to have a specific extended status, except
+        for any defined as excluded.  Unless specified via message, any
+        status containing any case of 'ready' will be considered a match.
+
+        Examples of message usage:
+
+          Wait for all unit status to CONTAIN any case of 'ready' or 'ok':
+              message = re.compile('.*ready.*|.*ok.*', re.IGNORECASE)
+
+          Wait for all units to reach this status (exact match):
+              message = 'Unit is ready'
+
+          Wait for all units to reach any one of these (exact match):
+              message = re.compile('Unit is ready|OK|Ready')
+
+          Wait for at least one unit to reach this status (exact match):
+              message = {'ready'}
+
+        See Amulet's sentry.wait_for_messages() for message usage detail.
+        https://github.com/juju/amulet/blob/master/amulet/sentry.py
+
+        :param message: Expected status match
+        :param exclude_services: List of juju service names to ignore
+        :param timeout: Maximum time in seconds to wait for status match
+        :returns: None.  Raises if timeout is hit.
+        """
+
+        if not message:
+            message = re.compile('.*ready.*', re.IGNORECASE)
+
+        if not exclude_services:
+            exclude_services = []
+
+        services = list(set(self.d.services.keys()) - set(exclude_services))
+        service_messages = {service: message for service in services}
+        self.d.sentry.wait_for_messages(service_messages, timeout=timeout)
 
     def _get_openstack_release(self):
         """Get openstack release.
