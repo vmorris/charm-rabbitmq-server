@@ -6,6 +6,7 @@ import glob
 import tempfile
 import random
 import time
+import socket
 
 from rabbitmq_context import (
     RabbitMQSSLContext,
@@ -16,17 +17,18 @@ from charmhelpers.core.templating import render
 
 from charmhelpers.contrib.openstack.utils import (
     get_hostname,
+    get_host_ip,
 )
 
 from charmhelpers.core.hookenv import (
-    config,
     relation_ids,
     related_units,
     log, ERROR,
     INFO,
     service_name,
     status_set,
-    cached
+    cached,
+    unit_get,
 )
 
 from charmhelpers.core.host import (
@@ -34,7 +36,9 @@ from charmhelpers.core.host import (
     mkdir,
     write_file,
     lsb_release,
-    cmp_pkgrevno
+    cmp_pkgrevno,
+    path_hash,
+    service as system_service,
 )
 
 from charmhelpers.contrib.peerstorage import (
@@ -147,8 +151,7 @@ def vhost_exists(vhost):
 def create_vhost(vhost):
     if vhost_exists(vhost):
         return
-    cmd = [RABBITMQ_CTL, 'add_vhost', vhost]
-    subprocess.check_call(cmd)
+    rabbitmqctl('add_vhost', vhost)
     log('Created new vhost (%s).' % vhost)
 
 
@@ -167,33 +170,30 @@ def create_user(user, password, admin=False):
     exists, is_admin = user_exists(user)
 
     if not exists:
-        cmd = [RABBITMQ_CTL, 'add_user', user, password]
-        subprocess.check_call(cmd)
-        log('Created new user (%s).' % user)
+        log('Creating new user (%s).' % user)
+        rabbitmqctl('add_user', user, password)
 
     if admin == is_admin:
         return
 
     if admin:
-        cmd = [RABBITMQ_CTL, 'set_user_tags', user, 'administrator']
         log('Granting user (%s) admin access.' % user)
+        rabbitmqctl('set_user_tags', user, 'administrator')
     else:
-        cmd = [RABBITMQ_CTL, 'set_user_tags', user]
         log('Revoking user (%s) admin access.' % user)
-    subprocess.check_call(cmd)
+        rabbitmqctl('set_user_tags', user)
 
 
 def grant_permissions(user, vhost):
-    cmd = [RABBITMQ_CTL, 'set_permissions', '-p',
-           vhost, user, '.*', '.*', '.*']
-    subprocess.check_call(cmd)
+    log("Granting permissions", level='DEBUG')
+    rabbitmqctl('set_permissions', '-p',
+                vhost, user, '.*', '.*', '.*')
 
 
 def set_policy(vhost, policy_name, match, value):
-    cmd = [RABBITMQ_CTL, 'set_policy', '-p', vhost,
-           policy_name, match, value]
-    log("setting policy: %s" % str(cmd), level='DEBUG')
-    subprocess.check_call(cmd)
+    log("setting policy", level='DEBUG')
+    rabbitmqctl('set_policy', '-p', vhost,
+                policy_name, match, value)
 
 
 @cached
@@ -255,8 +255,7 @@ def clear_ha_mode(vhost, name='HA', force=False):
 
     log("Clearing '%s' policy from vhost '%s'" % (name, vhost), level='INFO')
     try:
-        subprocess.check_call([RABBITMQ_CTL, 'clear_policy', '-p', vhost,
-                               name])
+        rabbitmqctl('clear_policy', '-p', vhost, name)
     except subprocess.CalledProcessError as ex:
         if not force:
             raise ex
@@ -286,29 +285,76 @@ def set_all_mirroring_queues(enable):
             clear_ha_mode(vhost, force=True)
 
 
-def service(action):
-    cmd = ['service', 'rabbitmq-server', action]
+def rabbitmqctl(action, *args):
+    ''' Run rabbitmqctl with action and args. This function uses
+        subprocess.check_call. For uses that need check_output
+        use a direct subproecess call
+     '''
+    cmd = [RABBITMQ_CTL, action]
+    for arg in args:
+        cmd.append(arg)
+    log("Running {}".format(cmd), 'DEBUG')
     subprocess.check_call(cmd)
 
 
-def cluster_with():
-    log('Clustering with new node')
+def wait_app():
+    ''' Wait until rabbitmq has fully started '''
+    run_dir = '/var/run/rabbitmq/'
+    if os.path.isdir(run_dir):
+        pid_file = run_dir + 'pid'
+    else:
+        pid_file = '/var/lib/rabbitmq/mnesia/rabbit@' \
+                   + get_local_nodename() + '.pid'
+    status_set('maintenance', 'Waiting for rabbitmq app to start: {}'
+               ''.format(pid_file))
+    try:
+        rabbitmqctl('wait', pid_file)
+        log('Confirmed rabbitmq app is running')
+        return True
+    except:
+        status_set('blocked', 'Rabbitmq failed to start')
+        try:
+            status_cmd = ['rabbitmqctl', 'status']
+            log(subprocess.check_output(status_cmd), 'DEBUG')
+        except:
+            pass
+        return False
+
+
+def start_app():
+    ''' Start the rabbitmq app and wait until it is fully started '''
+    status_set('maintenance', 'Starting rabbitmq applilcation')
+    rabbitmqctl('start_app')
+    wait_app()
+
+
+def join_cluster(node):
+    ''' Join cluster with node '''
     if cmp_pkgrevno('rabbitmq-server', '3.0.1') >= 0:
         cluster_cmd = 'join_cluster'
     else:
         cluster_cmd = 'cluster'
+    status_set('maintenance',
+               'Clustering with remote rabbit host (%s).' % node)
+    rabbitmqctl('stop_app')
+    # Intentionally using check_output so we can see rabbitmqctl error
+    # message if it fails
+    cmd = [RABBITMQ_CTL, cluster_cmd, node]
+    subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+    start_app()
+    log('Host clustered with %s.' % node, 'INFO')
+
+
+def cluster_with():
+    log('Clustering with new node')
 
     if clustered():
         log('Node is already clustered, skipping')
         return False
 
     # check the leader and try to cluster with it
-    if len(leader_node()) == 0:
-        log('No nodes available to cluster with')
-        return False
-
-    num_tries = 0
-    for node in leader_node():
+    node = leader_node()
+    if node:
         if node in running_nodes():
             log('Host already clustered with %s.' % node)
             return False
@@ -317,39 +363,28 @@ def cluster_with():
         # The asynchronous nature of hook firing nearly guarantees
         # this. Using random time wait is a hack until we can
         # implement charmhelpers.coordinator.
-        time.sleep(random.random()*100)
-        log('Clustering with remote rabbit host (%s).' % node)
+        status_set('maintenance',
+                   'Random wait for join_cluster to avoid collisions')
+        time.sleep(random.random() * 100)
         try:
-            cmd = [RABBITMQ_CTL, 'stop_app']
-            subprocess.check_call(cmd)
-            cmd = [RABBITMQ_CTL, cluster_cmd, node]
-            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-            cmd = [RABBITMQ_CTL, 'start_app']
-            subprocess.check_call(cmd)
-            log('Host clustered with %s.' % node)
+            join_cluster(node)
             return True
         except subprocess.CalledProcessError as e:
-            log('Failed to cluster with %s. Exception: %s'
-                % (node, e))
-            cmd = [RABBITMQ_CTL, 'start_app']
-            subprocess.check_call(cmd)
-        # continue to the next node
-        num_tries += 1
-        if num_tries > config('max-cluster-tries'):
-            log('Max tries number exhausted, exiting', level=ERROR)
-            raise
+            status_set('blocked', 'Failed to cluster with %s. Exception: %s'
+                       % (node, e))
+            start_app()
+    else:
+        status_set('waiting', 'Leader not available for clustering')
+        return False
 
     return False
 
 
 def break_cluster():
     try:
-        cmd = [RABBITMQ_CTL, 'stop_app']
-        subprocess.check_call(cmd)
-        cmd = [RABBITMQ_CTL, 'reset']
-        subprocess.check_call(cmd)
-        cmd = [RABBITMQ_CTL, 'start_app']
-        subprocess.check_call(cmd)
+        rabbitmqctl('stop_app')
+        rabbitmqctl('reset')
+        start_app()
         log('Cluster successfully broken.')
     except:
         # error, no nodes available for clustering
@@ -609,20 +644,30 @@ def leader_node():
     # to avoid split-brain clusters.
     leader_node_ip = peer_retrieve('leader_node_ip')
     if leader_node_ip:
-        return ["rabbit@" + get_node_hostname(leader_node_ip)]
-    else:
-        return []
+        return "rabbit@" + get_node_hostname(leader_node_ip)
 
 
-def get_node_hostname(address):
-    ''' Resolve IP address to hostname for nodes '''
-    node = get_hostname(address, fqdn=False)
-    if node:
-        return node
-    else:
-        log('Cannot resolve hostname for {} using DNS servers'.format(address),
+def get_node_hostname(ip_addr):
+    ''' Resolve IP address to hostname '''
+    try:
+        nodename = get_hostname(ip_addr, fqdn=False)
+    except:
+        log('Cannot resolve hostname for %s using DNS servers' % ip_addr,
             level='WARNING')
-        return None
+        log('Falling back to use socket.gethostname()',
+            level='WARNING')
+        # If the private-address is not resolvable using DNS
+        # then use the current hostname
+        nodename = socket.gethostname()
+    log('local nodename: %s' % nodename, level=INFO)
+    return nodename
+
+
+def get_local_nodename():
+    '''Resolve local nodename into something that's universally addressable'''
+    ip_addr = get_host_ip(unit_get('private-address'))
+    log('getting local nodename for ip address: %s' % ip_addr, level=INFO)
+    return get_node_hostname(ip_addr)
 
 
 @cached
@@ -650,14 +695,55 @@ def assess_status():
                            'Unit has peers, but RabbitMQ not clustered')
                 return
         # General status check
-        status_cmd = ['rabbitmqctl', 'status']
-        ret = subprocess.call(status_cmd)
-        if ret > 0:
-            status_set('blocked', 'RabbitMQ server is not running')
-        else:
+        ret = wait_app()
+        if ret:
             if clustered():
                 status_set('active', 'Unit is ready and clustered')
             else:
                 status_set('active', 'Unit is ready')
     else:
         status_set('waiting', 'RabbitMQ is not yet installed')
+
+
+def restart_on_change(restart_map, stopstart=False):
+    """Restart services based on configuration files changing
+
+    This function is used a decorator, for example::
+
+        @restart_on_change({
+            '/etc/ceph/ceph.conf': [ 'cinder-api', 'cinder-volume' ]
+            '/etc/apache/sites-enabled/*': [ 'apache2' ]
+            })
+        def config_changed():
+            pass  # your code here
+
+    In this example, the cinder-api and cinder-volume services
+    would be restarted if /etc/ceph/ceph.conf is changed by the
+    ceph_client_changed function. The apache2 service would be
+    restarted if any file matching the pattern got changed, created
+    or removed. Standard wildcards are supported, see documentation
+    for the 'glob' module for more information.
+    """
+    def wrap(f):
+        def wrapped_f(*args, **kwargs):
+            checksums = {path: path_hash(path) for path in restart_map}
+            f(*args, **kwargs)
+            restarts = []
+            for path in restart_map:
+                if path_hash(path) != checksums[path]:
+                    restarts += restart_map[path]
+            services_list = list(OrderedDict.fromkeys(restarts))
+            status_set('maintenance',
+                       'Random wait for restart to avoid collisions')
+            time.sleep(random.random() * 100)
+            if not stopstart:
+                for svc_name in services_list:
+                    system_service('restart', svc_name)
+                    wait_app()
+            else:
+                for action in ['stop', 'start']:
+                    for svc_name in services_list:
+                        system_service(action, svc_name)
+                        wait_app()
+        return wrapped_f
+    return wrap

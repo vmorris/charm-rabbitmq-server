@@ -130,19 +130,40 @@ class RelationUtil(TestCase):
             relation_settings={'private-address': ipv6_addr},
             relation_id=None)
 
+    @patch.object(rabbitmq_server_relations, 'is_leader')
     @patch.object(rabbitmq_server_relations, 'related_units')
     @patch.object(rabbitmq_server_relations, 'relation_ids')
     @patch.object(rabbitmq_server_relations, 'config')
     def test_is_sufficient_peers(self, mock_config, mock_relation_ids,
-                                 mock_related_units):
+                                 mock_related_units, mock_is_leader):
+        # With leadership Election
+        mock_is_leader.return_value = False
         _config = {'min-cluster-size': None}
         mock_config.side_effect = lambda key: _config.get(key)
         self.assertTrue(rabbitmq_server_relations.is_sufficient_peers())
 
+        mock_is_leader.return_value = False
+        mock_relation_ids.return_value = ['cluster:0']
+        mock_related_units.return_value = ['test/0']
+        _config = {'min-cluster-size': 3}
+        self.assertTrue(rabbitmq_server_relations.is_sufficient_peers())
+
+        mock_is_leader.return_value = False
+        mock_related_units.return_value = ['test/0', 'test/1']
+        self.assertTrue(rabbitmq_server_relations.is_sufficient_peers())
+
+        # Without leadership Election
+        mock_is_leader.side_effect = NotImplementedError
+        _config = {'min-cluster-size': None}
+        mock_config.side_effect = lambda key: _config.get(key)
+        self.assertTrue(rabbitmq_server_relations.is_sufficient_peers())
+
+        mock_is_leader.side_effect = NotImplementedError
         mock_relation_ids.return_value = ['cluster:0']
         mock_related_units.return_value = ['test/0']
         _config = {'min-cluster-size': 3}
         self.assertFalse(rabbitmq_server_relations.is_sufficient_peers())
 
+        mock_is_leader.side_effect = NotImplementedError
         mock_related_units.return_value = ['test/0', 'test/1']
         self.assertTrue(rabbitmq_server_relations.is_sufficient_peers())
