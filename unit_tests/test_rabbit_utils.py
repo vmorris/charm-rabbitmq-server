@@ -171,8 +171,9 @@ class UtilsTests(unittest.TestCase):
         mock_peer_retrieve.return_value = '192.168.20.50'
         mock_get_node_hostname.return_value = 'juju-devel3-machine-15'
         self.assertEqual(rabbit_utils.leader_node(),
-                         ['rabbit@juju-devel3-machine-15'])
+                         'rabbit@juju-devel3-machine-15')
 
+    @mock.patch('rabbit_utils.wait_app')
     @mock.patch('rabbit_utils.subprocess.check_call')
     @mock.patch('rabbit_utils.subprocess.check_output')
     @mock.patch('rabbit_utils.time')
@@ -183,10 +184,11 @@ class UtilsTests(unittest.TestCase):
     def test_cluster_with_not_clustered(self, mock_cmp_pkgrevno,
                                         mock_clustered, mock_leader_node,
                                         mock_running_nodes, mock_time,
-                                        mock_check_output, mock_check_call):
+                                        mock_check_output, mock_check_call,
+                                        mock_wait_app):
         mock_cmp_pkgrevno.return_value = True
         mock_clustered.return_value = False
-        mock_leader_node.return_value = ['rabbit@juju-devel7-machine-11']
+        mock_leader_node.return_value = 'rabbit@juju-devel7-machine-11'
         mock_running_nodes.return_value = ['rabbit@juju-devel5-machine-19']
         rabbit_utils.cluster_with()
         mock_check_output.assert_called_with([rabbit_utils.RABBITMQ_CTL,
@@ -206,12 +208,13 @@ class UtilsTests(unittest.TestCase):
                                     mock_time, mock_check_output,
                                     mock_check_call):
         mock_clustered.return_value = True
-        mock_leader_node.return_value = ['rabbit@juju-devel7-machine-11']
+        mock_leader_node.return_value = 'rabbit@juju-devel7-machine-11'
         mock_running_nodes.return_value = ['rabbit@juju-devel5-machine-19',
                                            'rabbit@juju-devel7-machine-11']
         rabbit_utils.cluster_with()
-        assert not mock_check_output.called
+        self.assertEqual(0, mock_check_output.call_count)
 
+    @mock.patch('rabbit_utils.wait_app')
     @mock.patch('rabbit_utils.subprocess.check_call')
     @mock.patch('rabbit_utils.subprocess.check_output')
     @mock.patch('rabbit_utils.time')
@@ -222,9 +225,9 @@ class UtilsTests(unittest.TestCase):
     def test_cluster_with_no_leader(self, mock_cmp_pkgrevno, mock_clustered,
                                     mock_leader_node, mock_running_nodes,
                                     mock_time, mock_check_output,
-                                    mock_check_call):
+                                    mock_check_call, mock_wait_app):
         mock_clustered.return_value = False
-        mock_leader_node.return_value = []
+        mock_leader_node.return_value = None
         mock_running_nodes.return_value = ['rabbit@juju-devel5-machine-19']
         rabbit_utils.cluster_with()
-        assert not mock_check_output.called
+        self.assertEqual(0, mock_check_output.call_count)
