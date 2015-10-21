@@ -40,6 +40,16 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
         self._add_relations()
         self._configure_services()
         self._deploy()
+
+        u.log.info('Waiting on extended status checks...')
+        exclude_services = ['mysql', 'nrpe']
+
+        # Wait for deployment ready msgs, except exclusions
+        self._auto_wait_for_status(exclude_services=exclude_services)
+
+        # Specifically wait for rmq cluster status msgs
+        u.rmq_wait_for_cluster(self, init_sleep=0)
+
         self._initialize_tests()
 
     def _add_services(self):
@@ -53,7 +63,9 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
             'name': 'rabbitmq-server',
             'units': 3
         }
-        other_services = [{'name': 'cinder'},
+        other_services = [{'name': 'cinder'},  
+                          {'name': 'mysql'},  # satisfy workload status
+                          {'name': 'keystone'},  #satisfy workload status
                           {'name': 'nrpe'}]
 
         super(RmqBasicDeployment, self)._add_services(this_service,
@@ -61,9 +73,15 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
 
     def _add_relations(self):
         """Add relations for the services."""
-        relations = {'cinder:amqp': 'rabbitmq-server:amqp',
-                     'nrpe:nrpe-external-master':
-                     'rabbitmq-server:nrpe-external-master'}
+        relations = {
+            'cinder:amqp': 'rabbitmq-server:amqp',
+            'cinder:shared-db': 'mysql:shared-db',
+            'cinder:identity-service': 'keystone:identity-service',
+            'cinder:amqp': 'rabbitmq-server:amqp',
+            'keystone:shared-db': 'mysql:shared-db',
+            'nrpe:nrpe-external-master': 'rabbitmq-server:'
+                                         'nrpe-external-master'
+        }
 
         super(RmqBasicDeployment, self)._add_relations(relations)
 
@@ -76,9 +94,20 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
             'management_plugin': 'False',
             'stats_cron_schedule': '*/1 * * * *'
         }
+
+        mysql_config = {'dataset-size': '50%'}
+
+        keystone_config = {'admin-password': 'openstack',
+                           'admin-token': 'ubuntutesting'}
+
         cinder_config = {}
-        configs = {'rabbitmq-server': rmq_config,
-                   'cinder': cinder_config}
+
+        configs = {
+            'rabbitmq-server': rmq_config,
+            'mysql': mysql_config,
+            'keystone': keystone_config,
+            'cinder': cinder_config
+        }
         super(RmqBasicDeployment, self)._configure_services(configs)
 
     def _initialize_tests(self):
@@ -87,15 +116,14 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
         self.rmq0_sentry = self.d.sentry.unit['rabbitmq-server/0']
         self.rmq1_sentry = self.d.sentry.unit['rabbitmq-server/1']
         self.rmq2_sentry = self.d.sentry.unit['rabbitmq-server/2']
+        self.keystone_sentry = self.d.sentry.unit['keystone/0']
+        self.mysql_sentry = self.d.sentry.unit['mysql/0']
         self.cinder_sentry = self.d.sentry.unit['cinder/0']
         self.nrpe_sentry = self.d.sentry.unit['nrpe/0']
         u.log.debug('openstack release val: {}'.format(
             self._get_openstack_release()))
         u.log.debug('openstack release str: {}'.format(
             self._get_openstack_release_string()))
-
-        # Let things settle a bit before moving forward
-        time.sleep(30)
 
     def _get_rmq_sentry_units(self):
         """Local helper specific to this 3-node rmq series of tests."""
@@ -115,12 +143,11 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
         # Add test user if it does not already exist
         u.add_rmq_test_user(sentry_units)
 
-        # Handle ssl
+        # Handle ssl (includes wait-for-cluster)
         if ssl:
-            u.configure_rmq_ssl_on(sentry_units, self.d, port=port)
+            u.configure_rmq_ssl_on(sentry_units, deployment=self, port=port)
         else:
-            u.configure_rmq_ssl_off(sentry_units, self.d)
-        self.d.sentry.wait()
+            u.configure_rmq_ssl_off(sentry_units, deployment=self)
 
         # Publish and get amqp messages in all possible unit combinations.
         # Qty of checks == (qty of units) ^ 2
@@ -182,6 +209,7 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
     def test_100_rmq_processes(self):
         """Verify that the expected service processes are running
         on each rabbitmq-server unit."""
+        u.log.debug('Checking system services on units...')
 
         # Beam and epmd sometimes briefly have more than one PID,
         # True checks for at least 1.
@@ -335,7 +363,7 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
                     'ssl config is off...')
         sentry_units = self._get_rmq_sentry_units()
         u.add_rmq_test_user(sentry_units)
-        u.configure_rmq_ssl_off(sentry_units, self.d)
+        u.configure_rmq_ssl_off(sentry_units, deployment=self)
 
         # Check amqp connection for all units, expect connections to succeed
         for unit in sentry_units:
@@ -352,7 +380,7 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
                     'config is off...')
         sentry_units = self._get_rmq_sentry_units()
         u.add_rmq_test_user(sentry_units)
-        u.configure_rmq_ssl_off(sentry_units, self.d)
+        u.configure_rmq_ssl_off(sentry_units, deployment=self)
 
         # Check ssl amqp connection for all units, expect connections to fail
         for unit in sentry_units:
@@ -411,14 +439,14 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
         u.log.debug('Enabling management_plugin charm config option...')
         config = {'management_plugin': 'True'}
         self.d.configure('rabbitmq-server', config)
-        self.d.sentry.wait()
+        u.rmq_wait_for_cluster(self)
 
         # Check tcp connect to management plugin port
-        max_wait = 120
+        max_wait = 600
         tries = 0
         ret = u.port_knock_units(sentry_units, mgmt_port)
-        while ret and tries < (max_wait / 12):
-            time.sleep(12)
+        while ret and tries < (max_wait / 30):
+            time.sleep(30)
             u.log.debug('Attempt {}: {}'.format(tries, ret))
             ret = u.port_knock_units(sentry_units, mgmt_port)
             tries += 1
@@ -432,15 +460,15 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
         u.log.debug('Disabling management_plugin charm config option...')
         config = {'management_plugin': 'False'}
         self.d.configure('rabbitmq-server', config)
-        self.d.sentry.wait()
+        u.rmq_wait_for_cluster(self)
 
         # Negative check - tcp connect to management plugin port
         u.log.info('Expect tcp connect fail since charm config '
                    'option is disabled.')
         tries = 0
         ret = u.port_knock_units(sentry_units, mgmt_port, expect_success=False)
-        while ret and tries < (max_wait / 12):
-            time.sleep(12)
+        while ret and tries < (max_wait / 30):
+            time.sleep(30)
             u.log.debug('Attempt {}: {}'.format(tries, ret))
             ret = u.port_knock_units(sentry_units, mgmt_port,
                                      expect_success=False)
@@ -495,28 +523,25 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
         u.log.info('OK\n')
 
     def test_415_cluster_partitioning(self):
-        """
-        Test if the cluster-partition-handling configuration is applied
-        correctly.
-        """
+        """Test if the cluster-partition-handling configuration is applied
+        to the config file as expected."""
+        u.log.debug('Checking cluster partitioning config option...')
+
         sentry_units = self._get_rmq_sentry_units()
+        set_default = {'cluster-partition-handling': 'ignore'}
+        set_alternate = {'cluster-partition-handling': 'autoheal'}
 
-        configuration = {'cluster-partition-handling': "autoheal"}
-        self.d.configure('rabbitmq-server', configuration)
-        self.d.sentry.wait()
+        u.log.debug('Setting cluster-partition-handling to autoheal...')
+        self.d.configure('rabbitmq-server', set_alternate)
+        u.rmq_wait_for_cluster(self)
 
-        # Wait for configuration to be effectively applied
-        time.sleep(10)
+        cmds = ["grep autoheal /etc/rabbitmq/rabbitmq.config"]
+        ret = u.check_commands_on_units(cmds, sentry_units)
+        if ret:
+            amulet.raise_status(amulet.FAIL, msg=ret)
 
-        u.log.debug('Checking if cluster-partition-handling has'
-                    ' been correclty applied...')
-        for sentry_unit in sentry_units:
-            cmds = [
-                "grep autoheal /etc/rabbitmq/rabbitmq.config"
-            ]
-
-            ret = u.check_commands_on_units(cmds, [sentry_unit])
-            if ret:
-                amulet.raise_status(amulet.FAIL, msg=ret)
+        u.log.debug('Setting cluster-partition-handling back to default...')
+        self.d.configure('rabbitmq-server', set_default)
+        u.rmq_wait_for_cluster(self)
 
         u.log.info('OK\n')
