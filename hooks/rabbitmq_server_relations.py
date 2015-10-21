@@ -367,6 +367,9 @@ def cluster_changed():
             rabbit.cluster_with()
             update_nrpe_checks()
 
+    # NOTE: toggle the cluster relation to ensure that any peers already
+    #       clustered re-assess status correctly
+    relation_set(clustered=True)
     # If cluster has changed peer db may have changed so run amqp_changed
     # to sync any changes
     for rid in relation_ids('amqp'):
