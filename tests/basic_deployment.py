@@ -63,9 +63,9 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
             'name': 'rabbitmq-server',
             'units': 3
         }
-        other_services = [{'name': 'cinder'},  
+        other_services = [{'name': 'cinder'},
                           {'name': 'mysql'},  # satisfy workload status
-                          {'name': 'keystone'},  #satisfy workload status
+                          {'name': 'keystone'},  # satisfy workload status
                           {'name': 'nrpe'}]
 
         super(RmqBasicDeployment, self)._add_services(this_service,
