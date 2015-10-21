@@ -1,0 +1,12 @@
+This directory provides Amulet tests that focus on verification of
+rabbitmq-server basic deployments.
+
+test_* methods are called in lexical sort order, although each individual test
+should be idempotent, and expected to pass regardless of run order.
+
+Test name convention to ensure desired test order:
+    1xx service and endpoint checks
+    2xx relation checks
+    3xx config checks
+    4xx functional checks
+    9xx restarts and other final checks
