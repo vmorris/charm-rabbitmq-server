@@ -48,7 +48,7 @@ from charmhelpers.contrib.peerstorage import (
 
 from collections import OrderedDict
 
-PACKAGES = ['rabbitmq-server', 'python-amqplib']
+PACKAGES = ['rabbitmq-server', 'python-amqplib', 'lockfile-progs']
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
