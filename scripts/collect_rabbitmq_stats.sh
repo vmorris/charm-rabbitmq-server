@@ -8,6 +8,7 @@ LOCK=/var/lock/rabbitmq-gather-metrics.lock
 # Check for a lock file and if not, create one
 lockfile-create -r2 --lock-name $LOCK > /dev/null 2>&1
 if [ $? -ne 0 ]; then
+    echo "Failed to create lockfile: $LOCK."
     exit 1
 fi
 trap "rm -f $LOCK > /dev/null 2>&1" exit
