@@ -371,7 +371,7 @@ def cluster_with():
             join_cluster(node)
             # NOTE: toggle the cluster relation to ensure that any peers
             #       already clustered re-assess status correctly
-            relation_set(clustered=True)
+            relation_set(clustered=get_local_nodename())
             return True
         except subprocess.CalledProcessError as e:
             status_set('blocked', 'Failed to cluster with %s. Exception: %s'
