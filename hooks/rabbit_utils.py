@@ -29,6 +29,7 @@ from charmhelpers.core.hookenv import (
     status_set,
     cached,
     unit_get,
+    relation_set,
 )
 
 from charmhelpers.core.host import (
@@ -368,6 +369,9 @@ def cluster_with():
         time.sleep(random.random() * 100)
         try:
             join_cluster(node)
+            # NOTE: toggle the cluster relation to ensure that any peers
+            #       already clustered re-assess status correctly
+            relation_set(clustered=True)
             return True
         except subprocess.CalledProcessError as e:
             status_set('blocked', 'Failed to cluster with %s. Exception: %s'
