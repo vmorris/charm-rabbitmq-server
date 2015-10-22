@@ -173,6 +173,8 @@ class UtilsTests(unittest.TestCase):
         self.assertEqual(rabbit_utils.leader_node(),
                          'rabbit@juju-devel3-machine-15')
 
+    @mock.patch('rabbit_utils.relation_set')
+    @mock.patch('rabbit_utils.get_local_nodename')
     @mock.patch('rabbit_utils.wait_app')
     @mock.patch('rabbit_utils.subprocess.check_call')
     @mock.patch('rabbit_utils.subprocess.check_output')
@@ -185,7 +187,8 @@ class UtilsTests(unittest.TestCase):
                                         mock_clustered, mock_leader_node,
                                         mock_running_nodes, mock_time,
                                         mock_check_output, mock_check_call,
-                                        mock_wait_app):
+                                        mock_wait_app, mock_get_local_nodename,
+                                        mock_relation_set):
         mock_cmp_pkgrevno.return_value = True
         mock_clustered.return_value = False
         mock_leader_node.return_value = 'rabbit@juju-devel7-machine-11'
