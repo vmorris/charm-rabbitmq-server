@@ -172,7 +172,8 @@ def amqp_changed(relation_id=None, remote_unit=None):
         # NOTE: active/active case
         if config('prefer-ipv6'):
             relation_settings = {'private-address': host_addr}
-            relation_set(relation_settings=relation_settings)
+            relation_set(relation_id=relation_id,
+                         relation_settings=relation_settings)
 
         return
 
