@@ -57,6 +57,7 @@ from charmhelpers.core.host import (
     get_nic_hwaddr,
     mkdir,
     write_file,
+    pwgen,
 )
 from charmhelpers.contrib.hahelpers.cluster import (
     determine_apache_port,
@@ -87,6 +88,8 @@ from charmhelpers.contrib.network.ip import (
     is_bridge_member,
 )
 from charmhelpers.contrib.openstack.utils import get_host_ip
+from charmhelpers.core.unitdata import kv
+
 CA_CERT_PATH = '/usr/local/share/ca-certificates/keystone_juju_ca_cert.crt'
 ADDRESS_TYPES = ['admin', 'internal', 'public']
 
@@ -626,15 +629,28 @@ class HAProxyContext(OSContextGenerator):
         if config('haproxy-client-timeout'):
             ctxt['haproxy_client_timeout'] = config('haproxy-client-timeout')
 
+        if config('haproxy-queue-timeout'):
+            ctxt['haproxy_queue_timeout'] = config('haproxy-queue-timeout')
+
+        if config('haproxy-connect-timeout'):
+            ctxt['haproxy_connect_timeout'] = config('haproxy-connect-timeout')
+
         if config('prefer-ipv6'):
             ctxt['ipv6'] = True
             ctxt['local_host'] = 'ip6-localhost'
             ctxt['haproxy_host'] = '::'
-            ctxt['stat_port'] = ':::8888'
         else:
             ctxt['local_host'] = '127.0.0.1'
             ctxt['haproxy_host'] = '0.0.0.0'
-            ctxt['stat_port'] = ':8888'
+
+        ctxt['stat_port'] = '8888'
+
+        db = kv()
+        ctxt['stat_password'] = db.get('stat-password')
+        if not ctxt['stat_password']:
+            ctxt['stat_password'] = db.set('stat-password',
+                                           pwgen(32))
+            db.flush()
 
         for frontend in cluster_hosts:
             if (len(cluster_hosts[frontend]['backends']) > 1 or
@@ -1086,6 +1102,20 @@ class OSConfigFlagContext(OSContextGenerator):
 
         return {self._template_flag:
                 config_flags_parser(config_flags)}
+
+
+class LibvirtConfigFlagsContext(OSContextGenerator):
+    """
+    This context provides support for extending
+    the libvirt section through user-defined flags.
+    """
+    def __call__(self):
+        ctxt = {}
+        libvirt_flags = config('libvirt-flags')
+        if libvirt_flags:
+            ctxt['libvirt_flags'] = config_flags_parser(
+                libvirt_flags)
+        return ctxt
 
 
 class SubordinateConfigContext(OSContextGenerator):
