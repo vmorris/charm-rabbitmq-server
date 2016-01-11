@@ -26,6 +26,7 @@ import re
 
 import six
 import traceback
+import uuid
 import yaml
 
 from charmhelpers.contrib.network import ip
@@ -41,6 +42,7 @@ from charmhelpers.core.hookenv import (
     log as juju_log,
     charm_dir,
     INFO,
+    related_units,
     relation_ids,
     relation_set,
     status_set,
@@ -84,6 +86,7 @@ UBUNTU_OPENSTACK_RELEASE = OrderedDict([
     ('utopic', 'juno'),
     ('vivid', 'kilo'),
     ('wily', 'liberty'),
+    ('xenial', 'mitaka'),
 ])
 
 
@@ -97,6 +100,7 @@ OPENSTACK_CODENAMES = OrderedDict([
     ('2014.2', 'juno'),
     ('2015.1', 'kilo'),
     ('2015.2', 'liberty'),
+    ('2016.1', 'mitaka'),
 ])
 
 # The ugly duckling
@@ -127,31 +131,40 @@ SWIFT_CODENAMES = OrderedDict([
 # >= Liberty version->codename mapping
 PACKAGE_CODENAMES = {
     'nova-common': OrderedDict([
-        ('12.0.0', 'liberty'),
+        ('12.0', 'liberty'),
+        ('13.0', 'mitaka'),
     ]),
     'neutron-common': OrderedDict([
-        ('7.0.0', 'liberty'),
+        ('7.0', 'liberty'),
+        ('8.0', 'mitaka'),
     ]),
     'cinder-common': OrderedDict([
-        ('7.0.0', 'liberty'),
+        ('7.0', 'liberty'),
+        ('8.0', 'mitaka'),
     ]),
     'keystone': OrderedDict([
-        ('8.0.0', 'liberty'),
+        ('8.0', 'liberty'),
+        ('9.0', 'mitaka'),
     ]),
     'horizon-common': OrderedDict([
-        ('8.0.0', 'liberty'),
+        ('8.0', 'liberty'),
+        ('9.0', 'mitaka'),
     ]),
     'ceilometer-common': OrderedDict([
-        ('5.0.0', 'liberty'),
+        ('5.0', 'liberty'),
+        ('6.0', 'mitaka'),
     ]),
     'heat-common': OrderedDict([
-        ('5.0.0', 'liberty'),
+        ('5.0', 'liberty'),
+        ('6.0', 'mitaka'),
     ]),
     'glance-common': OrderedDict([
-        ('11.0.0', 'liberty'),
+        ('11.0', 'liberty'),
+        ('12.0', 'mitaka'),
     ]),
     'openstack-dashboard': OrderedDict([
-        ('8.0.0', 'liberty'),
+        ('8.0', 'liberty'),
+        ('9.0', 'mitaka'),
     ]),
 }
 
@@ -238,7 +251,14 @@ def get_os_codename_package(package, fatal=True):
         error_out(e)
 
     vers = apt.upstream_version(pkg.current_ver.ver_str)
-    match = re.match('^(\d+)\.(\d+)\.(\d+)', vers)
+    if 'swift' in pkg.name:
+        # Fully x.y.z match for swift versions
+        match = re.match('^(\d+)\.(\d+)\.(\d+)', vers)
+    else:
+        # x.y match only for 20XX.X
+        # and ignore patch level for other packages
+        match = re.match('^(\d+)\.(\d+)', vers)
+
     if match:
         vers = match.group(0)
 
@@ -250,13 +270,8 @@ def get_os_codename_package(package, fatal=True):
         # < Liberty co-ordinated project versions
         try:
             if 'swift' in pkg.name:
-                swift_vers = vers[:5]
-                if swift_vers not in SWIFT_CODENAMES:
-                    # Deal with 1.10.0 upward
-                    swift_vers = vers[:6]
-                return SWIFT_CODENAMES[swift_vers]
+                return SWIFT_CODENAMES[vers]
             else:
-                vers = vers[:6]
                 return OPENSTACK_CODENAMES[vers]
         except KeyError:
             if not fatal:
@@ -375,6 +390,9 @@ def configure_installation_source(rel):
             'liberty': 'trusty-updates/liberty',
             'liberty/updates': 'trusty-updates/liberty',
             'liberty/proposed': 'trusty-proposed/liberty',
+            'mitaka': 'trusty-updates/mitaka',
+            'mitaka/updates': 'trusty-updates/mitaka',
+            'mitaka/proposed': 'trusty-proposed/mitaka',
         }
 
         try:
@@ -575,7 +593,7 @@ def _git_yaml_load(projects_yaml):
     return yaml.load(projects_yaml)
 
 
-def git_clone_and_install(projects_yaml, core_project, depth=1):
+def git_clone_and_install(projects_yaml, core_project):
     """
     Clone/install all specified OpenStack repositories.
 
@@ -625,6 +643,9 @@ def git_clone_and_install(projects_yaml, core_project, depth=1):
     for p in projects['repositories']:
         repo = p['repository']
         branch = p['branch']
+        depth = '1'
+        if 'depth' in p.keys():
+            depth = p['depth']
         if p['name'] == 'requirements':
             repo_dir = _git_clone_and_install_single(repo, branch, depth,
                                                      parent_dir, http_proxy,
@@ -669,19 +690,13 @@ def _git_clone_and_install_single(repo, branch, depth, parent_dir, http_proxy,
     """
     Clone and install a single git repository.
     """
-    dest_dir = os.path.join(parent_dir, os.path.basename(repo))
-
     if not os.path.exists(parent_dir):
         juju_log('Directory already exists at {}. '
                  'No need to create directory.'.format(parent_dir))
         os.mkdir(parent_dir)
 
-    if not os.path.exists(dest_dir):
-        juju_log('Cloning git repo: {}, branch: {}'.format(repo, branch))
-        repo_dir = install_remote(repo, dest=parent_dir, branch=branch,
-                                  depth=depth)
-    else:
-        repo_dir = dest_dir
+    juju_log('Cloning git repo: {}, branch: {}'.format(repo, branch))
+    repo_dir = install_remote(repo, dest=parent_dir, branch=branch, depth=depth)
 
     venv = os.path.join(parent_dir, 'venv')
 
@@ -859,7 +874,9 @@ def set_os_workload_status(configs, required_interfaces, charm_func=None):
         if charm_state != 'active' and charm_state != 'unknown':
             state = workload_state_compare(state, charm_state)
             if message:
-                message = "{} {}".format(message, charm_message)
+                charm_message = charm_message.replace("Incomplete relations: ",
+                                                      "")
+                message = "{}, {}".format(message, charm_message)
             else:
                 message = charm_message
 
@@ -976,3 +993,19 @@ def do_action_openstack_upgrade(package, upgrade_callback, configs):
             action_set({'outcome': 'no upgrade available.'})
 
     return ret
+
+
+def remote_restart(rel_name, remote_service=None):
+    trigger = {
+        'restart-trigger': str(uuid.uuid4()),
+    }
+    if remote_service:
+        trigger['remote-service'] = remote_service
+    for rid in relation_ids(rel_name):
+        # This subordinate can be related to two seperate services using
+        # different subordinate relations so only issue the restart if
+        # the principle is conencted down the relation we think it is
+        if related_units(relid=rid):
+            relation_set(relation_id=rid,
+                         relation_settings=trigger,
+                         )
