@@ -49,7 +49,7 @@ def check_stats(stats_collated, limits):
         ((l_vhost, l_queue), (int(t_warning), int(t_critical)))
         for l_vhost, l_queue, t_warning, t_critical in limits)
     if not (stats_collated):
-        yield 'No Queues Found', 'No Vhosts Found', None, "CRIT"
+        yield 'No Queues Found', 'No Vhosts Found', None, "UNKNOWN"
     # Go through the stats and compare again limits, if any.
     for l_vhost, l_queue in sorted(stats_collated):
         m_all = stats_collated[l_vhost, l_queue]
