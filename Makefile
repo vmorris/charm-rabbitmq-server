@@ -5,12 +5,10 @@ HOOKS_DIR := $(PWD)/hooks
 TEST_PREFIX := PYTHONPATH=$(HOOKS_DIR)
 
 clean:
-	rm -f .coverage
+	rm -f .coverage .testrepository
 	find . -name '*.pyc' -delete
-	rm -rf .venv
-	(which dh_clean && dh_clean) || true
 
-lint: .venv
+lint:
 	tox -e pep8
 
 bin/charm_helpers_sync.py:
