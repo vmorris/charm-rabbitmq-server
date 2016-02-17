@@ -5,20 +5,11 @@ HOOKS_DIR := $(PWD)/hooks
 TEST_PREFIX := PYTHONPATH=$(HOOKS_DIR)
 
 clean:
-	rm -f .coverage
+	rm -f .coverage .testrepository
 	find . -name '*.pyc' -delete
-	rm -rf .venv
-	(which dh_clean && dh_clean) || true
 
-.venv:
-	sudo apt-get install -y gcc python-dev python-virtualenv python-apt
-	virtualenv .venv --system-site-packages
-	.venv/bin/pip install -I -r test-requirements.txt
-
-lint: .venv
-	@.venv/bin/flake8 --exclude hooks/charmhelpers,tests/charmhelpers hooks \
-        unit_tests tests
-	@charm proof
+lint:
+	tox -e pep8
 
 bin/charm_helpers_sync.py:
 	@mkdir -p bin
@@ -33,10 +24,8 @@ publish: lint test
 	bzr push lp:charms/rabbitmq-server
 	bzr push lp:charms/trusty/rabbitmq-server
 
-test: .venv
-	@echo Starting tests...
-	env CHARM_DIR=$(CHARM_DIR) $(TEST_PREFIX) .venv/bin/nosetests \
-        -v --nologcapture --with-coverage unit_tests/
+test:
+	tox -e py27
 
 functional_test:
 	@echo Starting amulet tests...
