@@ -229,12 +229,13 @@ def set_ha_mode(vhost, mode, params=None, sync_mode='automatic'):
         return
 
     if mode == 'all':
-        value = '{"ha-mode": "all"}'
+        value = '{"ha-mode": "all", "ha-sync-mode": "%s"}' % sync_mode
     elif mode == 'exactly':
         value = '{"ha-mode":"exactly","ha-params":%s,"ha-sync-mode":"%s"}' \
                 % (params, sync_mode)
     elif mode == 'nodes':
-        value = '{"ha-mode":"nodes","ha-params":[%s]}' % ",".join(params)
+        value = '{"ha-mode":"nodes","ha-params":[%s]},"ha-sync-mode": "%s"' % (
+            ",".join(params), sync_mode)
     else:
         raise RabbitmqError(("Unknown mode '%s', known modes: "
                              "all, exactly, nodes"))
