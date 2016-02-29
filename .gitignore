@@ -4,3 +4,4 @@ revision
 .venv
 .tox
 .testrepository
+*.sw[nop]
