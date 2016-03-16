@@ -9,7 +9,7 @@ clean:
 	find . -name '*.pyc' -delete
 
 lint:
-	tox -e pep8
+	@tox -e pep8
 
 bin/charm_helpers_sync.py:
 	@mkdir -p bin
@@ -25,7 +25,8 @@ publish: lint test
 	bzr push lp:charms/trusty/rabbitmq-server
 
 test:
-	tox -e py27
+	@echo Starting unit tests...
+	@tox -e py27
 
 functional_test:
 	@echo Starting amulet tests...
