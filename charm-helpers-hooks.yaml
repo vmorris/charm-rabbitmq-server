@@ -12,3 +12,4 @@ include:
     - contrib.ssl
     - contrib.hahelpers.cluster
     - contrib.network.ip
+    - contrib.hardening|inc=*

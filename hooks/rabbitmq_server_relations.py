@@ -37,6 +37,7 @@ from charmhelpers.contrib.network.ip import (
 
 import charmhelpers.contrib.storage.linux.ceph as ceph
 from charmhelpers.contrib.openstack.utils import save_script_rc
+from charmhelpers.contrib.hardening.harden import harden
 
 from charmhelpers.fetch import (
     add_source,
@@ -103,6 +104,7 @@ STATS_DATAFILE = os.path.join(RABBIT_DIR, 'data',
 
 
 @hooks.hook('install.real')
+@harden()
 def install():
     pre_install_hooks()
     # NOTE(jamespage) install actually happens in config_changed hook
@@ -601,6 +603,7 @@ def update_nrpe_checks():
 
 
 @hooks.hook('upgrade-charm')
+@harden()
 def upgrade_charm():
     pre_install_hooks()
     add_source(config('source'), config('key'))
@@ -632,6 +635,7 @@ MAN_PLUGIN = 'rabbitmq_management'
 
 @hooks.hook('config-changed')
 @rabbit.restart_on_change(rabbit.restart_map())
+@harden()
 def config_changed():
 
     if config('prefer-ipv6'):
@@ -717,6 +721,12 @@ def pre_install_hooks():
     for f in glob.glob('exec.d/*/charm-pre-install'):
         if os.path.isfile(f) and os.access(f, os.X_OK):
             subprocess.check_call(['sh', '-c', f])
+
+
+@hooks.hook('update-status')
+@harden()
+def update_status():
+    log('Updating status.')
 
 
 if __name__ == '__main__':

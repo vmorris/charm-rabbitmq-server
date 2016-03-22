@@ -1,9 +1,21 @@
 import os
+import sys
+
 from testtools import TestCase
-from mock import patch
+from mock import patch, MagicMock
 
 os.environ['JUJU_UNIT_NAME'] = 'UNIT_TEST/0'  # noqa - needed for import
-import rabbitmq_server_relations
+
+# python-apt is not installed as part of test-requirements but is imported by
+# some charmhelpers modules so create a fake import.
+mock_apt = MagicMock()
+sys.modules['apt'] = mock_apt
+mock_apt.apt_pkg = MagicMock()
+
+with patch('charmhelpers.contrib.hardening.harden.harden') as mock_dec:
+    mock_dec.side_effect = (lambda *dargs, **dkwargs: lambda f:
+                            lambda *args, **kwargs: f(*args, **kwargs))
+    import rabbitmq_server_relations
 
 
 class RelationUtil(TestCase):
