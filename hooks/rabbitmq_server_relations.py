@@ -67,6 +67,7 @@ from charmhelpers.core.hookenv import (
     charm_dir,
     status_set,
     unit_private_ip,
+    network_get_primary_address,
 )
 from charmhelpers.core.host import (
     cmp_pkgrevno,
@@ -211,13 +212,27 @@ def amqp_changed(relation_id=None, remote_unit=None):
     if config('prefer-ipv6'):
         relation_settings['private-address'] = host_addr
     else:
-        # NOTE(jamespage)
-        # override private-address settings if access-network is
-        # configured and an appropriate network interface is configured.
+        hostname = None
+        fallback = unit_get('private-address')
+        if config('access-network'):
+            # NOTE(jamespage)
+            # override private-address settings if access-network is
+            # configured and an appropriate network interface is
+            # configured.
+            hostname = get_address_in_network(config('access-network'),
+                                              fallback)
+        else:
+            # NOTE(jamespage)
+            # Try using network spaces if access-network is not
+            # configured, fallback to private address if not
+            # supported
+            try:
+                hostname = network_get_primary_address('amqp')
+            except NotImplementedError:
+                hostname = fallback
+
         relation_settings['hostname'] = \
-            relation_settings['private-address'] = \
-            get_address_in_network(config('access-network'),
-                                   unit_get('private-address'))
+            relation_settings['private-address'] = hostname
 
     ssl_utils.configure_client_ssl(relation_settings)
 
