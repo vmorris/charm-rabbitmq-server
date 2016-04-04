@@ -28,7 +28,8 @@ from charmhelpers.contrib.hahelpers.cluster import (
     is_elected_leader
 )
 from charmhelpers.contrib.openstack.utils import (
-    get_host_ip
+    get_host_ip,
+    is_unit_paused_set,
 )
 
 from charmhelpers.contrib.network.ip import (
@@ -123,9 +124,10 @@ def configure_nodename():
         service_stop('rabbitmq-server')
         rabbit.update_rmq_env_conf(hostname='rabbit@%s' % nodename,
                                    ipv6=config('prefer-ipv6'))
-        log('Starting rabbitmq-server.')
-        service_restart('rabbitmq-server')
-        rabbit.wait_app()
+        if not is_unit_paused_set():
+            log('Starting rabbitmq-server.')
+            service_restart('rabbitmq-server')
+            rabbit.wait_app()
 
 
 def configure_amqp(username, vhost, admin=False):
@@ -394,8 +396,9 @@ def update_cookie(leaders_cookie=None):
     service_stop('rabbitmq-server')
     with open(rabbit.COOKIE_PATH, 'wb') as out:
         out.write(cookie)
-    service_restart('rabbitmq-server')
-    rabbit.wait_app()
+    if not is_unit_paused_set():
+        service_restart('rabbitmq-server')
+        rabbit.wait_app()
 
 
 @hooks.hook('ha-relation-joined')
@@ -692,7 +695,6 @@ def config_changed():
         for unit in related_units(rid):
             amqp_changed(relation_id=rid, remote_unit=unit)
 
-
 @hooks.hook('leader-settings-changed')
 def leader_settings_changed():
     if not os.path.exists(rabbit.RABBITMQ_CTL):
@@ -734,4 +736,4 @@ if __name__ == '__main__':
         hooks.execute(sys.argv)
     except UnregisteredHookError as e:
         log('Unknown hook {} - skipping.'.format(e))
-    rabbit.assess_status()
+    rabbit.assess_status(rabbit.ConfigRenderer(rabbit.CONFIG_FILES))
