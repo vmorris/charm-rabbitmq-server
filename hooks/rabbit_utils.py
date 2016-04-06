@@ -18,6 +18,10 @@ from charmhelpers.core.templating import render
 from charmhelpers.contrib.openstack.utils import (
     get_hostname,
     get_host_ip,
+    make_assess_status_func,
+    pause_unit,
+    resume_unit,
+    is_unit_paused_set,
 )
 
 from charmhelpers.core.hookenv import (
@@ -26,6 +30,7 @@ from charmhelpers.core.hookenv import (
     log, ERROR,
     INFO,
     service_name,
+    status_get,
     status_set,
     cached,
     unit_get,
@@ -67,6 +72,7 @@ _local_named_passwd = '/var/lib/charm/{}/{}.local_passwd'
 # hook_contexts are used as a convenient mechanism to render templates
 # logically, consider building a hook_context for template rendering so
 # the charm doesn't concern itself with template specifics etc.
+
 CONFIG_FILES = OrderedDict([
     (RABBITMQ_CONF, {
         'hook_contexts': [
@@ -120,6 +126,9 @@ class ConfigRenderer(object):
         """Write all the defined configuration files"""
         for service in self.config_data.keys():
             self.write(service)
+
+    def complete_contexts(self):
+        return []
 
 
 class RabbitmqError(Exception):
@@ -687,7 +696,7 @@ def clustered():
         return False
 
 
-def assess_status():
+def assess_cluster_status(*args):
     ''' Assess the status for the current running unit '''
     # NOTE: ensure rabbitmq is actually installed before doing
     #       any checks
@@ -696,18 +705,16 @@ def assess_status():
         peer_ids = relation_ids('cluster')
         if peer_ids and len(related_units(peer_ids[0])):
             if not clustered():
-                status_set('waiting',
-                           'Unit has peers, but RabbitMQ not clustered')
-                return
+                return 'waiting', 'Unit has peers, but RabbitMQ not clustered'
         # General status check
         ret = wait_app()
         if ret:
             if clustered():
-                status_set('active', 'Unit is ready and clustered')
+                return 'active', 'Unit is ready and clustered'
             else:
-                status_set('active', 'Unit is ready')
+                return 'active', 'Unit is ready'
     else:
-        status_set('waiting', 'RabbitMQ is not yet installed')
+        return 'waiting', 'RabbitMQ is not yet installed'
 
 
 def restart_on_change(restart_map, stopstart=False):
@@ -731,6 +738,8 @@ def restart_on_change(restart_map, stopstart=False):
     """
     def wrap(f):
         def wrapped_f(*args, **kwargs):
+            if is_unit_paused_set():
+                return f(*args, **kwargs)
             checksums = {path: path_hash(path) for path in restart_map}
             f(*args, **kwargs)
             restarts = []
@@ -752,3 +761,74 @@ def restart_on_change(restart_map, stopstart=False):
                         wait_app()
         return wrapped_f
     return wrap
+
+
+def assess_status(configs):
+    """Assess status of current unit
+    Decides what the state of the unit should be based on the current
+    configuration.
+    SIDE EFFECT: calls set_os_workload_status(...) which sets the workload
+    status of the unit.
+    Also calls status_set(...) directly if paused state isn't complete.
+    @param configs: a templating.OSConfigRenderer() object
+    @returns None - this function is executed for its side-effect
+    """
+    assess_status_func(configs)()
+    # Charm has a bespoke status message when clustered
+    if status_get() == ('active', 'Unit is ready') and clustered():
+        if clustered():
+            status_set('active', 'Unit is ready and clustered')
+
+
+def assess_status_func(configs):
+    """Helper function to create the function that will assess_status() for
+    the unit.
+    Uses charmhelpers.contrib.openstack.utils.make_assess_status_func() to
+    create the appropriate status function and then returns it.
+    Used directly by assess_status() and also for pausing and resuming
+    the unit.
+
+    NOTE(ajkavanagh) ports are not checked due to race hazards with services
+    that don't behave sychronously w.r.t their service scripts.  e.g.
+    apache2.
+    @param configs: a templating.OSConfigRenderer() object
+    @return f() -> None : a function that assesses the unit's workload status
+    """
+    return make_assess_status_func(
+        configs, {},
+        charm_func=assess_cluster_status,
+        services=services(), ports=None)
+
+
+def pause_unit_helper(configs):
+    """Helper function to pause a unit, and then call assess_status(...) in
+    effect, so that the status is correctly updated.
+    Uses charmhelpers.contrib.openstack.utils.pause_unit() to do the work.
+    @param configs: a templating.OSConfigRenderer() object
+    @returns None - this function is executed for its side-effect
+    """
+    _pause_resume_helper(pause_unit, configs)
+
+
+def resume_unit_helper(configs):
+    """Helper function to resume a unit, and then call assess_status(...) in
+    effect, so that the status is correctly updated.
+    Uses charmhelpers.contrib.openstack.utils.resume_unit() to do the work.
+    @param configs: a templating.OSConfigRenderer() object
+    @returns None - this function is executed for its side-effect
+    """
+    _pause_resume_helper(resume_unit, configs)
+
+
+def _pause_resume_helper(f, configs):
+    """Helper function that uses the make_assess_status_func(...) from
+    charmhelpers.contrib.openstack.utils to create an assess_status(...)
+    function that can be used with the pause/resume of the unit
+    @param f: the function to be used with the assess_status(...) function
+    @returns None - this function is executed for its side-effect
+    """
+    # TODO(ajkavanagh) - ports= has been left off because of the race hazard
+    # that exists due to service_start()
+    f(assess_status_func(configs),
+      services=services(),
+      ports=None)

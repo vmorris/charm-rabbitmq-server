@@ -13,6 +13,8 @@ relevant tests grouped together in run order.
 
 import amulet
 import time
+import subprocess
+import json
 
 from charmhelpers.contrib.openstack.amulet.deployment import (
     OpenStackAmuletDeployment
@@ -124,6 +126,32 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
             self._get_openstack_release()))
         u.log.debug('openstack release str: {}'.format(
             self._get_openstack_release_string()))
+
+    def _run_action(self, unit_id, action, *args):
+        command = ["juju", "action", "do", "--format=json", unit_id, action]
+        command.extend(args)
+        print("Running command: %s\n" % " ".join(command))
+        output = subprocess.check_output(command)
+        output_json = output.decode(encoding="UTF-8")
+        data = json.loads(output_json)
+        action_id = data[u'Action queued with id']
+        return action_id
+
+    def _wait_on_action(self, action_id):
+        command = ["juju", "action", "fetch", "--format=json", action_id]
+        while True:
+            try:
+                output = subprocess.check_output(command)
+            except Exception as e:
+                print(e)
+                return False
+            output_json = output.decode(encoding="UTF-8")
+            data = json.loads(output_json)
+            if data[u"status"] == "completed":
+                return True
+            elif data[u"status"] == "failed":
+                return False
+            time.sleep(2)
 
     def _get_rmq_sentry_units(self):
         """Local helper specific to this 3-node rmq series of tests."""
@@ -545,3 +573,20 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
         u.rmq_wait_for_cluster(self)
 
         u.log.info('OK\n')
+
+    def test_910_pause_and_resume(self):
+        """The services can be paused and resumed. """
+        u.log.debug('Checking pause and resume actions...')
+        unit_name = "rabbitmq-server/0"
+        unit = self.d.sentry.unit[unit_name]
+
+        assert u.status_get(unit)[0] == "active"
+
+        action_id = self._run_action(unit_name, "pause")
+        assert self._wait_on_action(action_id), "Pause action failed."
+        assert u.status_get(unit)[0] == "maintenance"
+
+        action_id = self._run_action(unit_name, "resume")
+        assert self._wait_on_action(action_id), "Resume action failed."
+        assert u.status_get(unit)[0] == "active"
+        u.log.debug('OK')

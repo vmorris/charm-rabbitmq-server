@@ -133,6 +133,7 @@ class UtilsTests(unittest.TestCase):
 
     @mock.patch('rabbit_utils.running_nodes')
     def test_not_clustered(self, mock_running_nodes):
+        print "test_not_clustered"
         mock_running_nodes.return_value = []
         self.assertFalse(rabbit_utils.clustered())
 
@@ -234,3 +235,48 @@ class UtilsTests(unittest.TestCase):
         mock_running_nodes.return_value = ['rabbit@juju-devel5-machine-19']
         rabbit_utils.cluster_with()
         self.assertEqual(0, mock_check_output.call_count)
+
+    def test_assess_status(self):
+        with mock.patch.object(rabbit_utils, 'assess_status_func') as asf:
+            callee = mock.MagicMock()
+            asf.return_value = callee
+            rabbit_utils.assess_status('test-config')
+            asf.assert_called_once_with('test-config')
+            callee.assert_called_once_with()
+
+    @mock.patch.object(rabbit_utils, 'assess_cluster_status')
+    @mock.patch.object(rabbit_utils, 'services')
+    @mock.patch.object(rabbit_utils, 'make_assess_status_func')
+    def test_assess_status_func(self,
+                                make_assess_status_func,
+                                services,
+                                assess_cluster_status):
+        services.return_value = 's1'
+        rabbit_utils.assess_status_func('test-config')
+        # ports=None whilst port checks are disabled.
+        make_assess_status_func.assert_called_once_with(
+            'test-config', {}, charm_func=assess_cluster_status, services='s1',
+            ports=None)
+
+    def test_pause_unit_helper(self):
+        with mock.patch.object(rabbit_utils, '_pause_resume_helper') as prh:
+            rabbit_utils.pause_unit_helper('random-config')
+            prh.assert_called_once_with(
+                rabbit_utils.pause_unit,
+                'random-config')
+        with mock.patch.object(rabbit_utils, '_pause_resume_helper') as prh:
+            rabbit_utils.resume_unit_helper('random-config')
+            prh.assert_called_once_with(
+                rabbit_utils.resume_unit,
+                'random-config')
+
+    @mock.patch.object(rabbit_utils, 'services')
+    def test_pause_resume_helper(self, services):
+        f = mock.MagicMock()
+        services.return_value = 's1'
+        with mock.patch.object(rabbit_utils, 'assess_status_func') as asf:
+            asf.return_value = 'assessor'
+            rabbit_utils._pause_resume_helper(f, 'some-config')
+            asf.assert_called_once_with('some-config')
+            # ports=None whilst port checks are disabled.
+            f.assert_called_once_with('assessor', services='s1', ports=None)
