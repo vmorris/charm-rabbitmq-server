@@ -19,6 +19,7 @@ import ssl_utils
 ssl_key_file = "/etc/rabbitmq/rabbit-server-privkey.pem"
 ssl_cert_file = "/etc/rabbitmq/rabbit-server-cert.pem"
 ssl_ca_file = "/etc/rabbitmq/rabbit-server-ca.pem"
+RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 
 
 def convert_from_base64(v):
@@ -38,6 +39,10 @@ class RabbitMQSSLContext(object):
 
     def enable_ssl(self, ssl_key, ssl_cert, ssl_port,
                    ssl_ca=None, ssl_only=False, ssl_client=None):
+
+        if not os.path.exists(RABBITMQ_CTL):
+            log('Deferring SSL configuration, RabbitMQ not yet installed')
+            return {}
 
         uid = pwd.getpwnam("root").pw_uid
         gid = grp.getgrnam("rabbitmq").gr_gid

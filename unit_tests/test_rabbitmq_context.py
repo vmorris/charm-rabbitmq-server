@@ -23,6 +23,7 @@ class TestRabbitMQSSLContext(unittest.TestCase):
     @mock.patch("rabbitmq_context.open_port")
     @mock.patch("rabbitmq_context.os.chmod")
     @mock.patch("rabbitmq_context.os.chown")
+    @mock.patch("rabbitmq_context.os.path.exists")
     @mock.patch("rabbitmq_context.pwd.getpwnam")
     @mock.patch("rabbitmq_context.grp.getgrnam")
     @mock.patch("rabbitmq_context.config")
@@ -30,8 +31,9 @@ class TestRabbitMQSSLContext(unittest.TestCase):
     @mock.patch("rabbitmq_context.ssl_utils.reconfigure_client_ssl")
     @mock.patch("rabbitmq_context.ssl_utils.get_ssl_mode")
     def test_context_ssl_on(self, get_ssl_mode, reconfig_ssl, close_port,
-                            config, gr, pw, chown, chmod, open_port):
+                            config, gr, pw, exists, chown, chmod, open_port):
 
+        exists.return_value = True
         get_ssl_mode.return_value = ("on", "on")
 
         def config_get(n):
