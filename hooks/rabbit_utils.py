@@ -39,7 +39,7 @@ from charmhelpers.core.hookenv import (
     relation_ids,
     related_units,
     log, ERROR,
-    INFO,
+    INFO, DEBUG,
     service_name,
     status_set,
     cached,
@@ -331,17 +331,16 @@ def wait_app():
     else:
         pid_file = '/var/lib/rabbitmq/mnesia/rabbit@' \
                    + get_local_nodename() + '.pid'
-    status_set('maintenance', 'Waiting for rabbitmq app to start: {}'
-               ''.format(pid_file))
+    log('Waiting for rabbitmq app to start: {}'.format(pid_file), DEBUG)
     try:
         rabbitmqctl('wait', pid_file)
-        log('Confirmed rabbitmq app is running')
+        log('Confirmed rabbitmq app is running', DEBUG)
         return True
     except subprocess.CalledProcessError as ex:
-        status_set('blocked', 'Rabbitmq failed to start')
+        status_set('blocked', 'RabbitMQ failed to start')
         try:
             status_cmd = ['rabbitmqctl', 'status']
-            log(subprocess.check_output(status_cmd), 'DEBUG')
+            log(subprocess.check_output(status_cmd), DEBUG)
         except:
             pass
         raise ex
