@@ -236,19 +236,27 @@ class UtilsTests(unittest.TestCase):
             asf.assert_called_once_with('test-config')
             callee.assert_called_once_with()
 
+    @mock.patch.object(rabbit_utils, 'clustered')
+    @mock.patch.object(rabbit_utils, 'status_set')
     @mock.patch.object(rabbit_utils, 'assess_cluster_status')
     @mock.patch.object(rabbit_utils, 'services')
-    @mock.patch.object(rabbit_utils, 'make_assess_status_func')
+    @mock.patch.object(rabbit_utils, '_determine_os_workload_status')
     def test_assess_status_func(self,
-                                make_assess_status_func,
+                                _determine_os_workload_status,
                                 services,
-                                assess_cluster_status):
+                                assess_cluster_status,
+                                status_set,
+                                clustered):
         services.return_value = 's1'
-        rabbit_utils.assess_status_func('test-config')
+        _determine_os_workload_status.return_value = ('active', '')
+        clustered.return_value = True
+        rabbit_utils.assess_status_func('test-config')()
         # ports=None whilst port checks are disabled.
-        make_assess_status_func.assert_called_once_with(
+        _determine_os_workload_status.assert_called_once_with(
             'test-config', {}, charm_func=assess_cluster_status, services='s1',
             ports=None)
+        status_set.assert_called_once_with('active',
+                                           'Unit is ready and clustered')
 
     def test_pause_unit_helper(self):
         with mock.patch.object(rabbit_utils, '_pause_resume_helper') as prh:

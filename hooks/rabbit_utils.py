@@ -15,7 +15,7 @@ from rabbitmq_context import (
 from charmhelpers.core.templating import render
 
 from charmhelpers.contrib.openstack.utils import (
-    make_assess_status_func,
+    _determine_os_workload_status,
     pause_unit,
     resume_unit,
     is_unit_paused_set,
@@ -27,7 +27,6 @@ from charmhelpers.core.hookenv import (
     log, ERROR,
     INFO,
     service_name,
-    status_get,
     status_set,
     cached,
     relation_set,
@@ -686,10 +685,9 @@ def assess_cluster_status(*args):
         # General status check
         ret = wait_app()
         if ret:
-            if clustered():
-                return 'active', 'Unit is ready and clustered'
-            else:
-                return 'active', 'Unit is ready'
+            # we're active - so just return the 'active' state, but if 'active'
+            # is returned, then it is ignored by the assess_status system.
+            return 'active', "message is ignored"
     else:
         return 'waiting', 'RabbitMQ is not yet installed'
 
@@ -751,10 +749,6 @@ def assess_status(configs):
     @returns None - this function is executed for its side-effect
     """
     assess_status_func(configs)()
-    # Charm has a bespoke status message when clustered
-    if status_get() == ('active', 'Unit is ready') and clustered():
-        if clustered():
-            status_set('active', 'Unit is ready and clustered')
 
 
 def assess_status_func(configs):
@@ -771,10 +765,16 @@ def assess_status_func(configs):
     @param configs: a templating.OSConfigRenderer() object
     @return f() -> None : a function that assesses the unit's workload status
     """
-    return make_assess_status_func(
-        configs, {},
-        charm_func=assess_cluster_status,
-        services=services(), ports=None)
+    def _assess_status_func():
+        state, message = _determine_os_workload_status(
+            configs, {},
+            charm_func=assess_cluster_status,
+            services=services(), ports=None)
+        if state == 'active' and clustered():
+            message = 'Unit is ready and clustered'
+        status_set(state, message)
+
+    return _assess_status_func
 
 
 def pause_unit_helper(configs):
