@@ -1,4 +1,4 @@
-# Copyright 2016 Canonical Limited.
+# Copyright 2016 Canonical Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,19 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from charmhelpers.core.hookenv import (
-    log,
-    DEBUG,
-)
-from charmhelpers.contrib.hardening.mysql.checks import config
-
-
-def run_mysql_checks():
-    log("Starting MySQL hardening checks.", level=DEBUG)
-    checks = config.get_audits()
-    for check in checks:
-        log("Running '%s' check" % (check.__class__.__name__), level=DEBUG)
-        check.ensure_compliance()
-
-    log("MySQL hardening checks complete.", level=DEBUG)
