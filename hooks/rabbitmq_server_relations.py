@@ -113,6 +113,8 @@ def install():
 
 def configure_nodename():
     '''Set RABBITMQ_NODENAME to something that's resolvable by my peers'''
+    # Update hosts file will full map of peers in cluster + self
+    rabbit.update_hosts_file(rabbit_host_map())
     nodename = rabbit.get_local_nodename()
     log('configuring nodename', level=INFO)
     if (nodename and
@@ -349,6 +351,26 @@ def store_leader_data():
                    leader_nodename=rabbit.get_local_nodename())
 
 
+def rabbit_host_map():
+    '''
+    Determine the current set of RabbitMQ hostnames and addresses
+    including the unit this code is being executed on.
+
+    @returns: dict of address->hostname mappings
+    '''
+    host_map = {}
+    host_map[unit_get('private-address')] = rabbit.get_local_nodename()
+    for rid in relation_ids('cluster'):
+        for unit in related_units(rid):
+            hostname = relation_get('hostname',
+                                    unit=unit, rid=rid)
+            private_address = relation_get('private-address',
+                                           unit=unit, rid=rid)
+            if hostname and private_address:
+                host_map[private_address] = hostname
+    return host_map
+
+
 @hooks.hook('cluster-relation-changed')
 def cluster_changed():
     # Future travelers beware ordering is significant
@@ -359,10 +381,9 @@ def cluster_changed():
     peer_echo(includes=whitelist)
 
     hostname = rdata.get('hostname')
-    private_address = rdata.get('private-address')
 
-    if hostname and private_address:
-        rabbit.update_hosts_file({private_address: hostname})
+    # Update hosts file will full map of peers in cluster + self
+    rabbit.update_hosts_file(rabbit_host_map())
 
     cookie = leader_get('cookie')
     leader_nodename = leader_get('leader_nodename')
@@ -663,6 +684,7 @@ MAN_PLUGIN = 'rabbitmq_management'
 @harden()
 def config_changed():
 
+    rabbit.update_hosts_file(rabbit_host_map())
     if config('prefer-ipv6'):
         rabbit.assert_charm_supports_ipv6()
 

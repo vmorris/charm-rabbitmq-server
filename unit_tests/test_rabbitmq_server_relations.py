@@ -157,3 +157,50 @@ class RelationUtil(TestCase):
         mock_is_leader.side_effect = NotImplementedError
         mock_related_units.return_value = ['test/0', 'test/1']
         self.assertTrue(rabbitmq_server_relations.is_sufficient_peers())
+
+    @patch('rabbitmq_server_relations.rabbit.get_local_nodename')
+    @patch.object(rabbitmq_server_relations, 'unit_get')
+    @patch.object(rabbitmq_server_relations, 'related_units')
+    @patch.object(rabbitmq_server_relations, 'relation_get')
+    @patch.object(rabbitmq_server_relations, 'relation_ids')
+    def test_rabbit_host_map(self,
+                             mock_relation_ids, mock_relation_get,
+                             mock_related_units, mock_unit_get,
+                             mock_local_nodename):
+        _rdata = {
+            'cluster:1': {
+                'rabbitmq-server/1': {
+                    'hostname': 'juju-abc-lxd-1',
+                    'private-address': '10.10.10.1',
+                },
+                'rabbitmq-server/2': {
+                    'hostname': 'juju-abc-lxd-2',
+                    'private-address': '10.10.10.2',
+                },
+                'rabbitmq-server/3': {
+                    # missing hostname - will be skipped
+                    'private-address': '10.10.10.3',
+                },
+            }
+        }
+
+        def _relation_get(attribute, unit, rid):
+            return _rdata[rid][unit].get(attribute)
+
+        def _related_units(rid):
+            return _rdata[rid].keys()
+
+        mock_relation_get.side_effect = _relation_get
+        mock_relation_ids.return_value = _rdata.keys()
+        mock_related_units.side_effect = _related_units
+        mock_unit_get.return_value = '10.10.10.0'
+        mock_local_nodename.return_value = 'juju-abc-lxd-0'
+
+        self.assertEqual(rabbitmq_server_relations.rabbit_host_map(),
+                         {'10.10.10.0': 'juju-abc-lxd-0',
+                          '10.10.10.1': 'juju-abc-lxd-1',
+                          '10.10.10.2': 'juju-abc-lxd-2'})
+
+        mock_relation_ids.assert_called_with('cluster')
+        mock_related_units.assert_called_with('cluster:1')
+        mock_unit_get.assert_called_with('private-address')
