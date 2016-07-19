@@ -130,13 +130,13 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
     def _initialize_tests(self):
         """Perform final initialization before tests get run."""
         # Access the sentries for inspecting service units
-        self.rmq0_sentry = self.d.sentry.unit['rabbitmq-server/0']
-        self.rmq1_sentry = self.d.sentry.unit['rabbitmq-server/1']
-        self.rmq2_sentry = self.d.sentry.unit['rabbitmq-server/2']
-        self.keystone_sentry = self.d.sentry.unit['keystone/0']
-        self.mysql_sentry = self.d.sentry.unit['mysql/0']
-        self.cinder_sentry = self.d.sentry.unit['cinder/0']
-        self.nrpe_sentry = self.d.sentry.unit['nrpe/0']
+        self.rmq0_sentry = self.d.sentry['rabbitmq-server'][0]
+        self.rmq1_sentry = self.d.sentry['rabbitmq-server'][1]
+        self.rmq2_sentry = self.d.sentry['rabbitmq-server'][2]
+        self.keystone_sentry = self.d.sentry['keystone'][0]
+        self.mysql_sentry = self.d.sentry['mysql'][0]
+        self.cinder_sentry = self.d.sentry['cinder'][0]
+        self.nrpe_sentry = self.d.sentry['nrpe'][0]
         u.log.debug('openstack release val: {}'.format(
             self._get_openstack_release()))
         u.log.debug('openstack release str: {}'.format(
@@ -592,16 +592,13 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
     def test_910_pause_and_resume(self):
         """The services can be paused and resumed. """
         u.log.debug('Checking pause and resume actions...')
-        unit_name = "rabbitmq-server/0"
-        unit = self.d.sentry.unit[unit_name]
+        assert u.status_get(self.rmq0_sentry)[0] == "active"
 
-        assert u.status_get(unit)[0] == "active"
+        action_id = u.run_action(self.rmq0_sentry, "pause")
+        assert u.wait_on_action(action_id), "Pause action failed."
+        assert u.status_get(self.rmq0_sentry)[0] == "maintenance"
 
-        action_id = self._run_action(unit_name, "pause")
-        assert self._wait_on_action(action_id), "Pause action failed."
-        assert u.status_get(unit)[0] == "maintenance"
-
-        action_id = self._run_action(unit_name, "resume")
-        assert self._wait_on_action(action_id), "Resume action failed."
-        assert u.status_get(unit)[0] == "active"
+        action_id = u.run_action(self.rmq0_sentry, "resume")
+        assert u.wait_on_action(action_id), "Resume action failed."
+        assert u.status_get(self.rmq0_sentry)[0] == "active"
         u.log.debug('OK')
