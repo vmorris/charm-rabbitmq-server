@@ -294,3 +294,27 @@ class UtilsTests(unittest.TestCase):
             asf.assert_called_once_with('some-config')
             # ports=None whilst port checks are disabled.
             f.assert_called_once_with('assessor', services='s1', ports=None)
+
+    @mock.patch('rabbit_utils.subprocess.check_call')
+    def test_rabbitmqctl_wait(self, check_call):
+        rabbit_utils.rabbitmqctl('wait', '/var/lib/rabbitmq.pid')
+        check_call.assert_called_with(['timeout', '180',
+                                       '/usr/sbin/rabbitmqctl', 'wait',
+                                       '/var/lib/rabbitmq.pid'])
+
+    @mock.patch('rabbit_utils.subprocess.check_call')
+    def test_rabbitmqctl_start_app(self, check_call):
+        rabbit_utils.rabbitmqctl('start_app')
+        check_call.assert_called_with(['/usr/sbin/rabbitmqctl', 'start_app'])
+
+    @mock.patch('rabbit_utils.subprocess.check_call')
+    def test_rabbitmqctl_wait_fail(self, check_call):
+        check_call.side_effect = (rabbit_utils.subprocess.
+                                  CalledProcessError(1, 'cmd'))
+        with self.assertRaises(rabbit_utils.subprocess.CalledProcessError):
+            rabbit_utils.wait_app()
+
+    @mock.patch('rabbit_utils.subprocess.check_call')
+    def test_rabbitmqctl_wait_success(self, check_call):
+        check_call.return_value = 0
+        self.assertTrue(rabbit_utils.wait_app())

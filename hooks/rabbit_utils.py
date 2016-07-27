@@ -312,7 +312,11 @@ def rabbitmqctl(action, *args):
         subprocess.check_call. For uses that need check_output
         use a direct subproecess call
      '''
-    cmd = [RABBITMQ_CTL, action]
+    cmd = []
+    # wait will run for ever. Timeout in a reasonable amount of time
+    if 'wait' in action:
+        cmd.extend(["timeout", "180"])
+    cmd.extend([RABBITMQ_CTL, action])
     for arg in args:
         cmd.append(arg)
     log("Running {}".format(cmd), 'DEBUG')
@@ -333,14 +337,14 @@ def wait_app():
         rabbitmqctl('wait', pid_file)
         log('Confirmed rabbitmq app is running')
         return True
-    except:
+    except subprocess.CalledProcessError as ex:
         status_set('blocked', 'Rabbitmq failed to start')
         try:
             status_cmd = ['rabbitmqctl', 'status']
             log(subprocess.check_output(status_cmd), 'DEBUG')
         except:
             pass
-        return False
+        raise ex
 
 
 def start_app():
