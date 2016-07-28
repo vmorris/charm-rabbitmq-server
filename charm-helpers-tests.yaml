@@ -1,5 +1,5 @@
 destination: tests/charmhelpers
-branch: lp:charm-helpers
+branch: lp:~openstack-charmers/charm-helpers/stable
 include:
     - contrib.amulet
     - contrib.openstack.amulet
