@@ -41,6 +41,8 @@ from charmhelpers.contrib.openstack.amulet.utils import (
     # ERROR
 )
 
+from charmhelpers.core.host import lsb_release
+
 # Use DEBUG to turn on debug logging
 u = OpenStackAmuletUtils(DEBUG)
 
@@ -53,6 +55,7 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
         """Deploy the entire test environment."""
         super(RmqBasicDeployment, self).__init__(series, openstack, source,
                                                  stable)
+        self.client_series = lsb_release()['DISTRIB_CODENAME']
         self._add_services()
         self._add_relations()
         self._configure_services()
@@ -451,6 +454,12 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
     def test_408_rmq_amqp_messages_all_units_ssl_on(self):
         """Send amqp messages with ssl enabled, to every rmq unit and
         check every rmq unit for messages.  Standard ssl tcp port."""
+        # http://pad.lv/1625044
+        if self.client_series >= 'xenial' and self.series <= 'trusty':
+            u.log.info('SKIP')
+            u.log.info('Skipping SSL tests due to client'
+                       ' compatibility issues')
+            return
         u.log.debug('Checking amqp message publish/get on all units '
                     '(ssl on)...')
 
@@ -462,6 +471,12 @@ class RmqBasicDeployment(OpenStackAmuletDeployment):
     def test_410_rmq_amqp_messages_all_units_ssl_alt_port(self):
         """Send amqp messages with ssl on, to every rmq unit and check
         every rmq unit for messages.  Custom ssl tcp port."""
+        # http://pad.lv/1625044
+        if self.client_series >= 'xenial' and self.series <= 'trusty':
+            u.log.info('SKIP')
+            u.log.info('Skipping SSL tests due to client'
+                       ' compatibility issues')
+            return
         u.log.debug('Checking amqp message publish/get on all units '
                     '(ssl on)...')
 
