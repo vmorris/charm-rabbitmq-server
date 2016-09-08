@@ -4,6 +4,7 @@ include:
     - fetch
     - core
     - cli
+    - osplatform
     - contrib.charmsupport
     - contrib.openstack|inc=*
     - contrib.storage
