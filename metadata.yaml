@@ -9,6 +9,11 @@ tags:
   - openstack
   - amqp
   - misc
+series:
+  - xenial
+  - trusty
+  - precise
+  - yakkety
 provides:
   amqp:
     interface: rabbitmq
