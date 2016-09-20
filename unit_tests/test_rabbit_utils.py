@@ -242,13 +242,31 @@ class UtilsTests(unittest.TestCase):
         rabbit_utils.cluster_with()
         self.assertEqual(0, mock_check_output.call_count)
 
-    def test_assess_status(self):
+    @mock.patch('rabbit_utils.application_version_set')
+    @mock.patch('rabbit_utils.get_upstream_version')
+    def test_assess_status(self, mock_get_upstream_version,
+                           mock_application_version_set):
+        mock_get_upstream_version.return_value = None
         with mock.patch.object(rabbit_utils, 'assess_status_func') as asf:
             callee = mock.MagicMock()
             asf.return_value = callee
             rabbit_utils.assess_status('test-config')
             asf.assert_called_once_with('test-config')
             callee.assert_called_once_with()
+            self.assertFalse(mock_application_version_set.called)
+
+    @mock.patch('rabbit_utils.application_version_set')
+    @mock.patch('rabbit_utils.get_upstream_version')
+    def test_assess_status_installed(self, mock_get_upstream_version,
+                                     mock_application_version_set):
+        mock_get_upstream_version.return_value = '3.5.7'
+        with mock.patch.object(rabbit_utils, 'assess_status_func') as asf:
+            callee = mock.MagicMock()
+            asf.return_value = callee
+            rabbit_utils.assess_status('test-config')
+            asf.assert_called_once_with('test-config')
+            callee.assert_called_once_with()
+            mock_application_version_set.assert_called_with('3.5.7')
 
     @mock.patch.object(rabbit_utils, 'clustered')
     @mock.patch.object(rabbit_utils, 'status_set')

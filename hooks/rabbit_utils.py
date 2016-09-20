@@ -44,6 +44,7 @@ from charmhelpers.core.hookenv import (
     status_set,
     cached,
     relation_set,
+    application_version_set,
 )
 
 from charmhelpers.core.host import (
@@ -61,11 +62,15 @@ from charmhelpers.contrib.peerstorage import (
     peer_retrieve
 )
 
+from charmhelpers.fetch import get_upstream_version
+
 from socket import gethostname as get_local_nodename
 
 from collections import OrderedDict
 
 PACKAGES = ['rabbitmq-server', 'python-amqplib', 'lockfile-progs']
+
+VERSION_PACKAGE = 'rabbitmq-server'
 
 RABBITMQ_CTL = '/usr/sbin/rabbitmqctl'
 COOKIE_PATH = '/var/lib/rabbitmq/.erlang.cookie'
@@ -766,6 +771,9 @@ def assess_status(configs):
     @returns None - this function is executed for its side-effect
     """
     assess_status_func(configs)()
+    rmq_version = get_upstream_version(VERSION_PACKAGE)
+    if rmq_version:
+        application_version_set(rmq_version)
 
 
 def assess_status_func(configs):
