@@ -79,9 +79,9 @@ from charmhelpers.core.hookenv import (
     Hooks,
     UnregisteredHookError,
     is_leader,
-    leader_set,
     charm_dir,
     status_set,
+    unit_private_ip,
     network_get_primary_address,
 )
 from charmhelpers.core.host import (
@@ -96,6 +96,7 @@ from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.peerstorage import (
     peer_echo,
     peer_retrieve,
+    peer_store,
     peer_store_and_set,
     peer_retrieve_by_prefix,
     leader_get,
@@ -127,8 +128,6 @@ def install():
 
 def configure_nodename():
     '''Set RABBITMQ_NODENAME to something that's resolvable by my peers'''
-    # Update hosts file will full map of peers in cluster + self
-    rabbit.update_hosts_file(rabbit_host_map())
     nodename = rabbit.get_local_nodename()
     log('configuring nodename', level=INFO)
     if (nodename and
@@ -349,40 +348,11 @@ def cluster_joined(relation_id=None):
     if not is_sufficient_peers():
         return
 
-
-def store_leader_data():
-    '''
-    Store cluster bootstrap data using leader storage if
-
-    a) RabbitMQ is installed and cookie exists
-    b) Is the current leader of the service
-    '''
-    if (is_leader() and os.path.exists(rabbit.COOKIE_PATH)):
-        log('Leader storing cluster bootstrap data', level=INFO)
+    if is_elected_leader('res_rabbitmq_vip'):
+        log('Leader peer_storing cookie', level=INFO)
         cookie = open(rabbit.COOKIE_PATH, 'r').read().strip()
-        leader_set(cookie=cookie,
-                   leader_node_ip=None,
-                   leader_nodename=rabbit.get_local_nodename())
-
-
-def rabbit_host_map():
-    '''
-    Determine the current set of RabbitMQ hostnames and addresses
-    including the unit this code is being executed on.
-
-    @returns: dict of address->hostname mappings
-    '''
-    host_map = {}
-    host_map[unit_get('private-address')] = rabbit.get_local_nodename()
-    for rid in relation_ids('cluster'):
-        for unit in related_units(rid):
-            hostname = relation_get('hostname',
-                                    unit=unit, rid=rid)
-            private_address = relation_get('private-address',
-                                           unit=unit, rid=rid)
-            if hostname and private_address:
-                host_map[private_address] = hostname
-    return host_map
+        peer_store('cookie', cookie)
+        peer_store('leader_node_ip', unit_private_ip())
 
 
 @hooks.hook('cluster-relation-changed')
@@ -394,26 +364,26 @@ def cluster_changed():
     whitelist = [a for a in rdata.keys() if a not in blacklist]
     peer_echo(includes=whitelist)
 
-    hostname = rdata.get('hostname')
-
-    # Update hosts file will full map of peers in cluster + self
-    rabbit.update_hosts_file(rabbit_host_map())
-
-    cookie = leader_get('cookie')
-    leader_nodename = leader_get('leader_nodename')
-    if not cookie or not leader_nodename:
-        log('Leader has not set cookie, skipping clustering.', level=INFO)
+    cookie = peer_retrieve('cookie')
+    if not cookie:
+        log('cluster_joined: cookie not yet set.', level=INFO)
         return
+
+    rdata = relation_get()
+    if rdata:
+        hostname = rdata.get('hostname', None)
+        private_address = rdata.get('private-address', None)
+
+        if hostname and private_address:
+            rabbit.update_hosts_file({private_address: hostname})
 
     if not is_sufficient_peers():
         log('Not enough peers, waiting until leader is configured',
             level=INFO)
         return
 
-    leader_joined = (leader_nodename == hostname)
-
-    # Update local cookie with cookie from leader
-    update_cookie(cookie)
+    # sync the cookie with peers if necessary
+    update_cookie()
 
     if is_relation_made('ha') and \
             config('ha-vip-only') is False:
@@ -421,12 +391,15 @@ def cluster_changed():
             'rabbitmq cluster config.', level=INFO)
         return
 
-    # Ensure we're not the lead unit and that
-    # the hostname of the lead unit has been written
-    # to /etc/hosts so that we can actually cluster
-    if not is_leader() and leader_joined:
-        rabbit.cluster_with()
-        update_nrpe_checks()
+    # cluster with node?
+    try:
+        if not is_leader():
+            rabbit.cluster_with()
+            update_nrpe_checks()
+    except NotImplementedError:
+        if is_newer():
+            rabbit.cluster_with()
+            update_nrpe_checks()
 
     # If cluster has changed peer db may have changed so run amqp_changed
     # to sync any changes
@@ -435,21 +408,20 @@ def cluster_changed():
             amqp_changed(relation_id=rid, remote_unit=unit)
 
 
-def update_cookie(cookie):
-    '''
-    Update local RMQ Erlang cookie with provided values
-
-    @param cookie: RMQ cookie from lead unit
-    '''
+def update_cookie(leaders_cookie=None):
+    # sync cookie
+    if leaders_cookie:
+        cookie = leaders_cookie
+    else:
+        cookie = peer_retrieve('cookie')
     cookie_local = None
     with open(rabbit.COOKIE_PATH, 'r') as f:
         cookie_local = f.read().strip()
 
     if cookie_local == cookie:
-        log('cookie already synchronized with peer.')
+        log('Cookie already synchronized with peer.')
         return
 
-    log('Installing new cookie and restarting RabbitMQ.')
     service_stop('rabbitmq-server')
     with open(rabbit.COOKIE_PATH, 'wb') as out:
         out.write(cookie)
@@ -698,7 +670,6 @@ MAN_PLUGIN = 'rabbitmq_management'
 @harden()
 def config_changed():
 
-    rabbit.update_hosts_file(rabbit_host_map())
     if config('prefer-ipv6'):
         rabbit.assert_charm_supports_ipv6()
 
@@ -753,9 +724,6 @@ def config_changed():
         for unit in related_units(rid):
             amqp_changed(relation_id=rid, remote_unit=unit)
 
-    store_leader_data()
-
-
 @hooks.hook('leader-settings-changed')
 def leader_settings_changed():
     if not os.path.exists(rabbit.RABBITMQ_CTL):
@@ -765,7 +733,7 @@ def leader_settings_changed():
     # force cluster-relation-changed hooks to run on peers
     cookie = leader_get(attribute='cookie')
     if cookie:
-        update_cookie(cookie)
+        update_cookie(leaders_cookie=cookie)
         # Force cluster-relation-changed hooks to run on peers
         # This will precipitate peer clustering
         # Without this a chicken and egg scenario prevails when
@@ -778,11 +746,6 @@ def leader_settings_changed():
     for rid in relation_ids('amqp'):
         for unit in related_units(rid):
             amqp_changed(relation_id=rid, remote_unit=unit)
-
-
-@hooks.hook('leader-elected')
-def leader_elected():
-    store_leader_data()
 
 
 def pre_install_hooks():

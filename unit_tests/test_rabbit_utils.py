@@ -173,12 +173,20 @@ class UtilsTests(unittest.TestCase):
         self.assertEqual(rabbit_utils.running_nodes(),
                          ['rabbit@juju-devel3-machine-14'])
 
+    @mock.patch('rabbit_utils.get_hostname')
+    def test_get_node_hostname(self, mock_get_hostname):
+        mock_get_hostname.return_value = 'juju-devel3-machine-13'
+        self.assertEqual(rabbit_utils.get_node_hostname('192.168.20.50'),
+                         'juju-devel3-machine-13')
+        mock_get_hostname.assert_called_with('192.168.20.50', fqdn=False)
+
+    @mock.patch('rabbit_utils.get_node_hostname')
     @mock.patch('rabbit_utils.peer_retrieve')
-    def test_leader_node(self, mock_peer_retrieve):
-        mock_peer_retrieve.return_value = 'juju-devel3-machine-15'
+    def test_leader_node(self, mock_peer_retrieve, mock_get_node_hostname):
+        mock_peer_retrieve.return_value = '192.168.20.50'
+        mock_get_node_hostname.return_value = 'juju-devel3-machine-15'
         self.assertEqual(rabbit_utils.leader_node(),
                          'rabbit@juju-devel3-machine-15')
-        mock_peer_retrieve.assert_called_with('leader_nodename')
 
     @mock.patch('rabbit_utils.relation_set')
     @mock.patch('rabbit_utils.get_local_nodename')
@@ -325,14 +333,18 @@ class UtilsTests(unittest.TestCase):
         rabbit_utils.rabbitmqctl('start_app')
         check_call.assert_called_with(['/usr/sbin/rabbitmqctl', 'start_app'])
 
+    @mock.patch.object(rabbit_utils, 'get_local_nodename')
     @mock.patch('rabbit_utils.subprocess.check_call')
-    def test_rabbitmqctl_wait_fail(self, check_call):
+    def test_rabbitmqctl_wait_fail(self, check_call, local_nodename):
         check_call.side_effect = (rabbit_utils.subprocess.
                                   CalledProcessError(1, 'cmd'))
+        local_nodename.return_value = 'rabbitmq-server-0'
         with self.assertRaises(rabbit_utils.subprocess.CalledProcessError):
             rabbit_utils.wait_app()
 
+    @mock.patch.object(rabbit_utils, 'get_local_nodename')
     @mock.patch('rabbit_utils.subprocess.check_call')
-    def test_rabbitmqctl_wait_success(self, check_call):
+    def test_rabbitmqctl_wait_success(self, check_call, local_nodename):
         check_call.return_value = 0
+        local_nodename.return_value = 'rabbitmq-server-0'
         self.assertTrue(rabbit_utils.wait_app())

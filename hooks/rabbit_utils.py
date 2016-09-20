@@ -20,6 +20,7 @@ import glob
 import tempfile
 import random
 import time
+import socket
 
 from rabbitmq_context import (
     RabbitMQSSLContext,
@@ -30,6 +31,8 @@ from charmhelpers.core.templating import render
 
 from charmhelpers.contrib.openstack.utils import (
     _determine_os_workload_status,
+    get_hostname,
+    get_host_ip,
     pause_unit,
     resume_unit,
     is_unit_paused_set,
@@ -43,6 +46,7 @@ from charmhelpers.core.hookenv import (
     service_name,
     status_set,
     cached,
+    unit_get,
     relation_set,
     application_version_set,
 )
@@ -63,8 +67,6 @@ from charmhelpers.contrib.peerstorage import (
 )
 
 from charmhelpers.fetch import get_upstream_version
-
-from socket import gethostname as get_local_nodename
 
 from collections import OrderedDict
 
@@ -353,7 +355,7 @@ def wait_app():
 
 def start_app():
     ''' Start the rabbitmq app and wait until it is fully started '''
-    status_set('maintenance', 'Starting RabbitMQ')
+    status_set('maintenance', 'Starting rabbitmq applilcation')
     rabbitmqctl('start_app')
     wait_app()
 
@@ -675,11 +677,32 @@ def leader_node():
     ''' Provide the leader node for clustering '''
     # Each rabbitmq node should join_cluster with the leader
     # to avoid split-brain clusters.
-    leader_nodename = peer_retrieve('leader_nodename')
-    if leader_nodename:
-        return "rabbit@{}".format(leader_nodename)
-    else:
-        return None
+    leader_node_ip = peer_retrieve('leader_node_ip')
+    if leader_node_ip:
+        return "rabbit@" + get_node_hostname(leader_node_ip)
+
+
+def get_node_hostname(ip_addr):
+    ''' Resolve IP address to hostname '''
+    try:
+        nodename = get_hostname(ip_addr, fqdn=False)
+    except:
+        log('Cannot resolve hostname for %s using DNS servers' % ip_addr,
+            level='WARNING')
+        log('Falling back to use socket.gethostname()',
+            level='WARNING')
+        # If the private-address is not resolvable using DNS
+        # then use the current hostname
+        nodename = socket.gethostname()
+    log('local nodename: %s' % nodename, level=INFO)
+    return nodename
+
+
+def get_local_nodename():
+    '''Resolve local nodename into something that's universally addressable'''
+    ip_addr = get_host_ip(unit_get('private-address'))
+    log('getting local nodename for ip address: %s' % ip_addr, level=INFO)
+    return get_node_hostname(ip_addr)
 
 
 @cached
