@@ -758,6 +758,7 @@ def pre_install_hooks():
 @harden()
 def update_status():
     log('Updating status.')
+    configure_nodename()
 
 
 if __name__ == '__main__':
